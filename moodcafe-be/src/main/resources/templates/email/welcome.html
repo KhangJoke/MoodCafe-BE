@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome to the Company</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">
+        <h2 style="color: #0056b3;">Welcome, <span th:text="${fullName}"></span>!</h2>
+        <p>You have been invited to join <strong><span th:text="${companyName}"></span></strong> on MoodCafe.</p>
+        <p>Your account has been created successfully. Below are your login credentials:</p>
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Email / Username:</strong> <span th:text="${email}"></span></p>
+            <p style="margin: 5px 0;"><strong>Password:</strong> <span th:text="${password}"></span></p>
+        </div>
+        <p style="color: red;"><strong>Important:</strong> Please log in and change your password immediately for security reasons.</p>
+        <p>Best regards,<br>The MoodCafe Team</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="font-size: 0.8em; color: #777;">&copy; <span th:text="${year}"></span> MoodCafe. All rights reserved.</p>
+        <div th:replace="~{email/fragments/footer :: footer}"></div>
+    </div>
+</body>
+</html>

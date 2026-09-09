@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="footer">
+    <hr style="border:none; border-top:1px solid #eee; margin:30px 0 20px;">
+
+    <p style="font-size:13px; color:#666; line-height:1.6; margin:0;">
+        Trân trọng,<br>
+        <strong>MoodCafe Recruitment Team</strong>
+    </p>
+
+    <p style="font-size:12px; color:#999; margin-top:20px;">
+        Đây là email được gửi tự động, vui lòng không trả lời email này.
+    </p>
+
+    <p style="font-size:12px; color:#aaa; margin-top:12px;">
+        © <span th:text="${year}"></span> MoodCafe. All rights reserved.
+    </p>
+</div>
+
+</body>
+</html>

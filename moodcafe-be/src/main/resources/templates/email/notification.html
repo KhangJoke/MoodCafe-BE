@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif; padding: 20px;">
+
+<div style="max-width:500px; margin:auto; background:#fff; padding:25px; border-radius:12px;">
+
+    <h2 style="color:#4b2e2a;" th:text="${title}">Notification</h2>
+
+    <p th:text="${content}">Content goes here</p>
+
+    <div th:replace="~{email/fragments/footer :: footer}"></div>
+</div>
+
+</body>
+</html>

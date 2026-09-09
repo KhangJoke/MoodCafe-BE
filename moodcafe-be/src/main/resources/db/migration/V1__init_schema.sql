@@ -35,13 +35,14 @@ CREATE TABLE users
     email             VARCHAR(255) NOT NULL UNIQUE,
     password          VARCHAR(255),
 
-    full_name         VARCHAR(150) NOT NULL,
+    user_name         VARCHAR(150) NOT NULL,
     avatar_url        VARCHAR(500),
 
     role_id           UUID NOT NULL,
 
     is_active         BOOLEAN NOT NULL DEFAULT TRUE,
     is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    require_password_change BOOLEAN NOT NULL DEFAULT FALSE,
 
     created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -513,6 +514,33 @@ CREATE TABLE store_subscriptions
 
 
 -- =========================================================
+-- 19. NOTIFICATIONS
+-- =========================================================
+
+CREATE TABLE notifications
+(
+    notification_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    user_id         UUID NOT NULL,
+
+    title           VARCHAR(255) NOT NULL,
+    content         TEXT,
+
+    is_read         BOOLEAN NOT NULL DEFAULT FALSE,
+    type            VARCHAR(50) NOT NULL,
+    reference_id    VARCHAR(255),
+
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at         TIMESTAMP,
+
+    CONSTRAINT fk_notifications_user
+        FOREIGN KEY (user_id)
+            REFERENCES users (user_id)
+            ON DELETE CASCADE
+);
+
+
+-- =========================================================
 -- INDEXES
 -- =========================================================
 
@@ -591,3 +619,13 @@ CREATE INDEX idx_store_subscriptions_status
 
 CREATE INDEX idx_store_subscriptions_end_date
     ON store_subscriptions(end_date);
+
+-- Notifications
+CREATE INDEX idx_notifications_user_id
+    ON notifications(user_id);
+
+CREATE INDEX idx_notifications_is_read
+    ON notifications(is_read);
+
+CREATE INDEX idx_notifications_created_at
+    ON notifications(created_at DESC);

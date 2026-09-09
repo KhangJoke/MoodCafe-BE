@@ -1,4 +1,4 @@
-package com.moodcafe.moodcafebe;
+package com.moodcafe;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
