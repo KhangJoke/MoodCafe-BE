@@ -105,6 +105,15 @@ public class SecurityConfig {
                                 "/**"
                         ).permitAll()
 
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/stores",
+                                "/api/stores/*",
+                                "/api/stores/*/images",
+                                "/api/stores/*/amenities",
+                                "/api/amenities"
+                        ).permitAll()
+
                         .anyRequest()
                         .authenticated()
                 )

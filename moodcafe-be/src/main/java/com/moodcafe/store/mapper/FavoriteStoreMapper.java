@@ -1,0 +1,17 @@
+package com.moodcafe.store.mapper;
+
+import com.moodcafe.store.dto.response.FavoriteStoreResponse;
+import com.moodcafe.store.entity.FavoriteStore;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+
+@Mapper(componentModel = "spring")
+public interface FavoriteStoreMapper {
+
+    @Mapping(source = "user.userId", target = "userId")
+    @Mapping(source = "store.storeId", target = "storeId")
+    @Mapping(source = "store.name", target = "storeName")
+    @Mapping(source = "store.address", target = "storeAddress")
+    @Mapping(target = "primaryImageUrl", ignore = true)
+    FavoriteStoreResponse toResponse(FavoriteStore favoriteStore);
+}
