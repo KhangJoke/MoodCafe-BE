@@ -2,9 +2,9 @@ package com.moodcafe.auth.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.moodcafe.auth.abstraction.cache.IRedisTokenService;
+import com.moodcafe.auth.abstraction.cache.RedisTokenService;
 import com.moodcafe.auth.abstraction.repository.UserRepository;
-import com.moodcafe.auth.abstraction.service.IJwtService;
+import com.moodcafe.auth.abstraction.service.JwtService;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,8 +37,8 @@ public class SecurityConfig {
             "/v3/api-docs/**"
     };
 
-    private final IJwtService jwtService;
-    private final IRedisTokenService redisTokenService;
+    private final JwtService jwtService;
+    private final RedisTokenService redisTokenService;
     private final UserRepository userRepository;
     private final UserDetailsService userDetailsService;
 

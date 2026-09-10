@@ -1,6 +1,6 @@
 package com.moodcafe.auth.controller;
 
-import com.moodcafe.auth.abstraction.service.IAuthService;
+import com.moodcafe.auth.abstraction.service.AuthService;
 import com.moodcafe.auth.dto.auth.request.ConfirmOtpRequest;
 import com.moodcafe.auth.dto.auth.request.LoginRequest;
 import com.moodcafe.auth.dto.auth.request.RefreshTokenRequest;
@@ -10,7 +10,6 @@ import com.moodcafe.auth.dto.auth.request.SendOtpRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.auth.response.ConfirmOtpResponse;
 import com.moodcafe.auth.dto.auth.response.EmailActionResponse;
-import com.moodcafe.auth.dto.user.response.UserResponse;
 import com.moodcafe.shared.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final IAuthService authService;
+    private final AuthService authService;
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<EmailActionResponse>> register(

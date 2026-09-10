@@ -1,6 +1,6 @@
 package com.moodcafe.auth.abstraction.cache;
 
-public interface IRedisTokenService {
+public interface RedisTokenService {
 
     void blacklistToken(String jti, long ttlMs);
 

@@ -1,6 +1,6 @@
 package com.moodcafe.auth.service;
 
-import com.moodcafe.auth.abstraction.service.IJwtService;
+import com.moodcafe.auth.abstraction.service.JwtService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -21,7 +21,7 @@ import java.util.function.Function;
 
 @Service
 @RequiredArgsConstructor
-public class JwtServiceImpl implements IJwtService {
+public class JwtServiceImpl implements JwtService {
 
     @Value("${jwt.secret}")
     private String secretKey;

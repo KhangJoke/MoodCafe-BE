@@ -10,7 +10,7 @@ import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.auth.response.ConfirmOtpResponse;
 import com.moodcafe.auth.dto.auth.response.EmailActionResponse;
 
-public interface IAuthService {
+public interface AuthService {
 
     EmailActionResponse register(RegisterRequest request);
 

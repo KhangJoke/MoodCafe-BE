@@ -1,6 +1,6 @@
 package com.moodcafe.notification.service.cache;
 
-import com.moodcafe.notification.abstraction.cache.IRedisOtpService;
+import com.moodcafe.notification.abstraction.cache.RedisOtpService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 import java.util.Collections;
 @Service
 @RequiredArgsConstructor
-public class RedisOtpServiceImpl implements IRedisOtpService {
+public class RedisOtpServiceImpl implements RedisOtpService {
 
     private final RedisTemplate<String, String> redisTemplate;
     private final RedisScript<Long> saveOtpScript;

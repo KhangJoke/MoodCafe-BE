@@ -1,7 +1,7 @@
 package com.moodcafe.auth.service.cache;
 
 import com.moodcafe.auth.abstraction.repository.RefreshTokenRepository;
-import com.moodcafe.auth.abstraction.service.IRefreshTokenService;
+import com.moodcafe.auth.abstraction.service.RefreshTokenService;
 import com.moodcafe.auth.entity.RefreshToken;
 import com.moodcafe.auth.entity.User;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class RefreshTokenServiceImpl implements IRefreshTokenService {
+public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
 

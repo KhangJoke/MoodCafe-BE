@@ -2,7 +2,7 @@ package com.moodcafe.notification.abstraction.service;
 
 import java.util.concurrent.CompletableFuture;
 
-public interface IEmailSender {
+public interface EmailSender {
 
     // async functions
     CompletableFuture<Void> sendOtpEmailAsync(String toEmail, String otp);

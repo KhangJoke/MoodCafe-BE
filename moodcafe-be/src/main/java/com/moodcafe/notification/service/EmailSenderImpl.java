@@ -1,6 +1,6 @@
 package com.moodcafe.notification.service;
 
-import com.moodcafe.notification.abstraction.service.IEmailSender;
+import com.moodcafe.notification.abstraction.service.EmailSender;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import java.util.concurrent.CompletableFuture;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class EmailSenderImpl implements IEmailSender {
+public class EmailSenderImpl implements EmailSender {
 
     private final JavaMailSender mailSender;
     private final SpringTemplateEngine templateEngine;

@@ -1,7 +1,7 @@
 package com.moodcafe.notification.controllers;
 
 import com.moodcafe.auth.dto.user.CustomUserDetails;
-import com.moodcafe.notification.abstraction.service.INotificationService;
+import com.moodcafe.notification.abstraction.service.NotificationService;
 import com.moodcafe.notification.dto.response.NotificationResponse;
 import com.moodcafe.shared.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -11,14 +11,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor
 public class NotificationController {
 
-    private final INotificationService notificationService;
+    private final NotificationService notificationService;
 
     @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamNotifications(@AuthenticationPrincipal CustomUserDetails userDetails) {

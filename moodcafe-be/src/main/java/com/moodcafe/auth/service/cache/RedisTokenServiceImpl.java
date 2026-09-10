@@ -1,6 +1,6 @@
 package com.moodcafe.auth.service.cache;
 
-import com.moodcafe.auth.abstraction.cache.IRedisTokenService;
+import com.moodcafe.auth.abstraction.cache.RedisTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
-public class RedisTokenServiceImpl implements IRedisTokenService {
+public class RedisTokenServiceImpl implements RedisTokenService {
 
     private final RedisTemplate<String, String> redisTemplate;
 

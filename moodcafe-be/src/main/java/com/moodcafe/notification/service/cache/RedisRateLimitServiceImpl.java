@@ -1,6 +1,6 @@
 package com.moodcafe.notification.service.cache;
 
-import com.moodcafe.notification.abstraction.cache.IRedisRateLimitService;
+import com.moodcafe.notification.abstraction.cache.RedisRateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -10,7 +10,7 @@ import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
-public class RedisRateLimitServiceImpl implements IRedisRateLimitService {
+public class RedisRateLimitServiceImpl implements RedisRateLimitService {
 
     private final RedisTemplate<String, String> redisTemplate;
     private final RedisScript<Long> rateLimitScript;

@@ -1,6 +1,6 @@
 package com.moodcafe.auth.controller;
 
-import com.moodcafe.auth.abstraction.service.IUserService;
+import com.moodcafe.auth.abstraction.service.UserService;
 import com.moodcafe.auth.dto.user.request.UserCommonRequest;
 import com.moodcafe.auth.dto.user.response.UserResponse;
 import com.moodcafe.shared.response.ApiResponse;
@@ -16,7 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final IUserService userService;
+    private final UserService userService;
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser() {

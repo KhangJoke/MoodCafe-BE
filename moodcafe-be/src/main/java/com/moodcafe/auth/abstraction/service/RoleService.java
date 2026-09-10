@@ -1,4 +1,4 @@
 package com.moodcafe.auth.abstraction.service;
 
-public interface IRoleService {
+public interface RoleService {
 }

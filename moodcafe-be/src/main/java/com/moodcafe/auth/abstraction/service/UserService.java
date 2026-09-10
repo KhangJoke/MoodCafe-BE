@@ -5,7 +5,7 @@ import com.moodcafe.auth.dto.user.response.UserResponse;
 
 import java.util.UUID;
 
-public interface IUserService {
+public interface UserService {
     UserResponse getCurrentUser();
 
     UserResponse getById(UUID userId);

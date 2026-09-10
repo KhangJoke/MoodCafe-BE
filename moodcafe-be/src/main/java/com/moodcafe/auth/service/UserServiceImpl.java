@@ -1,7 +1,7 @@
 package com.moodcafe.auth.service;
 
 import com.moodcafe.auth.abstraction.repository.UserRepository;
-import com.moodcafe.auth.abstraction.service.IUserService;
+import com.moodcafe.auth.abstraction.service.UserService;
 import com.moodcafe.auth.dto.user.request.UserCommonRequest;
 import com.moodcafe.auth.dto.user.response.UserResponse;
 import com.moodcafe.auth.entity.User;
@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class UserServiceImpl implements IUserService {
+public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;

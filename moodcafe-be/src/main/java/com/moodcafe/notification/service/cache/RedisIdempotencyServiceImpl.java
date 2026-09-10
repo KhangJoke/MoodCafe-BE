@@ -1,6 +1,6 @@
 package com.moodcafe.notification.service.cache;
 
-import com.moodcafe.notification.abstraction.cache.IRedisIdempotencyService;
+import com.moodcafe.notification.abstraction.cache.RedisIdempotencyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
-public class RedisIdempotencyServiceImpl implements IRedisIdempotencyService {
+public class RedisIdempotencyServiceImpl implements RedisIdempotencyService {
 
     private final RedisTemplate<String, String> redisTemplate;
 

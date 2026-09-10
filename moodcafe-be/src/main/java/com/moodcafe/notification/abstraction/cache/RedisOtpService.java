@@ -1,6 +1,6 @@
 package com.moodcafe.notification.abstraction.cache;
 
-public interface IRedisOtpService {
+public interface RedisOtpService {
 
     boolean saveOtp(String type, String email, String otp);
 

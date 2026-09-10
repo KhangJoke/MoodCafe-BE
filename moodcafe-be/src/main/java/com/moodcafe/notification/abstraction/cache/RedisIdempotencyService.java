@@ -1,6 +1,6 @@
 package com.moodcafe.notification.abstraction.cache;
 
-public interface IRedisIdempotencyService {
+public interface RedisIdempotencyService {
 
     boolean isProcessed(String eventId);
 

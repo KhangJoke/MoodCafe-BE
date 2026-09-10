@@ -4,9 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moodcafe.auth.abstraction.repository.RoleRepository;
 import com.moodcafe.auth.abstraction.repository.UserRepository;
-import com.moodcafe.auth.abstraction.service.IAuthService;
-import com.moodcafe.auth.abstraction.service.IJwtService;
-import com.moodcafe.auth.abstraction.service.IRefreshTokenService;
+import com.moodcafe.auth.abstraction.service.AuthService;
+import com.moodcafe.auth.abstraction.service.JwtService;
+import com.moodcafe.auth.abstraction.service.RefreshTokenService;
 import com.moodcafe.auth.dto.auth.PendingUser;
 import com.moodcafe.auth.dto.auth.request.ConfirmOtpRequest;
 import com.moodcafe.auth.dto.auth.request.LoginRequest;
@@ -17,13 +17,12 @@ import com.moodcafe.auth.dto.auth.request.SendOtpRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.auth.response.ConfirmOtpResponse;
 import com.moodcafe.auth.dto.auth.response.EmailActionResponse;
-import com.moodcafe.auth.dto.user.response.UserResponse;
 import com.moodcafe.auth.entity.Role;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.auth.mapper.UserMapper;
 import com.moodcafe.auth.service.cache.OtpAttemptTracker;
-import com.moodcafe.notification.abstraction.cache.IRedisOtpService;
-import com.moodcafe.notification.abstraction.service.INotificationService;
+import com.moodcafe.notification.abstraction.cache.RedisOtpService;
+import com.moodcafe.notification.abstraction.service.NotificationService;
 import com.moodcafe.notification.dto.request.OtpNotificationRequest;
 import com.moodcafe.notification.dto.request.OtpRequest;
 import com.moodcafe.shared.enums.OtpType;
@@ -46,7 +45,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AuthServiceImpl implements IAuthService {
+public class AuthServiceImpl implements AuthService {
 
     private static final String PENDING_REGISTER_PREFIX = "auth:register:";
     private static final long REGISTRATION_TTL_MINUTES = 5;
@@ -55,13 +54,13 @@ public class AuthServiceImpl implements IAuthService {
     private final RoleRepository roleRepository;
 
     private final PasswordEncoder passwordEncoder;
-    private final IJwtService jwtService;
-    private final IRefreshTokenService refreshTokenService;
+    private final JwtService jwtService;
+    private final RefreshTokenService refreshTokenService;
 
     private final UserMapper userMapper;
 
-    private final INotificationService notificationService;
-    private final IRedisOtpService redisOtpService;
+    private final NotificationService notificationService;
+    private final RedisOtpService redisOtpService;
     private final OtpAttemptTracker otpAttemptTracker;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;

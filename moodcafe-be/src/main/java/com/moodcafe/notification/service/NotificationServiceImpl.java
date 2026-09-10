@@ -1,12 +1,12 @@
 package com.moodcafe.notification.service;
 
-import com.moodcafe.auth.abstraction.service.IUserService;
-import com.moodcafe.notification.abstraction.cache.IRedisIdempotencyService;
-import com.moodcafe.notification.abstraction.cache.IRedisOtpService;
-import com.moodcafe.notification.abstraction.cache.IRedisRateLimitService;
+import com.moodcafe.auth.abstraction.service.UserService;
+import com.moodcafe.notification.abstraction.cache.RedisIdempotencyService;
+import com.moodcafe.notification.abstraction.cache.RedisOtpService;
+import com.moodcafe.notification.abstraction.cache.RedisRateLimitService;
 import com.moodcafe.notification.abstraction.repository.NotificationRepository;
-import com.moodcafe.notification.abstraction.service.IEmailSender;
-import com.moodcafe.notification.abstraction.service.INotificationService;
+import com.moodcafe.notification.abstraction.service.EmailSender;
+import com.moodcafe.notification.abstraction.service.NotificationService;
 import com.moodcafe.notification.dto.request.OtpNotificationRequest;
 import com.moodcafe.notification.dto.response.NotificationResponse;
 import com.moodcafe.notification.entity.Notification;
@@ -29,14 +29,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class NotificationServiceImpl implements INotificationService {
+public class NotificationServiceImpl implements NotificationService {
 
-    private final IRedisOtpService otpService;
-    private final IRedisRateLimitService rateLimitService;
-    private final IRedisIdempotencyService idempotencyService;
+    private final RedisOtpService otpService;
+    private final RedisRateLimitService rateLimitService;
+    private final RedisIdempotencyService idempotencyService;
 
-    private final IEmailSender emailSender;
-    private final IUserService userService;
+    private final EmailSender emailSender;
+    private final UserService userService;
 
     private final NotificationRepository notificationRepository;
     private final NotificationMapper notificationMapper;
