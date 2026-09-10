@@ -1,9 +1,31 @@
 package com.moodcafe.notification.entity.enums;
 
 public enum NotificationType {
-    APPLICATION_STATUS_UPDATED,  // Thay đổi trạng thái ứng tuyển
-    INTERVIEW_SCHEDULED,         // Đặt lịch phỏng vấn
-    NEW_JOB_POSTED,              // Việc làm mới phù hợp
-    SUBSCRIPTION_UPGRADED,       // Nâng cấp gói dịch vụ thành công
-    JOB_STATUS_UPDATED           // Trạng thái tin tuyển dụng thay đổi
+
+    // Store
+    STORE_APPROVED,
+    STORE_REJECTED,
+    STORE_UPDATED,
+
+    // Store staff
+    STAFF_INVITED,
+    STAFF_ADDED,
+    STAFF_REMOVED,
+
+    // Booking / reservation
+    RESERVATION_CREATED,
+    RESERVATION_CONFIRMED,
+    RESERVATION_CANCELLED,
+    RESERVATION_UPDATED,
+
+    // Favorite store
+    FAVORITE_STORE_UPDATED,
+
+    // Vibe Snap
+    VIBE_SNAP_SUBMITTED,
+    VIBE_SNAP_VERIFIED,
+    VIBE_SNAP_REJECTED,
+
+    // System
+    SYSTEM_ANNOUNCEMENT
 }
