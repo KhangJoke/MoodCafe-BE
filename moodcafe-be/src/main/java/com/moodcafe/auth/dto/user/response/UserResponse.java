@@ -1,5 +1,6 @@
 package com.moodcafe.auth.dto.user.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.moodcafe.auth.dto.role.response.RoleResponse;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,7 +14,7 @@ public class UserResponse {
 
     private UUID userId;
     private String email;
-    private String userName ;
+    private String userName;
     private String avatarUrl;
 
     private RoleResponse role;
@@ -21,6 +22,10 @@ public class UserResponse {
     private Boolean active;
     private Boolean emailVerified;
     private Boolean requirePasswordChange;
+    private String noiseTolerance;
+
+    @JsonProperty("isFirstLogin")
+    private Boolean firstLogin;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

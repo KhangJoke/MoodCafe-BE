@@ -4,13 +4,13 @@ import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
-import com.moodcafe.store.abstraction.service.IStoreImageService;
+import com.moodcafe.store.abstraction.service.StoreImageService;
+import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreImageRequest;
 import com.moodcafe.store.dto.response.StoreImageResponse;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreImage;
 import com.moodcafe.store.mapper.StoreImageMapper;
-import com.moodcafe.store.security.StoreSecurityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,17 +20,17 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class StoreImageServiceImpl implements IStoreImageService {
+public class StoreImageServiceImpl implements StoreImageService {
 
     private final StoreRepository storeRepository;
     private final StoreImageRepository storeImageRepository;
     private final StoreImageMapper storeImageMapper;
-    private final StoreSecurityService storeSecurityService;
+    private final StoreStaffService storeStaffService;
 
     @Override
     @Transactional
     public StoreImageResponse addImage(UUID storeId, CreateStoreImageRequest request) {
-        storeSecurityService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
@@ -59,7 +59,7 @@ public class StoreImageServiceImpl implements IStoreImageService {
     @Override
     @Transactional
     public void removeImage(UUID storeId, UUID imageId) {
-        storeSecurityService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
         StoreImage image = storeImageRepository.findByStoreImageIdAndStoreStoreId(imageId, storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_IMAGE_NOT_FOUND));
@@ -83,7 +83,7 @@ public class StoreImageServiceImpl implements IStoreImageService {
     @Override
     @Transactional
     public StoreImageResponse setPrimaryImage(UUID storeId, UUID imageId) {
-        storeSecurityService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
         StoreImage targetImage = storeImageRepository.findByStoreImageIdAndStoreStoreId(imageId, storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_IMAGE_NOT_FOUND));

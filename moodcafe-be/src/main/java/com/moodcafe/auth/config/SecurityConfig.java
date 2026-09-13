@@ -15,6 +15,7 @@ import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -89,7 +90,7 @@ public class SecurityConfig {
 
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
-                                org.springframework.security.config.http.SessionCreationPolicy.STATELESS
+                                SessionCreationPolicy.STATELESS
                         )
                 )
 
@@ -98,6 +99,11 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(
                                 DispatcherType.ASYNC
                         ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/auth/set-password"
+                        ).authenticated()
 
                         .requestMatchers(PUBLIC_ENDPOINTS)
                         .permitAll()
@@ -113,7 +119,9 @@ public class SecurityConfig {
                                 "/api/stores/*",
                                 "/api/stores/*/images",
                                 "/api/stores/*/amenities",
-                                "/api/amenities"
+                                "/api/amenities",
+                                "/api/tags",
+                                "/api/tags/*"
                         ).permitAll()
 
                         .anyRequest()

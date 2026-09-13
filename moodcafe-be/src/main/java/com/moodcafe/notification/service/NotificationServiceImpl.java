@@ -65,11 +65,11 @@ public class NotificationServiceImpl implements NotificationService {
 
         if (!rateLimitService.isAllowed(otpType, email)) {
             log.warn("OTP rate limit exceeded for {}", email);
-            throw new com.moodcafe.shared.exceptions.AppException(com.moodcafe.shared.error.ErrorCode.OTP_RATE_LIMIT_EXCEEDED);
+            throw new AppException(ErrorCode.OTP_RATE_LIMIT_EXCEEDED);
         }
 
         if (!otpService.saveOtp(otpType, email, otp)) {
-            throw new com.moodcafe.shared.exceptions.AppException(com.moodcafe.shared.error.ErrorCode.OTP_SAVE_FAILED);
+            throw new AppException(ErrorCode.OTP_SAVE_FAILED);
         }
 
         emailSender.sendOtpEmailAsync(email, otp);

@@ -7,9 +7,12 @@ import com.moodcafe.auth.dto.auth.request.RefreshTokenRequest;
 import com.moodcafe.auth.dto.auth.request.RegisterRequest;
 import com.moodcafe.auth.dto.auth.request.ResetPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SendOtpRequest;
+import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
+import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.auth.response.ConfirmOtpResponse;
 import com.moodcafe.auth.dto.auth.response.EmailActionResponse;
+import com.moodcafe.auth.dto.user.response.UserResponse;
 import com.moodcafe.shared.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +71,20 @@ public class AuthController {
         );
     }
 
+    @PostMapping("/social-login")
+    public ResponseEntity<ApiResponse<AuthResponse>> socialLogin(
+            @Valid @RequestBody SocialLoginRequest request
+    ) {
+        AuthResponse response = authService.socialLogin(request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        response,
+                        "Social login successfully"
+                )
+        );
+    }
+
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(
             @Valid @RequestBody RefreshTokenRequest request
@@ -118,6 +135,19 @@ public class AuthController {
                 ApiResponse.success(
                         null,
                         "Password has been reset successfully"
+                )
+        );
+    }
+
+    @PostMapping("/set-password")
+    public ResponseEntity<ApiResponse<UserResponse>> setPassword(
+            @Valid @RequestBody SetPasswordRequest request
+    ) {
+        UserResponse response = authService.setPassword(request);
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        response,
+                        "Thiết lập mật khẩu thành công"
                 )
         );
     }

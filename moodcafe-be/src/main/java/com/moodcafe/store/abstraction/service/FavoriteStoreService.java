@@ -5,7 +5,7 @@ import com.moodcafe.store.dto.response.FavoriteStoreResponse;
 import java.util.List;
 import java.util.UUID;
 
-public interface IFavoriteStoreService {
+public interface FavoriteStoreService {
 
     void addFavoriteStore(UUID storeId);
 

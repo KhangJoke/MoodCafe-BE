@@ -1,11 +1,13 @@
 package com.moodcafe.store.service;
 
+import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.AmenityRepository;
 import com.moodcafe.store.abstraction.repository.StoreAmenityRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
-import com.moodcafe.store.abstraction.service.IAmenityService;
+import com.moodcafe.store.abstraction.service.AmenityService;
+import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateAmenityRequest;
 import com.moodcafe.store.dto.request.UpdateAmenityRequest;
 import com.moodcafe.store.dto.response.AmenityResponse;
@@ -13,7 +15,6 @@ import com.moodcafe.store.entity.Amenity;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreAmenity;
 import com.moodcafe.store.mapper.AmenityMapper;
-import com.moodcafe.store.security.StoreSecurityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,18 +24,19 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class AmenityServiceImpl implements IAmenityService {
+public class AmenityServiceImpl implements AmenityService {
 
     private final AmenityRepository amenityRepository;
     private final StoreRepository storeRepository;
     private final StoreAmenityRepository storeAmenityRepository;
     private final AmenityMapper amenityMapper;
-    private final StoreSecurityService storeSecurityService;
+    private final StoreStaffService storeStaffService;
+    private final CurrentUserService currentUserService;
 
     @Override
     @Transactional
     public AmenityResponse createAmenity(CreateAmenityRequest request) {
-        storeSecurityService.requireSystemAdmin();
+        currentUserService.requireSystemAdmin();
 
         String trimmedName = request.getName().trim();
         if (amenityRepository.existsByName(trimmedName)) {
@@ -51,7 +53,7 @@ public class AmenityServiceImpl implements IAmenityService {
     @Override
     @Transactional
     public AmenityResponse updateAmenity(UUID amenityId, UpdateAmenityRequest request) {
-        storeSecurityService.requireSystemAdmin();
+        currentUserService.requireSystemAdmin();
 
         Amenity amenity = amenityRepository.findById(amenityId)
                 .orElseThrow(() -> new AppException(ErrorCode.AMENITY_NOT_FOUND));
@@ -82,7 +84,7 @@ public class AmenityServiceImpl implements IAmenityService {
     @Override
     @Transactional
     public void addAmenityToStore(UUID storeId, UUID amenityId) {
-        storeSecurityService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
@@ -105,7 +107,7 @@ public class AmenityServiceImpl implements IAmenityService {
     @Override
     @Transactional
     public void removeAmenityFromStore(UUID storeId, UUID amenityId) {
-        storeSecurityService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
         if (!storeAmenityRepository.existsByStoreStoreIdAndAmenityAmenityId(storeId, amenityId)) {
             throw new AppException(ErrorCode.STORE_AMENITY_NOT_FOUND);

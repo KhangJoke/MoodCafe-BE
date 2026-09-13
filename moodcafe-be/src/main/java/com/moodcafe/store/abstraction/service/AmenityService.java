@@ -7,7 +7,7 @@ import com.moodcafe.store.dto.response.AmenityResponse;
 import java.util.List;
 import java.util.UUID;
 
-public interface IAmenityService {
+public interface AmenityService {
 
     AmenityResponse createAmenity(CreateAmenityRequest request);
 

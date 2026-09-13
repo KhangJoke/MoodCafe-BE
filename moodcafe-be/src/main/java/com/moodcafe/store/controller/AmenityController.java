@@ -1,7 +1,7 @@
 package com.moodcafe.store.controller;
 
 import com.moodcafe.shared.response.ApiResponse;
-import com.moodcafe.store.abstraction.service.IAmenityService;
+import com.moodcafe.store.abstraction.service.AmenityService;
 import com.moodcafe.store.dto.request.CreateAmenityRequest;
 import com.moodcafe.store.dto.request.UpdateAmenityRequest;
 import com.moodcafe.store.dto.response.AmenityResponse;
@@ -18,7 +18,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AmenityController {
 
-    private final IAmenityService amenityService;
+    private final AmenityService amenityService;
 
     // --- Global Amenities ---
 

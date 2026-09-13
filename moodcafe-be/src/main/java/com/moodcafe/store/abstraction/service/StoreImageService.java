@@ -6,7 +6,7 @@ import com.moodcafe.store.dto.response.StoreImageResponse;
 import java.util.List;
 import java.util.UUID;
 
-public interface IStoreImageService {
+public interface StoreImageService {
 
     StoreImageResponse addImage(UUID storeId, CreateStoreImageRequest request);
 

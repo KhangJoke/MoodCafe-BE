@@ -22,6 +22,8 @@ public interface UserMapper {
     @Mapping(target = "active", ignore = true)
     @Mapping(target = "emailVerified", ignore = true)
     @Mapping(target = "requirePasswordChange", ignore = true)
+    @Mapping(target = "noiseTolerance", ignore = true)
+    @Mapping(target = "firstLogin", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     void updateUser(

@@ -1,6 +1,7 @@
 package com.moodcafe.auth.controller;
 
 import com.moodcafe.auth.abstraction.service.UserService;
+import com.moodcafe.auth.dto.user.request.OnboardingRequest;
 import com.moodcafe.auth.dto.user.request.UserCommonRequest;
 import com.moodcafe.auth.dto.user.response.UserResponse;
 import com.moodcafe.shared.response.ApiResponse;
@@ -27,6 +28,20 @@ public class UserController {
                 ApiResponse.success(
                         user,
                         "Get current user successfully"
+                )
+        );
+    }
+
+    @PostMapping("/onboarding")
+    public ResponseEntity<ApiResponse<UserResponse>> completeOnboarding(
+            @Valid @RequestBody OnboardingRequest request
+    ) {
+        UserResponse user = userService.completeOnboarding(request);
+
+        return ResponseEntity.ok(
+                ApiResponse.success(
+                        user,
+                        "Complete onboarding successfully"
                 )
         );
     }

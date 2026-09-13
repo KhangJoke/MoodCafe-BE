@@ -8,7 +8,7 @@ import com.moodcafe.store.dto.response.StoreResponse;
 import java.util.List;
 import java.util.UUID;
 
-public interface IStoreService {
+public interface StoreService {
 
     StoreResponse createStore(CreateStoreRequest request);
 

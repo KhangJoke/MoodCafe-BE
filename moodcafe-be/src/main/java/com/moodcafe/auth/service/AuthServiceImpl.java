@@ -42,6 +42,15 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import com.moodcafe.auth.abstraction.service.CurrentUserService;
+import com.moodcafe.auth.abstraction.service.SocialAuthService;
+import com.moodcafe.auth.dto.auth.SocialUserInfo;
+import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
+import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
+import com.moodcafe.auth.dto.user.response.UserResponse;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.util.Objects;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -64,6 +73,10 @@ public class AuthServiceImpl implements AuthService {
     private final OtpAttemptTracker otpAttemptTracker;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+
+    private final List<SocialAuthService> socialAuthServices;
+    private final CurrentUserService currentUserService;
+
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -230,6 +243,67 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
+    public AuthResponse socialLogin(SocialLoginRequest request) {
+        String provider = request.getProvider() != null ? request.getProvider().trim().toUpperCase() : "";
+
+        SocialAuthService socialAuthService = socialAuthServices.stream()
+                .filter(service -> service.supports(provider))
+                .findFirst()
+                .orElseThrow(() -> new AppException(ErrorCode.BAD_REQUEST, "Unsupported social login provider: " + provider));
+
+        SocialUserInfo socialUserInfo = socialAuthService.verifyToken(request.getToken());
+        String verifiedEmail = socialUserInfo.getEmail().trim().toLowerCase();
+
+        User user = userRepository.findByEmail(verifiedEmail).orElse(null);
+
+        if (user == null) {
+            Role role = roleRepository.findByName("CUSTOMER")
+                    .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND, "CUSTOMER role not found"));
+
+            String fullName = (socialUserInfo.getFullName() != null && !socialUserInfo.getFullName().isBlank())
+                    ? socialUserInfo.getFullName().trim()
+                    : verifiedEmail.split("@")[0];
+
+            String avatarUrl = socialUserInfo.getAvatarUrl();
+            if ((avatarUrl == null || avatarUrl.isBlank()) && request.getAvatarUrl() != null && !request.getAvatarUrl().isBlank()) {
+                avatarUrl = request.getAvatarUrl().trim();
+            }
+
+            user = User.builder()
+                    .email(verifiedEmail)
+                    .userName(fullName)
+                    .avatarUrl(avatarUrl)
+                    .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                    .role(role)
+                    .active(true)
+                    .emailVerified(true)
+                    .requirePasswordChange(true)
+                    .firstLogin(true)
+                    .noiseTolerance("MEDIUM")
+                    .build();
+
+            user = userRepository.save(user);
+        } else {
+            if (!user.isActive()) {
+                throw new AppException(ErrorCode.USER_IS_BLOCKED, "Account is disabled");
+            }
+            String avatarUrl = socialUserInfo.getAvatarUrl() != null ? socialUserInfo.getAvatarUrl() : request.getAvatarUrl();
+            if ((user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) && avatarUrl != null && !avatarUrl.isBlank()) {
+                user.setAvatarUrl(avatarUrl.trim());
+                user = userRepository.save(user);
+            }
+        }
+
+        UserDetails userDetails = createUserDetails(user);
+        String accessToken = jwtService.generateToken(userDetails);
+        String refreshToken = refreshTokenService.createRefreshToken(user);
+
+        return buildAuthResponse(user, accessToken, refreshToken);
+    }
+
+
+    @Override
     public AuthResponse refresh(RefreshTokenRequest request) {
 
         // 1. Validate old refresh token
@@ -338,6 +412,24 @@ public class AuthServiceImpl implements AuthService {
         } catch (Exception ignored) {
         }
     }
+
+    @Override
+    @Transactional
+    public UserResponse setPassword(SetPasswordRequest request) {
+        User user = currentUserService.getCurrentUser();
+
+        if (!user.isRequirePasswordChange()) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Password change is not required for this account");
+        }
+
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword().trim()));
+        user.setRequirePasswordChange(false);
+        user = userRepository.save(user);
+
+        return userMapper.toResponse(user);
+    }
+
 
     private void savePendingUser(PendingUser pendingUser, long ttlMinutes) {
         try {

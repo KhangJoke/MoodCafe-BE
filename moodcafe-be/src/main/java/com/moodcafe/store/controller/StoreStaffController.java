@@ -1,8 +1,9 @@
 package com.moodcafe.store.controller;
 
 import com.moodcafe.shared.response.ApiResponse;
-import com.moodcafe.store.abstraction.service.IStoreStaffService;
+import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.AddStoreStaffRequest;
+import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStaffRequest;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import jakarta.validation.Valid;
@@ -19,7 +20,16 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StoreStaffController {
 
-    private final IStoreStaffService storeStaffService;
+    private final StoreStaffService storeStaffService;
+
+    @PostMapping("/create")
+    public ResponseEntity<ApiResponse<StoreStaffResponse>> createStaffAccount(
+            @PathVariable UUID storeId,
+            @Valid @RequestBody CreateStaffAccountRequest request) {
+        StoreStaffResponse staff = storeStaffService.createStaffAccount(storeId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(staff, "Staff account created successfully"));
+    }
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<StoreStaffResponse>>> getStoreStaff(

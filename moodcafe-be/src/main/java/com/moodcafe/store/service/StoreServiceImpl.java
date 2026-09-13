@@ -1,10 +1,16 @@
 package com.moodcafe.store.service;
 
+import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
-import com.moodcafe.store.abstraction.repository.*;
-import com.moodcafe.store.abstraction.service.IStoreService;
+import com.moodcafe.store.abstraction.repository.StoreAmenityRepository;
+import com.moodcafe.store.abstraction.repository.StoreImageRepository;
+import com.moodcafe.store.abstraction.repository.StoreRepository;
+import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
+import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
+import com.moodcafe.store.abstraction.service.StoreService;
+import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
@@ -17,7 +23,6 @@ import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.mapper.AmenityMapper;
 import com.moodcafe.store.mapper.StoreImageMapper;
 import com.moodcafe.store.mapper.StoreMapper;
-import com.moodcafe.store.security.StoreSecurityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,7 +33,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class StoreServiceImpl implements IStoreService {
+public class StoreServiceImpl implements StoreService {
 
     private final StoreRepository storeRepository;
     private final StoreRoleRepository storeRoleRepository;
@@ -38,12 +43,13 @@ public class StoreServiceImpl implements IStoreService {
     private final StoreMapper storeMapper;
     private final StoreImageMapper storeImageMapper;
     private final AmenityMapper amenityMapper;
-    private final StoreSecurityService storeSecurityService;
+    private final StoreStaffService storeStaffService;
+    private final CurrentUserService currentUserService;
 
     @Override
     @Transactional
     public StoreResponse createStore(CreateStoreRequest request) {
-        User currentUser = storeSecurityService.getCurrentAuthenticatedUser();
+        User currentUser = currentUserService.getCurrentUser();
 
         Store store = storeMapper.toEntity(request);
         store.setStatus("PENDING");
@@ -91,7 +97,7 @@ public class StoreServiceImpl implements IStoreService {
     @Override
     @Transactional
     public StoreResponse updateStore(UUID storeId, UpdateStoreRequest request) {
-        storeSecurityService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
@@ -105,7 +111,7 @@ public class StoreServiceImpl implements IStoreService {
     @Override
     @Transactional
     public StoreResponse changeStoreStatus(UUID storeId, UpdateStoreStatusRequest request) {
-        storeSecurityService.requireSystemAdmin();
+        currentUserService.requireSystemAdmin();
 
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));

@@ -1,8 +1,8 @@
 package com.moodcafe.store.controller;
 
 import com.moodcafe.shared.response.ApiResponse;
-import com.moodcafe.store.abstraction.service.IStoreService;
-import com.moodcafe.store.abstraction.service.IStoreStaffService;
+import com.moodcafe.store.abstraction.service.StoreService;
+import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
@@ -22,8 +22,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StoreController {
 
-    private final IStoreService storeService;
-    private final IStoreStaffService storeStaffService;
+    private final StoreService storeService;
+    private final StoreStaffService storeStaffService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<StoreResponse>> createStore(@Valid @RequestBody CreateStoreRequest request) {

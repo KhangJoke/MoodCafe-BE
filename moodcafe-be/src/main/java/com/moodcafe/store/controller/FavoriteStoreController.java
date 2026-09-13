@@ -1,7 +1,7 @@
 package com.moodcafe.store.controller;
 
 import com.moodcafe.shared.response.ApiResponse;
-import com.moodcafe.store.abstraction.service.IFavoriteStoreService;
+import com.moodcafe.store.abstraction.service.FavoriteStoreService;
 import com.moodcafe.store.dto.response.FavoriteStoreResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +14,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class FavoriteStoreController {
 
-    private final IFavoriteStoreService favoriteStoreService;
+    private final FavoriteStoreService favoriteStoreService;
 
     @PostMapping("/api/stores/{storeId}/favorite")
     public ResponseEntity<ApiResponse<Void>> addFavoriteStore(@PathVariable UUID storeId) {

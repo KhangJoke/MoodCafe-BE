@@ -53,7 +53,13 @@ public enum ErrorCode {
     FAVORITE_STORE_NOT_FOUND(HttpStatus.NOT_FOUND, "Favorite store not found"),
     FAVORITE_STORE_ALREADY_EXISTS(HttpStatus.CONFLICT, "Store is already in user's favorites"),
     FORBIDDEN_STORE_ACCESS(HttpStatus.FORBIDDEN, "You do not have permission to manage this store"),
+    TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "Tag not found"),
+    TAG_ALREADY_EXISTS(HttpStatus.CONFLICT, "Tag name already exists"),
     // Generic
+    FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 5MB limit"),
+    FILE_TYPE_INVALID(HttpStatus.BAD_REQUEST, "Only JPG, PNG, and WEBP image formats are supported"),
+    FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload file to Cloudinary"),
     FORBIDDEN_ACTION(HttpStatus.FORBIDDEN, "Access denied"),
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "Invalid role"),
     DATABASE_CONNECTION_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "Cơ sở dữ liệu tạm thời gián đoạn kết nối, vui lòng thử lại sau"),

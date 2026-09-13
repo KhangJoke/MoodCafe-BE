@@ -1,7 +1,7 @@
 package com.moodcafe.store.controller;
 
 import com.moodcafe.shared.response.ApiResponse;
-import com.moodcafe.store.abstraction.service.IStoreImageService;
+import com.moodcafe.store.abstraction.service.StoreImageService;
 import com.moodcafe.store.dto.request.CreateStoreImageRequest;
 import com.moodcafe.store.dto.response.StoreImageResponse;
 import jakarta.validation.Valid;
@@ -18,7 +18,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StoreImageController {
 
-    private final IStoreImageService storeImageService;
+    private final StoreImageService storeImageService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<StoreImageResponse>>> getStoreImages(
