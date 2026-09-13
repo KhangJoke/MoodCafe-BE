@@ -63,7 +63,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                         .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND)));
 
         User newStaffUser = User.builder()
-                .userName(request.getName().trim())
+                .fullName(request.getName().trim())
                 .email(email)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(merchantStaffRole)

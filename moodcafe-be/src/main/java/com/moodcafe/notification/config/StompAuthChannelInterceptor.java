@@ -72,7 +72,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 throw new IllegalArgumentException("Invalid token: username missing");
             }
 
-            User user = userRepository.findByUserName(username)
+            User user = userRepository.findByEmail(username)
                     .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
 
             UserDetails userDetails = new CustomUserDetails(user);

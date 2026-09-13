@@ -8,6 +8,7 @@ import com.moodcafe.auth.dto.user.CustomUserDetails;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -21,6 +22,8 @@ import jakarta.servlet.http.*;
 import java.io.IOException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
+@Slf4j
 @RequiredArgsConstructor
 public class JwtFilter extends OncePerRequestFilter {
 
@@ -45,7 +48,8 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         if (token == null || request.getServletPath().startsWith("/api/auth/login")
-                || request.getServletPath().startsWith("/api/auth/refresh")) {
+                || request.getServletPath().startsWith("/api/auth/refresh")
+                || request.getServletPath().startsWith("/api/auth/logout")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -59,13 +63,13 @@ public class JwtFilter extends OncePerRequestFilter {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 return;
             }
-            String username = jwtService.extractUsername(token);
-            User user = userRepository.findByUserName(username)
+            String email = jwtService.extractUsername(token);
+            User user = userRepository.findByEmail(email)
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
             UserDetails userDetails = new CustomUserDetails(user);
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (username != null && authentication == null) {
+            if (email != null && authentication == null) {
                 if (jwtService.isTokenValid(token, userDetails)) {
                     UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(
                             userDetails, null, userDetails.getAuthorities());
@@ -97,6 +101,7 @@ public class JwtFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
+            log.error("JWT Filter validation failed for URI {}: {}", request.getRequestURI(), e.getMessage(), e);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }

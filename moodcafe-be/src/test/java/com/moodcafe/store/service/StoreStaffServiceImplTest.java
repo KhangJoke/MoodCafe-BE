@@ -83,7 +83,7 @@ class StoreStaffServiceImplTest {
         ownerUser = User.builder()
                 .userId(UUID.randomUUID())
                 .email("owner@moodcafe.com")
-                .userName("Owner User")
+                .fullName("Owner User")
                 .role(Role.builder().name("CUSTOMER").build())
                 .build();
 

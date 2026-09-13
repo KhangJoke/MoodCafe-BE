@@ -32,7 +32,7 @@ public class UserController {
         );
     }
 
-    @PostMapping("/onboarding")
+    @RequestMapping(value = "/onboarding", method = {RequestMethod.POST, RequestMethod.PUT})
     public ResponseEntity<ApiResponse<UserResponse>> completeOnboarding(
             @Valid @RequestBody OnboardingRequest request
     ) {

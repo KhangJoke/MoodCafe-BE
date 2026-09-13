@@ -9,7 +9,7 @@ public interface EmailSender {
 
     CompletableFuture<Void> sendPasswordResetEmailAsync(String toEmail, String resetLink);
 
-    CompletableFuture<Void> sendWelcomeEmailAsync(String toEmail, String userName);
+    CompletableFuture<Void> sendWelcomeEmailAsync(String toEmail, String fullName);
 
     CompletableFuture<Void> sendNotificationEmailAsync(String toEmail, String title, String content);
 }

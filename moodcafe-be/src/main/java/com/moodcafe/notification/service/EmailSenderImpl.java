@@ -102,14 +102,14 @@ public class EmailSenderImpl implements EmailSender {
     @Async
     public CompletableFuture<Void> sendWelcomeEmailAsync(
             String toEmail,
-            String userName
+            String fullName
     ) {
 
         try {
             Context context = new Context();
 
             context.setVariable("email", toEmail);
-            context.setVariable("userName", userName);
+            context.setVariable("fullName", fullName);
             context.setVariable("year", Year.now().getValue());
 
             String html = templateEngine.process(

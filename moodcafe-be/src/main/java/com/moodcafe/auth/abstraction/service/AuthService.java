@@ -7,6 +7,7 @@ import com.moodcafe.auth.dto.auth.request.RegisterRequest;
 import com.moodcafe.auth.dto.auth.request.ResetPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SendOtpRequest;
 import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
+import com.moodcafe.auth.dto.auth.request.SetupPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.auth.response.ConfirmOtpResponse;
@@ -32,4 +33,6 @@ public interface AuthService {
     void resetPassword(ResetPasswordRequest request);
 
     UserResponse setPassword(SetPasswordRequest request);
+
+    AuthResponse setupPassword(SetupPasswordRequest request);
 }

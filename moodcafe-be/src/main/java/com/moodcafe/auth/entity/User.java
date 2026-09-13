@@ -33,8 +33,8 @@ public class User {
     @Column(name = "password", length = 255)
     private String password;
 
-    @Column(name = "user_name", nullable = false, length = 150)
-    private String userName;
+    @Column(name = "full_name", nullable = false, length = 150)
+    private String fullName;
 
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;

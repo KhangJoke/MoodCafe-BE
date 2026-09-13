@@ -44,7 +44,7 @@ class CurrentUserServiceImplTest {
         sampleUser = User.builder()
                 .userId(UUID.randomUUID())
                 .email("user@moodcafe.vn")
-                .userName("Mood User")
+                .fullName("Mood User")
                 .role(role)
                 .build();
     }

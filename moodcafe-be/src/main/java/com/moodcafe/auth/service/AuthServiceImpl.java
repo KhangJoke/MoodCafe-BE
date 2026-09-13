@@ -46,6 +46,7 @@ import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.abstraction.service.SocialAuthService;
 import com.moodcafe.auth.dto.auth.SocialUserInfo;
 import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
+import com.moodcafe.auth.dto.auth.request.SetupPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.user.response.UserResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -57,6 +58,7 @@ import java.util.Objects;
 public class AuthServiceImpl implements AuthService {
 
     private static final String PENDING_REGISTER_PREFIX = "auth:register:";
+    private static final String SETUP_PASSWORD_PREFIX = "setup_pwd:";
     private static final long REGISTRATION_TTL_MINUTES = 5;
 
     private final UserRepository userRepository;
@@ -94,7 +96,7 @@ public class AuthServiceImpl implements AuthService {
         // 3. Create PendingUser (encode password before Redis caching for security)
         PendingUser pendingUser = new PendingUser(
                 request.getEmail(),
-                request.getUserName(),
+                request.getFullName(),
                 passwordEncoder.encode(request.getPassword())
         );
 
@@ -163,7 +165,7 @@ public class AuthServiceImpl implements AuthService {
 
             User user = User.builder()
                     .email(pendingUser.email())
-                    .userName(pendingUser.userName())
+                    .fullName(pendingUser.fullName())
                     .password(pendingUser.password()) // already encoded
                     .role(role)
                     .active(true)
@@ -197,6 +199,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public AuthResponse login(LoginRequest request) {
 
         // 1. Find user
@@ -272,7 +275,7 @@ public class AuthServiceImpl implements AuthService {
 
             user = User.builder()
                     .email(verifiedEmail)
-                    .userName(fullName)
+                    .fullName(fullName)
                     .avatarUrl(avatarUrl)
                     .password(passwordEncoder.encode(UUID.randomUUID().toString()))
                     .role(role)
@@ -295,6 +298,17 @@ public class AuthServiceImpl implements AuthService {
             }
         }
 
+        if (user.isRequirePasswordChange()) {
+            String setupToken = UUID.randomUUID().toString();
+            redisTemplate.opsForValue().set(SETUP_PASSWORD_PREFIX + setupToken, user.getUserId().toString(), 15, TimeUnit.MINUTES);
+
+            return AuthResponse.builder()
+                    .user(userMapper.toResponse(user))
+                    .needsPasswordSetup(true)
+                    .setupToken(setupToken)
+                    .build();
+        }
+
         UserDetails userDetails = createUserDetails(user);
         String accessToken = jwtService.generateToken(userDetails);
         String refreshToken = refreshTokenService.createRefreshToken(user);
@@ -304,6 +318,7 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
+    @Transactional
     public AuthResponse refresh(RefreshTokenRequest request) {
 
         // 1. Validate old refresh token
@@ -343,6 +358,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
     public void logout(String refreshToken) {
 
         try {
@@ -428,6 +444,33 @@ public class AuthServiceImpl implements AuthService {
         user = userRepository.save(user);
 
         return userMapper.toResponse(user);
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse setupPassword(SetupPasswordRequest request) {
+        String key = SETUP_PASSWORD_PREFIX + request.getSetupToken();
+        String userIdStr = redisTemplate.opsForValue().get(key);
+
+        if (userIdStr == null || userIdStr.isBlank()) {
+            throw new AppException(ErrorCode.TOKEN_INVALID, "Mã thiết lập mật khẩu đã hết hạn hoặc không hợp lệ");
+        }
+
+        UUID userId = UUID.fromString(userIdStr);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND, "Không tìm thấy người dùng"));
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword().trim()));
+        user.setRequirePasswordChange(false);
+        user = userRepository.save(user);
+
+        redisTemplate.delete(key);
+
+        UserDetails userDetails = createUserDetails(user);
+        String accessToken = jwtService.generateToken(userDetails);
+        String refreshToken = refreshTokenService.createRefreshToken(user);
+
+        return buildAuthResponse(user, accessToken, refreshToken);
     }
 
 

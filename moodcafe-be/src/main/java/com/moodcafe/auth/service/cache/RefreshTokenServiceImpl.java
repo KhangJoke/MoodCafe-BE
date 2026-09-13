@@ -4,9 +4,12 @@ import com.moodcafe.auth.abstraction.repository.RefreshTokenRepository;
 import com.moodcafe.auth.abstraction.service.RefreshTokenService;
 import com.moodcafe.auth.entity.RefreshToken;
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.shared.error.ErrorCode;
+import com.moodcafe.shared.exceptions.AppException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -14,6 +17,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
@@ -46,7 +50,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         RefreshToken refreshToken =
                 refreshTokenRepository.findByToken(token)
                         .orElseThrow(() ->
-                                new RuntimeException(
+                                new AppException(
+                                        ErrorCode.TOKEN_INVALID,
                                         "Invalid refresh token"
                                 )
                         );
@@ -56,7 +61,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
             revokeAllUserTokens(refreshToken.getUser());
 
-            throw new RuntimeException(
+            throw new AppException(
+                    ErrorCode.TOKEN_REVOKED,
                     "Refresh token revoked"
             );
         }
@@ -65,7 +71,8 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         if (refreshToken.getExpiresAt()
                 .isBefore(LocalDateTime.now())) {
 
-            throw new RuntimeException(
+            throw new AppException(
+                    ErrorCode.TOKEN_EXPIRED,
                     "Refresh token expired"
             );
         }
@@ -78,13 +85,9 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         RefreshToken refreshToken =
                 refreshTokenRepository.findByToken(token)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Refresh token not found"
-                                )
-                        );
+                        .orElse(null);
 
-        if (Boolean.TRUE.equals(refreshToken.getRevoked())) {
+        if (refreshToken == null || Boolean.TRUE.equals(refreshToken.getRevoked())) {
             return;
         }
 

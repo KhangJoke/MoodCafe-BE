@@ -15,7 +15,6 @@ public interface UserMapper {
 
     UserResponse toResponse(User user);
 
-    @Mapping(source = "fullName", target = "userName")
     @Mapping(target = "userId", ignore = true)
     @Mapping(target = "password", ignore = true)
     @Mapping(target = "role", ignore = true)

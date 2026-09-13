@@ -9,6 +9,7 @@ import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.abstraction.service.SocialAuthService;
 import com.moodcafe.auth.dto.auth.SocialUserInfo;
 import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
+import com.moodcafe.auth.dto.auth.request.SetupPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.user.response.UserResponse;
@@ -29,6 +30,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -38,6 +40,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -73,7 +76,10 @@ class AuthServiceImplTest {
     private NotificationService notificationService;
 
     @Mock
-    private RedisTemplate<String, Object> redisTemplate;
+    private RedisTemplate<String, String> redisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
 
     @Mock
     private ObjectMapper objectMapper;
@@ -107,7 +113,7 @@ class AuthServiceImplTest {
         sampleUser = User.builder()
                 .userId(UUID.randomUUID())
                 .email("social@moodcafe.vn")
-                .userName("Social User")
+                .fullName("Social User")
                 .role(customerRole)
                 .password("old_encoded_hash")
                 .requirePasswordChange(true)
@@ -210,7 +216,7 @@ class AuthServiceImplTest {
         User savedUser = User.builder()
                 .userId(UUID.randomUUID())
                 .email("newgoogle@moodcafe.vn")
-                .userName("New Google User")
+                .fullName("New Google User")
                 .avatarUrl("https://lh3.googleusercontent.com/avatar.jpg")
                 .role(customerRole)
                 .requirePasswordChange(true)
@@ -219,8 +225,7 @@ class AuthServiceImplTest {
                 .build();
 
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
-        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("mock_access_token");
-        when(refreshTokenService.createRefreshToken(any(User.class))).thenReturn("mock_refresh_token");
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
         UserResponse mappedResponse = UserResponse.builder()
                 .userId(savedUser.getUserId())
@@ -234,8 +239,62 @@ class AuthServiceImplTest {
 
         assertThat(response).isNotNull();
         assertThat(response.getUser()).isNotNull();
-        assertThat(response.getUser().getRequirePasswordChange()).isTrue();
-        assertThat(response.getAccessToken()).isEqualTo("mock_access_token");
+        assertThat(response.isNeedsPasswordSetup()).isTrue();
+        assertThat(response.getSetupToken()).isNotNull();
+        assertThat(response.getAccessToken()).isNull();
+    }
+
+    @Test
+    @DisplayName("setupPassword - valid setupToken sets password and returns AuthResponse")
+    void setupPassword_ValidToken_ReturnsAuthResponse() {
+        String setupToken = UUID.randomUUID().toString();
+        UUID userId = sampleUser.getUserId();
+        SetupPasswordRequest request = SetupPasswordRequest.builder()
+                .setupToken(setupToken)
+                .newPassword("myNewPassword123")
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("setup_pwd:" + setupToken)).thenReturn(userId.toString());
+        when(userRepository.findById(userId)).thenReturn(Optional.of(sampleUser));
+        when(passwordEncoder.encode("myNewPassword123")).thenReturn("encoded_new_password");
+        when(userRepository.save(sampleUser)).thenReturn(sampleUser);
+        when(jwtService.generateToken(any(UserDetails.class))).thenReturn("new_access_token");
+        when(refreshTokenService.createRefreshToken(sampleUser)).thenReturn("new_refresh_token");
+
+        UserResponse mappedUser = UserResponse.builder()
+                .userId(userId)
+                .email(sampleUser.getEmail())
+                .requirePasswordChange(false)
+                .build();
+        when(userMapper.toResponse(sampleUser)).thenReturn(mappedUser);
+
+        AuthResponse response = authService.setupPassword(request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getAccessToken()).isEqualTo("new_access_token");
+        assertThat(response.getRefreshToken()).isEqualTo("new_refresh_token");
+        assertThat(sampleUser.isRequirePasswordChange()).isFalse();
+        assertThat(sampleUser.getPassword()).isEqualTo("encoded_new_password");
+        verify(redisTemplate).delete("setup_pwd:" + setupToken);
+    }
+
+    @Test
+    @DisplayName("setupPassword - expired or invalid setupToken throws TOKEN_INVALID")
+    void setupPassword_InvalidToken_ThrowsTokenInvalid() {
+        SetupPasswordRequest request = SetupPasswordRequest.builder()
+                .setupToken("expired_token")
+                .newPassword("myNewPassword123")
+                .build();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("setup_pwd:expired_token")).thenReturn(null);
+
+        assertThatThrownBy(() -> authService.setupPassword(request))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TOKEN_INVALID);
+
+        verify(userRepository, never()).save(any());
     }
 
     @Test

@@ -11,7 +11,7 @@ public interface StoreStaffMapper {
 
     @Mapping(source = "store.storeId", target = "storeId")
     @Mapping(source = "user.userId", target = "userId")
-    @Mapping(source = "user.userName", target = "userName")
+    @Mapping(source = "user.fullName", target = "fullName")
     @Mapping(source = "user.email", target = "email")
     @Mapping(source = "storeRole.name", target = "storeRole")
     StoreStaffResponse toResponse(StoreStaff storeStaff);

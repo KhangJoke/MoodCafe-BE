@@ -15,7 +15,7 @@ public class StoreStaffResponse {
     private UUID storeStaffId;
     private UUID storeId;
     private UUID userId;
-    private String userName;
+    private String fullName;
     private String email;
     private String storeRole;
     private String status;

@@ -51,7 +51,7 @@ class UserServiceImplTest {
         sampleUser = User.builder()
                 .userId(UUID.randomUUID())
                 .email("test@moodcafe.vn")
-                .userName("Minh Khang")
+                .fullName("Minh Khang")
                 .firstLogin(true)
                 .noiseTolerance(null)
                 .active(true)
@@ -60,7 +60,7 @@ class UserServiceImplTest {
         sampleResponse = UserResponse.builder()
                 .userId(sampleUser.getUserId())
                 .email(sampleUser.getEmail())
-                .userName(sampleUser.getUserName())
+                .fullName(sampleUser.getFullName())
                 .firstLogin(false)
                 .noiseTolerance("LOW")
                 .build();
