@@ -3,6 +3,8 @@ package com.moodcafe.store.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -15,6 +17,8 @@ import java.util.UUID;
                 @Index(name = "idx_store_images_primary", columnList = "store_id, is_primary")
         }
 )
+@SQLDelete(sql = "UPDATE store_images SET is_deleted = true WHERE store_image_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -37,6 +41,10 @@ public class StoreImage {
     @Builder.Default
     @Column(name = "is_primary", nullable = false)
     private boolean primary = false;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

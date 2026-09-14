@@ -3,6 +3,8 @@ package com.moodcafe.store.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -18,6 +20,8 @@ import java.util.UUID;
                 @Index(name = "idx_store_amenities_amenity_id", columnList = "amenity_id")
         }
 )
+@SQLDelete(sql = "UPDATE store_amenities SET is_deleted = true WHERE store_amenity_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -37,6 +41,10 @@ public class StoreAmenity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "amenity_id", nullable = false, foreignKey = @ForeignKey(name = "fk_store_amenities_amenity"))
     private Amenity amenity;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

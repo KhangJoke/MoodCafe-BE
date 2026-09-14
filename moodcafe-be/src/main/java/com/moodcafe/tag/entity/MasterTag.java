@@ -3,6 +3,8 @@ package com.moodcafe.tag.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -15,6 +17,8 @@ import java.util.UUID;
                 @Index(name = "idx_vibe_tags_category", columnList = "category")
         }
 )
+@SQLDelete(sql = "UPDATE vibe_tags SET is_deleted = true WHERE vibe_tag_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -44,6 +48,10 @@ public class MasterTag {
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

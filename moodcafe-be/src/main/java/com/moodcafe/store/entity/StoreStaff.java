@@ -4,6 +4,8 @@ import com.moodcafe.auth.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -20,6 +22,8 @@ import java.util.UUID;
                 @Index(name = "idx_store_staffs_role_id", columnList = "store_role_id")
         }
 )
+@SQLDelete(sql = "UPDATE store_staffs SET is_deleted = true WHERE store_staff_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -51,6 +55,10 @@ public class StoreStaff {
     @Builder.Default
     @Column(name = "joined_at", nullable = false)
     private LocalDateTime joinedAt = LocalDateTime.now();
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
