@@ -53,14 +53,17 @@ public class AuthController {
 
     @PostMapping("/confirm-otp")
     public ResponseEntity<ApiResponse<ConfirmOtpResponse>> confirmOtp(
-            @Valid @RequestBody ConfirmOtpRequest request
+            @Valid @RequestBody ConfirmOtpRequest request,
+            @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+            HttpServletResponse response
     ) {
-        ConfirmOtpResponse response = authService.confirmOtp(request);
+        ConfirmOtpResponse confirmResponse = authService.confirmOtp(request);
+        handleRefreshTokenCookie(response, confirmResponse, cookiesEnabled);
 
         return ResponseEntity.ok(
                 ApiResponse.success(
-                        response,
-                        response.getMessage()
+                        confirmResponse,
+                        confirmResponse.getMessage()
                 )
         );
     }
@@ -157,6 +160,15 @@ public class AuthController {
             if (authResponse != null && authResponse.getRefreshToken() != null) {
                 cookieUtils.setRefreshTokenCookie(response, authResponse.getRefreshToken());
                 authResponse.setRefreshToken(null);
+            }
+        }
+    }
+
+    private void handleRefreshTokenCookie(HttpServletResponse response, ConfirmOtpResponse confirmResponse, String cookiesEnabled) {
+        if ("true".equalsIgnoreCase(cookiesEnabled)) {
+            if (confirmResponse != null && confirmResponse.getRefreshToken() != null) {
+                cookieUtils.setRefreshTokenCookie(response, confirmResponse.getRefreshToken());
+                confirmResponse.setRefreshToken(null);
             }
         }
     }

@@ -176,10 +176,16 @@ public class AuthServiceImpl implements AuthService {
             User savedUser = userRepository.save(user);
             deletePendingUser(email);
 
+            UserDetails userDetails = createUserDetails(savedUser);
+            String accessToken = jwtService.generateToken(userDetails);
+            String refreshToken = refreshTokenService.createRefreshToken(savedUser);
+
             return ConfirmOtpResponse.builder()
                     .verified(true)
                     .message("User registration completed successfully")
                     .user(userMapper.toResponse(savedUser))
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
                     .build();
 
         // 5. Handle FORGET_PASSWORD flow

@@ -1,4 +1,4 @@
-package com.moodcafe.notification.controllers;
+package com.moodcafe.notification.controller;
 
 import com.moodcafe.auth.dto.user.CustomUserDetails;
 import com.moodcafe.notification.abstraction.service.NotificationService;

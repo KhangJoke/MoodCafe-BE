@@ -37,7 +37,8 @@ public class SecurityConfig {
             "/swagger-ui/**",
             "/v3/api-docs/**",
             "/ws/**",
-            "/ws"
+            "/ws",
+            "/error"
     };
 
     private final JwtService jwtService;
@@ -97,7 +98,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
 
                         .dispatcherTypeMatchers(
-                                DispatcherType.ASYNC
+                                DispatcherType.ASYNC,
+                                DispatcherType.ERROR
                         ).permitAll()
 
                         .requestMatchers(

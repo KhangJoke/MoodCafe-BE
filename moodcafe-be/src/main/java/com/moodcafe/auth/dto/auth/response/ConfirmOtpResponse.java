@@ -19,4 +19,6 @@ public class ConfirmOtpResponse {
     private String message;
     private String resetToken;
     private UserResponse user;
+    private String accessToken;
+    private String refreshToken;
 }
