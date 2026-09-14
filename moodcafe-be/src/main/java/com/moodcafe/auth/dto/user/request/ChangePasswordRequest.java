@@ -2,19 +2,15 @@ package com.moodcafe.auth.dto.user.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.Setter;
 
-import java.util.UUID;
+public record ChangePasswordRequest(
+        @NotBlank(message = "Mật khẩu hiện tại không được để trống")
+        String currentPassword,
 
-@Getter
-@Setter
-public class ChangePasswordRequest {
-    @NotBlank(message = "Id is required")
-    private UUID id;
-    @NotBlank(message = "Old Password is required")
-    private String oldPassword;
-    @NotBlank(message = "New Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
-    private String newPassword;
-}
+        @NotBlank(message = "Mật khẩu mới không được để trống")
+        @Size(min = 6, max = 100, message = "Mật khẩu mới phải có ít nhất 6 ký tự")
+        String newPassword,
+
+        @NotBlank(message = "Xác nhận mật khẩu không được để trống")
+        String confirmPassword
+) {}

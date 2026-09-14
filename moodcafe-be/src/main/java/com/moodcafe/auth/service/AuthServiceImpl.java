@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.abstraction.service.SocialAuthService;
 import com.moodcafe.auth.dto.auth.SocialUserInfo;
-import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
+import com.moodcafe.auth.dto.user.request.ChangePasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SetupPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.user.response.UserResponse;
@@ -437,19 +437,25 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public UserResponse setPassword(SetPasswordRequest request) {
-        User user = currentUserService.getCurrentUser();
-
-        if (!user.isRequirePasswordChange()) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Password change is not required for this account");
+    public void changePassword(ChangePasswordRequest request) {
+        if (!request.newPassword().equals(request.confirmPassword())) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Mật khẩu xác nhận không khớp với mật khẩu mới");
         }
 
+        User user = currentUserService.getCurrentUser();
 
-        user.setPassword(passwordEncoder.encode(request.getNewPassword().trim()));
+        if (user.getPassword() != null && !passwordEncoder.matches(request.currentPassword(), user.getPassword())) {
+            throw new AppException(ErrorCode.WRONG_PASSWORD, "Mật khẩu hiện tại không chính xác");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.newPassword().trim()));
         user.setRequirePasswordChange(false);
-        user = userRepository.save(user);
+        userRepository.save(user);
 
-        return userMapper.toResponse(user);
+        try {
+            refreshTokenService.revokeAllUserTokens(user);
+        } catch (Exception ignored) {
+        }
     }
 
     @Override

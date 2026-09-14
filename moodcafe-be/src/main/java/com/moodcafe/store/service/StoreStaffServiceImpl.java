@@ -1,8 +1,8 @@
 package com.moodcafe.store.service;
 
-import com.moodcafe.auth.abstraction.repository.RoleRepository;
-import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
+import com.moodcafe.auth.abstraction.service.RoleService;
+import com.moodcafe.auth.abstraction.service.UserService;
 import com.moodcafe.auth.entity.Role;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.error.ErrorCode;
@@ -14,6 +14,7 @@ import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.AddStoreStaffRequest;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
+import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStaffRequest;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import com.moodcafe.store.dto.response.UserStoreResponse;
@@ -38,8 +39,8 @@ public class StoreStaffServiceImpl implements StoreStaffService {
     private final StoreRepository storeRepository;
     private final StoreStaffRepository storeStaffRepository;
     private final StoreRoleRepository storeRoleRepository;
-    private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
+    private final UserService userService;
+    private final RoleService roleService;
     private final StoreStaffMapper storeStaffMapper;
     private final PasswordEncoder passwordEncoder;
     private final CurrentUserService currentUserService;
@@ -54,13 +55,16 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
         String email = request.getEmail().trim().toLowerCase();
-        if (userRepository.existsByEmail(email)) {
+        if (userService.existsByEmail(email)) {
             throw new AppException(ErrorCode.EMAIL_ALREADY_REGISTERED, "Email đã tồn tại trong hệ thống");
         }
 
-        Role merchantStaffRole = roleRepository.findByName("MERCHANT_STAFF")
-                .orElseGet(() -> roleRepository.findByName("CUSTOMER")
-                        .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND)));
+        Role merchantStaffRole;
+        try {
+            merchantStaffRole = roleService.getRoleByName("MERCHANT_STAFF");
+        } catch (AppException e) {
+            merchantStaffRole = roleService.getRoleByName("CUSTOMER");
+        }
 
         User newStaffUser = User.builder()
                 .fullName(request.getName().trim())
@@ -73,7 +77,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .firstLogin(false)
                 .build();
 
-        newStaffUser = userRepository.save(newStaffUser);
+        newStaffUser = userService.createUserEntity(newStaffUser);
 
         StoreRole role = storeRoleRepository.findByName(request.getStoreRole().trim().toUpperCase())
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_ROLE_NOT_FOUND));
@@ -98,8 +102,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
-        User targetUser = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        User targetUser = userService.getUserEntityById(request.getUserId());
 
         if (storeStaffRepository.existsByStoreStoreIdAndUserUserId(storeId, targetUser.getUserId())) {
             throw new AppException(ErrorCode.STORE_STAFF_ALREADY_EXISTS);
@@ -140,6 +143,18 @@ public class StoreStaffServiceImpl implements StoreStaffService {
 
         staff = storeStaffRepository.save(staff);
         return storeStaffMapper.toResponse(staff);
+    }
+
+    @Override
+    @Transactional
+    public void updateStaffPassword(UUID storeId, UUID userId, UpdateStaffPasswordRequest request) {
+        requireStoreAccess(storeId, "OWNER");
+
+        if (!storeStaffRepository.existsByStoreStoreIdAndUserUserId(storeId, userId)) {
+            throw new AppException(ErrorCode.STORE_STAFF_NOT_FOUND);
+        }
+
+        userService.updateUserPassword(userId, request.getNewPassword().trim());
     }
 
     @Override

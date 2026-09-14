@@ -1,8 +1,8 @@
 package com.moodcafe.store.service;
 
-import com.moodcafe.auth.abstraction.repository.RoleRepository;
-import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
+import com.moodcafe.auth.abstraction.service.RoleService;
+import com.moodcafe.auth.abstraction.service.UserService;
 import com.moodcafe.auth.entity.Role;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.error.ErrorCode;
@@ -11,6 +11,7 @@ import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
+import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreRole;
@@ -51,10 +52,10 @@ class StoreStaffServiceImplTest {
     private StoreRoleRepository storeRoleRepository;
 
     @Mock
-    private UserRepository userRepository;
+    private UserService userService;
 
     @Mock
-    private RoleRepository roleRepository;
+    private RoleService roleService;
 
     @Mock
     private PasswordEncoder passwordEncoder;
@@ -128,10 +129,10 @@ class StoreStaffServiceImplTest {
         when(storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, ownerUser.getUserId()))
                 .thenReturn(Optional.of(StoreStaff.builder().store(store).user(ownerUser).storeRole(ownerRole).build()));
         when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
-        when(userRepository.existsByEmail("cashier@moodcafe.com")).thenReturn(false);
-        when(roleRepository.findByName("MERCHANT_STAFF")).thenReturn(Optional.of(merchantStaffSystemRole));
+        when(userService.existsByEmail("cashier@moodcafe.com")).thenReturn(false);
+        when(roleService.getRoleByName("MERCHANT_STAFF")).thenReturn(merchantStaffSystemRole);
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encodedPassword");
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userService.createUserEntity(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(storeRoleRepository.findByName("CASHIER")).thenReturn(Optional.of(staffRole));
         when(storeStaffRepository.save(any(StoreStaff.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -143,7 +144,7 @@ class StoreStaffServiceImplTest {
 
         assertThat(result).isNotNull();
         assertThat(result.getStoreRole()).isEqualTo("CASHIER");
-        verify(userRepository).save(any(User.class));
+        verify(userService).createUserEntity(any(User.class));
         verify(storeStaffRepository).save(any(StoreStaff.class));
     }
 
@@ -159,14 +160,47 @@ class StoreStaffServiceImplTest {
         when(storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, ownerUser.getUserId()))
                 .thenReturn(Optional.of(StoreStaff.builder().store(store).user(ownerUser).storeRole(ownerRole).build()));
         when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
-        when(userRepository.existsByEmail("existing@moodcafe.com")).thenReturn(true);
+        when(userService.existsByEmail("existing@moodcafe.com")).thenReturn(true);
 
         assertThatThrownBy(() -> storeStaffService.createStaffAccount(storeId, request))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("Email đã tồn tại");
 
-        verify(userRepository, never()).save(any(User.class));
+        verify(userService, never()).createUserEntity(any(User.class));
         verify(storeStaffRepository, never()).save(any(StoreStaff.class));
+    }
+
+    @Test
+    @DisplayName("updateStaffPassword should update password successfully")
+    void updateStaffPassword_Success() {
+        UUID staffUserId = UUID.randomUUID();
+        UpdateStaffPasswordRequest request = new UpdateStaffPasswordRequest("newSecret123");
+
+        when(storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, ownerUser.getUserId()))
+                .thenReturn(Optional.of(StoreStaff.builder().store(store).user(ownerUser).storeRole(ownerRole).build()));
+        when(storeStaffRepository.existsByStoreStoreIdAndUserUserId(storeId, staffUserId)).thenReturn(true);
+
+        storeStaffService.updateStaffPassword(storeId, staffUserId, request);
+
+        verify(userService).updateUserPassword(staffUserId, "newSecret123");
+    }
+
+    @Test
+    @DisplayName("updateStaffPassword should throw exception when staff not found in store")
+    void updateStaffPassword_StaffNotFound() {
+        UUID staffUserId = UUID.randomUUID();
+        UpdateStaffPasswordRequest request = new UpdateStaffPasswordRequest("newSecret123");
+
+        when(storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, ownerUser.getUserId()))
+                .thenReturn(Optional.of(StoreStaff.builder().store(store).user(ownerUser).storeRole(ownerRole).build()));
+        when(storeStaffRepository.existsByStoreStoreIdAndUserUserId(storeId, staffUserId)).thenReturn(false);
+
+        assertThatThrownBy(() -> storeStaffService.updateStaffPassword(storeId, staffUserId, request))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.STORE_STAFF_NOT_FOUND);
+
+        verify(userService, never()).updateUserPassword(any(), any());
     }
 
     @Test

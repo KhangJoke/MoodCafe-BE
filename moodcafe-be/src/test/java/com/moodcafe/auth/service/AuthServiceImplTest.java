@@ -8,8 +8,8 @@ import com.moodcafe.auth.abstraction.service.RefreshTokenService;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.abstraction.service.SocialAuthService;
 import com.moodcafe.auth.dto.auth.SocialUserInfo;
-import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SetupPasswordRequest;
+import com.moodcafe.auth.dto.user.request.ChangePasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.user.response.UserResponse;
@@ -127,68 +127,6 @@ class AuthServiceImplTest {
     void tearDown() {
         SecurityContextHolder.clearContext();
     }
-
-    @Test
-    @DisplayName("setPassword - successfully encodes new password and clears requirePasswordChange")
-    void setPassword_Success() {
-        when(currentUserService.getCurrentUser()).thenReturn(sampleUser);
-        when(passwordEncoder.encode("mySecurePassword123")).thenReturn("new_encoded_hash");
-        when(userRepository.save(any(User.class))).thenReturn(sampleUser);
-
-        UserResponse userResponse = UserResponse.builder()
-                .userId(sampleUser.getUserId())
-                .email(sampleUser.getEmail())
-                .requirePasswordChange(false)
-                .build();
-        when(userMapper.toResponse(sampleUser)).thenReturn(userResponse);
-
-        SetPasswordRequest request = SetPasswordRequest.builder()
-                .newPassword("mySecurePassword123")
-                .build();
-
-        UserResponse response = authService.setPassword(request);
-
-        assertThat(response).isNotNull();
-        assertThat(response.getRequirePasswordChange()).isFalse();
-        assertThat(sampleUser.getPassword()).isEqualTo("new_encoded_hash");
-        assertThat(sampleUser.isRequirePasswordChange()).isFalse();
-        verify(userRepository, times(1)).save(sampleUser);
-    }
-
-    @Test
-    @DisplayName("setPassword - throws USER_NOT_FOUND when user does not exist")
-    void setPassword_UserNotFound() {
-        when(currentUserService.getCurrentUser()).thenThrow(new AppException(ErrorCode.USER_NOT_FOUND));
-
-        SetPasswordRequest request = SetPasswordRequest.builder()
-                .newPassword("mySecurePassword123")
-                .build();
-
-        assertThatThrownBy(() -> authService.setPassword(request))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
-
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("setPassword - throws BAD_REQUEST when requirePasswordChange is false")
-    void setPassword_NotRequired_ThrowsBadRequest() {
-        sampleUser.setRequirePasswordChange(false);
-        when(currentUserService.getCurrentUser()).thenReturn(sampleUser);
-
-        SetPasswordRequest request = SetPasswordRequest.builder()
-                .newPassword("mySecurePassword123")
-                .build();
-
-        assertThatThrownBy(() -> authService.setPassword(request))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
-
-        verify(userRepository, never()).save(any());
-    }
-
-
 
     @Test
     @DisplayName("socialLogin - new user is created with requirePasswordChange=true")
@@ -310,6 +248,53 @@ class AuthServiceImplTest {
         assertThatThrownBy(() -> authService.socialLogin(request))
                 .isInstanceOf(AppException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
+    }
+
+    @Test
+    @DisplayName("changePassword - success updates password and revokes tokens")
+    void changePassword_Success() {
+        ChangePasswordRequest request = new ChangePasswordRequest("oldPass123", "newPass123", "newPass123");
+
+        when(currentUserService.getCurrentUser()).thenReturn(sampleUser);
+        sampleUser.setPassword("encoded_oldPass");
+        when(passwordEncoder.matches("oldPass123", "encoded_oldPass")).thenReturn(true);
+        when(passwordEncoder.encode("newPass123")).thenReturn("encoded_newPass");
+
+        authService.changePassword(request);
+
+        assertThat(sampleUser.getPassword()).isEqualTo("encoded_newPass");
+        assertThat(sampleUser.isRequirePasswordChange()).isFalse();
+        verify(userRepository).save(sampleUser);
+        verify(refreshTokenService).revokeAllUserTokens(sampleUser);
+    }
+
+    @Test
+    @DisplayName("changePassword - mismatch confirmation throws INVALID_INPUT")
+    void changePassword_MismatchConfirm_ThrowsInvalidInput() {
+        ChangePasswordRequest request = new ChangePasswordRequest("oldPass123", "newPass123", "differentPass");
+
+        assertThatThrownBy(() -> authService.changePassword(request))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+
+        verify(currentUserService, never()).getCurrentUser();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("changePassword - wrong current password throws WRONG_PASSWORD")
+    void changePassword_WrongCurrentPassword_ThrowsWrongPassword() {
+        ChangePasswordRequest request = new ChangePasswordRequest("wrongPass", "newPass123", "newPass123");
+
+        when(currentUserService.getCurrentUser()).thenReturn(sampleUser);
+        sampleUser.setPassword("encoded_realPass");
+        when(passwordEncoder.matches("wrongPass", "encoded_realPass")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.changePassword(request))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WRONG_PASSWORD);
+
+        verify(userRepository, never()).save(any());
     }
 }
 

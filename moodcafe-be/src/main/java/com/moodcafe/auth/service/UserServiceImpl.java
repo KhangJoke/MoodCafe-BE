@@ -11,6 +11,7 @@ import com.moodcafe.auth.mapper.UserMapper;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final CurrentUserService currentUserService;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public UserResponse getCurrentUser() {
@@ -87,5 +89,40 @@ public class UserServiceImpl implements UserService {
     @Override
     public boolean existsById(UUID userId) {
         return userRepository.existsById(userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsByEmail(String email) {
+        return userRepository.existsByEmail(email);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public User getUserEntityById(UUID userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public User getUserEntityByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    @Override
+    @Transactional
+    public User createUserEntity(User user) {
+        return userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public void updateUserPassword(UUID userId, String rawNewPassword) {
+        User user = getUserEntityById(userId);
+        user.setPassword(passwordEncoder.encode(rawNewPassword.trim()));
+        user.setRequirePasswordChange(false);
+        userRepository.save(user);
     }
 }

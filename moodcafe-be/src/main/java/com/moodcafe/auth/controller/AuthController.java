@@ -7,7 +7,7 @@ import com.moodcafe.auth.dto.auth.request.RefreshTokenRequest;
 import com.moodcafe.auth.dto.auth.request.RegisterRequest;
 import com.moodcafe.auth.dto.auth.request.ResetPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SendOtpRequest;
-import com.moodcafe.auth.dto.auth.request.SetPasswordRequest;
+import com.moodcafe.auth.dto.user.request.ChangePasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SetupPasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -199,15 +200,15 @@ public class AuthController {
         );
     }
 
-    @PostMapping("/set-password")
-    public ResponseEntity<ApiResponse<UserResponse>> setPassword(
-            @Valid @RequestBody SetPasswordRequest request
+    @PutMapping("/change-password")
+    public ResponseEntity<ApiResponse<Void>> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request
     ) {
-        UserResponse response = authService.setPassword(request);
+        authService.changePassword(request);
         return ResponseEntity.ok(
                 ApiResponse.success(
-                        response,
-                        "Thiết lập mật khẩu thành công"
+                        null,
+                        "Đổi mật khẩu thành công"
                 )
         );
     }

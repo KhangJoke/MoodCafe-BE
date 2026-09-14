@@ -1,8 +1,8 @@
 package com.moodcafe.notification.config;
 
 import com.moodcafe.auth.abstraction.cache.RedisTokenService;
-import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.abstraction.service.JwtService;
+import com.moodcafe.auth.abstraction.service.UserService;
 import com.moodcafe.auth.dto.user.CustomUserDetails;
 import com.moodcafe.auth.entity.User;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtService jwtService;
     private final RedisTokenService redisTokenService;
-    private final UserRepository userRepository;
+    private final UserService userService;
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
@@ -72,8 +72,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 throw new IllegalArgumentException("Invalid token: username missing");
             }
 
-            User user = userRepository.findByEmail(username)
-                    .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
+            User user = userService.getUserEntityByEmail(username);
 
             UserDetails userDetails = new CustomUserDetails(user);
             if (!jwtService.isTokenValid(token, userDetails)) {

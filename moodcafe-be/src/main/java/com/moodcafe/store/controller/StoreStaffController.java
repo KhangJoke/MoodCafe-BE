@@ -4,6 +4,7 @@ import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.AddStoreStaffRequest;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
+import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStaffRequest;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import jakarta.validation.Valid;
@@ -54,6 +55,15 @@ public class StoreStaffController {
             @Valid @RequestBody UpdateStoreStaffRequest request) {
         StoreStaffResponse staff = storeStaffService.updateStaffRole(storeId, userId, request);
         return ResponseEntity.ok(ApiResponse.success(staff, "Staff updated successfully"));
+    }
+
+    @PutMapping("/{userId}/password")
+    public ResponseEntity<ApiResponse<Void>> updateStaffPassword(
+            @PathVariable UUID storeId,
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateStaffPasswordRequest request) {
+        storeStaffService.updateStaffPassword(storeId, userId, request);
+        return ResponseEntity.ok(ApiResponse.success(null, "Staff password updated successfully"));
     }
 
     @DeleteMapping("/{userId}")
