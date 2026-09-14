@@ -55,6 +55,10 @@ public enum ErrorCode {
     FORBIDDEN_STORE_ACCESS(HttpStatus.FORBIDDEN, "You do not have permission to manage this store"),
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "Tag not found"),
     TAG_ALREADY_EXISTS(HttpStatus.CONFLICT, "Tag name already exists"),
+    // Review
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "Review not found"),
+    REVIEW_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST, "A live photo of the store taken at the moment is required to submit a review"),
+    FORBIDDEN_REVIEW_ACTION(HttpStatus.FORBIDDEN, "You do not have permission to modify this review"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 5MB limit"),
