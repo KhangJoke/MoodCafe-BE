@@ -95,4 +95,57 @@ class CloudinaryServiceImplTest {
         assertThat(response.getPublicId()).isEqualTo("moodcafe/cafe");
         assertThat(response.getFormat()).isEqualTo("jpg");
     }
+
+    @Test
+    @DisplayName("extractPublicId - returns expected public ID for various URL formats")
+    void extractPublicId_Scenarios() {
+        assertThat(cloudinaryService.extractPublicId(null)).isNull();
+        assertThat(cloudinaryService.extractPublicId("")).isNull();
+
+        // Already a publicId
+        assertThat(cloudinaryService.extractPublicId("moodcafe/stores/sample"))
+                .isEqualTo("moodcafe/stores/sample");
+
+        // Standard Cloudinary URL with version and extension
+        assertThat(cloudinaryService.extractPublicId("https://res.cloudinary.com/demo/image/upload/v1/moodcafe/cafe.jpg"))
+                .isEqualTo("moodcafe/cafe");
+
+        // Store image URL with timestamp version and nested folders
+        assertThat(cloudinaryService.extractPublicId("https://res.cloudinary.com/demo/image/upload/v1712345678/moodcafe/stores/store-123/img-abc.png"))
+                .isEqualTo("moodcafe/stores/store-123/img-abc");
+
+        // URL with transformations and version
+        assertThat(cloudinaryService.extractPublicId("https://res.cloudinary.com/demo/image/upload/c_fill,w_300/v12345/moodcafe/stores/store-123/img-abc.webp"))
+                .isEqualTo("moodcafe/stores/store-123/img-abc");
+    }
+
+    @Test
+    @DisplayName("deleteImage - calls destroy when publicId is valid")
+    void deleteImage_Success() throws IOException {
+        when(cloudinary.uploader()).thenReturn(uploader);
+
+        cloudinaryService.deleteImage("moodcafe/stores/sample");
+
+        verify(uploader, times(1)).destroy(eq("moodcafe/stores/sample"), anyMap());
+    }
+
+    @Test
+    @DisplayName("deleteImage - does not call destroy when publicId is null or blank")
+    void deleteImage_NullOrBlank_DoesNothing() {
+        cloudinaryService.deleteImage(null);
+        cloudinaryService.deleteImage("  ");
+
+        verifyNoInteractions(cloudinary);
+    }
+
+    @Test
+    @DisplayName("deleteImageByUrl - extracts publicId and destroys image")
+    void deleteImageByUrl_Success() throws IOException {
+        when(cloudinary.uploader()).thenReturn(uploader);
+
+        String url = "https://res.cloudinary.com/demo/image/upload/v1712345678/moodcafe/stores/store-123/img-abc.png";
+        cloudinaryService.deleteImageByUrl(url);
+
+        verify(uploader, times(1)).destroy(eq("moodcafe/stores/store-123/img-abc"), anyMap());
+    }
 }

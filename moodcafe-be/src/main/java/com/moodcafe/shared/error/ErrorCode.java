@@ -60,6 +60,11 @@ public enum ErrorCode {
     ONBOARDING_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "Onboarding question not found"),
     STORE_TAG_ALREADY_REQUESTED(HttpStatus.CONFLICT, "Tag has already been requested or approved for this store"),
     STORE_TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "Store tag association not found"),
+    // Review
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "Review not found"),
+    REVIEW_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST,
+            "A live photo of the store taken at the moment is required to submit a review"),
+    FORBIDDEN_REVIEW_ACTION(HttpStatus.FORBIDDEN, "You do not have permission to modify this review"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 5MB limit"),
@@ -67,9 +72,9 @@ public enum ErrorCode {
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload file to Cloudinary"),
     FORBIDDEN_ACTION(HttpStatus.FORBIDDEN, "Access denied"),
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "Invalid role"),
-    DATABASE_CONNECTION_ERROR(HttpStatus.SERVICE_UNAVAILABLE, "Cơ sở dữ liệu tạm thời gián đoạn kết nối, vui lòng thử lại sau"),
+    DATABASE_CONNECTION_ERROR(HttpStatus.SERVICE_UNAVAILABLE,
+            "Cơ sở dữ liệu tạm thời gián đoạn kết nối, vui lòng thử lại sau"),
     UNCATEGORIZED_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, "Uncategorized exception");
-
 
     private final HttpStatus statusCode;
     private final String message;

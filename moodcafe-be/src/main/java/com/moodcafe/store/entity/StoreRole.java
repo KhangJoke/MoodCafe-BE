@@ -13,6 +13,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -24,6 +26,8 @@ import java.util.UUID;
                 @Index(name = "idx_store_roles_name", columnList = "name", unique = true)
         }
 )
+@SQLDelete(sql = "UPDATE store_roles SET is_deleted = true WHERE store_role_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -41,6 +45,10 @@ public class StoreRole {
 
     @Column(name = "description", length = 255)
     private String description;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

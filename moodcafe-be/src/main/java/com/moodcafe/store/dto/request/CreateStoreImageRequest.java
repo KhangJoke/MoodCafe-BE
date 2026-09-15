@@ -1,8 +1,8 @@
 package com.moodcafe.store.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Getter
 @Setter
@@ -11,9 +11,8 @@ import lombok.*;
 @Builder
 public class CreateStoreImageRequest {
 
-    @NotBlank(message = "Image URL is required")
-    @Size(max = 500, message = "Image URL cannot exceed 500 characters")
-    private String imageUrl;
+    @NotNull(message = "Image file is required")
+    private MultipartFile file;
 
     @Builder.Default
     private Boolean isPrimary = false;
