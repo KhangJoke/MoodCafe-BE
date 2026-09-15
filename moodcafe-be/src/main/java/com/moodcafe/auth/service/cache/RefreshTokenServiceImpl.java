@@ -11,7 +11,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,11 +33,11 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
                 .token(UUID.randomUUID().toString())
                 .user(user)
                 .expiresAt(
-                        LocalDateTime.now()
-                                .plusDays(refreshTokenExpirationDays)
+                        Instant.now()
+                                .plus(refreshTokenExpirationDays, ChronoUnit.DAYS)
                 )
                 .revoked(false)
-                .createdAt(LocalDateTime.now())
+                .createdAt(Instant.now())
                 .build();
 
         refreshTokenRepository.save(refreshToken);
@@ -69,7 +70,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         // Expiration check
         if (refreshToken.getExpiresAt()
-                .isBefore(LocalDateTime.now())) {
+                .isBefore(Instant.now())) {
 
             throw new AppException(
                     ErrorCode.TOKEN_EXPIRED,

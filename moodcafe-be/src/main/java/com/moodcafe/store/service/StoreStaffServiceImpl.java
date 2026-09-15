@@ -27,7 +27,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -87,7 +87,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .user(newStaffUser)
                 .storeRole(role)
                 .status("ACTIVE")
-                .joinedAt(LocalDateTime.now())
+                .joinedAt(Instant.now())
                 .build();
 
         staff = storeStaffRepository.save(staff);
@@ -116,7 +116,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .user(targetUser)
                 .storeRole(role)
                 .status("ACTIVE")
-                .joinedAt(LocalDateTime.now())
+                .joinedAt(Instant.now())
                 .build();
 
         staff = storeStaffRepository.save(staff);

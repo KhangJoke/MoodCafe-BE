@@ -55,6 +55,11 @@ public enum ErrorCode {
     FORBIDDEN_STORE_ACCESS(HttpStatus.FORBIDDEN, "You do not have permission to manage this store"),
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "Tag not found"),
     TAG_ALREADY_EXISTS(HttpStatus.CONFLICT, "Tag name already exists"),
+    TAG_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "Tag category not found"),
+    TAG_CATEGORY_ALREADY_EXISTS(HttpStatus.CONFLICT, "Tag category code or name already exists"),
+    ONBOARDING_QUESTION_NOT_FOUND(HttpStatus.NOT_FOUND, "Onboarding question not found"),
+    STORE_TAG_ALREADY_REQUESTED(HttpStatus.CONFLICT, "Tag has already been requested or approved for this store"),
+    STORE_TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "Store tag association not found"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 5MB limit"),

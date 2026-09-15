@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -17,10 +17,12 @@ import java.util.UUID;
 public class TagResponse {
 
     private UUID tagId;
+    private UUID tagCategoryId;
+    private String categoryCode;
+    private String categoryName;
     private String name;
     private String description;
-    private String tagType;
-    private String category;
+    private Integer scaleValue;
     private Boolean active;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 }

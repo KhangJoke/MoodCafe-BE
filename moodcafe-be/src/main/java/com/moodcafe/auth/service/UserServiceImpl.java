@@ -125,4 +125,12 @@ public class UserServiceImpl implements UserService {
         user.setRequirePasswordChange(false);
         userRepository.save(user);
     }
+
+    @Override
+    @Transactional
+    public void setFirstLoginFalse(UUID userId) {
+        User user = getUserEntityById(userId);
+        user.setFirstLogin(false);
+        userRepository.save(user);
+    }
 }

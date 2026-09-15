@@ -5,7 +5,7 @@ import com.moodcafe.auth.dto.role.response.RoleResponse;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -27,6 +27,6 @@ public class UserResponse {
     @JsonProperty("isFirstLogin")
     private Boolean firstLogin;
 
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private Instant createdAt;
+    private Instant updatedAt;
 }

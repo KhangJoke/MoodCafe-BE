@@ -29,4 +29,6 @@ public interface UserService {
     User createUserEntity(User user);
 
     void updateUserPassword(UUID userId, String rawNewPassword);
+
+    void setFirstLoginFalse(UUID userId);
 }

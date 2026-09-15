@@ -1,8 +1,12 @@
 package com.moodcafe.store.dto.response;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -17,5 +21,5 @@ public class UserStoreResponse {
     private String storeAddress;
     private String storeRole;
     private String status;
-    private LocalDateTime joinedAt;
+    private Instant joinedAt;
 }

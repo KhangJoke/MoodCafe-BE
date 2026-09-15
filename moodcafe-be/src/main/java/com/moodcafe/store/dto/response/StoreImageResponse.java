@@ -1,8 +1,12 @@
 package com.moodcafe.store.dto.response;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -16,5 +20,5 @@ public class StoreImageResponse {
     private UUID storeId;
     private String imageUrl;
     private boolean isPrimary;
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 }

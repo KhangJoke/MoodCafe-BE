@@ -1,8 +1,15 @@
 package com.moodcafe.tag.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import lombok.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -12,14 +19,13 @@ import lombok.*;
 public class CreateTagRequest {
 
     @NotBlank(message = "Tag name is required")
+    @Size(max = 100, message = "Tag name cannot exceed 100 characters")
     private String name;
 
     private String description;
 
-    @Builder.Default
-    private String tagType = "PRIMARY";
+    @NotNull(message = "Tag category ID is required")
+    private UUID tagCategoryId;
 
-    @NotBlank(message = "Category is required (VIBE or PURPOSE)")
-    @Pattern(regexp = "VIBE|PURPOSE", message = "Category must be VIBE or PURPOSE")
-    private String category;
+    private Integer scaleValue;
 }

@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -258,7 +258,7 @@ public class NotificationServiceImpl implements NotificationService {
 
         if (!Boolean.TRUE.equals(notification.getRead())) {
             notification.setRead(true);
-            notification.setReadAt(LocalDateTime.now());
+            notification.setReadAt(Instant.now());
             notification = notificationRepository.save(notification);
             log.info("Notification {} marked as read successfully", notificationId);
         }

@@ -2,10 +2,12 @@ package com.moodcafe.tag.service;
 
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
-import com.moodcafe.tag.abstraction.repository.MasterTagRepository;
+import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
+import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.dto.request.CreateTagRequest;
 import com.moodcafe.tag.dto.response.TagResponse;
-import com.moodcafe.tag.entity.MasterTag;
+import com.moodcafe.tag.entity.Tag;
+import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.mapper.TagMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,7 +30,10 @@ import static org.mockito.Mockito.*;
 class TagServiceImplTest {
 
     @Mock
-    private MasterTagRepository tagRepository;
+    private TagRepository tagRepository;
+
+    @Mock
+    private TagCategoryRepository tagCategoryRepository;
 
     @Mock
     private TagMapper tagMapper;
@@ -36,23 +41,34 @@ class TagServiceImplTest {
     @InjectMocks
     private TagServiceImpl tagService;
 
-    private MasterTag sampleTag;
+    private UUID categoryId;
+    private TagCategory category;
+    private Tag sampleTag;
     private TagResponse sampleResponse;
 
     @BeforeEach
     void setUp() {
+        categoryId = UUID.randomUUID();
+        category = TagCategory.builder()
+                .tagCategoryId(categoryId)
+                .name("Vibe")
+                .code("VIBE")
+                .build();
+
         UUID tagId = UUID.randomUUID();
-        sampleTag = MasterTag.builder()
+        sampleTag = Tag.builder()
                 .tagId(tagId)
                 .name("Yên tĩnh")
-                .category("VIBE")
+                .category(category)
                 .active(true)
                 .build();
 
         sampleResponse = TagResponse.builder()
                 .tagId(tagId)
+                .tagCategoryId(categoryId)
+                .categoryName("Vibe")
+                .categoryCode("VIBE")
                 .name("Yên tĩnh")
-                .category("VIBE")
                 .build();
     }
 
@@ -62,7 +78,7 @@ class TagServiceImplTest {
         when(tagRepository.findAllByActiveTrue()).thenReturn(List.of(sampleTag));
         when(tagMapper.toResponse(sampleTag)).thenReturn(sampleResponse);
 
-        List<TagResponse> results = tagService.getAllTags(null);
+        List<TagResponse> results = tagService.getAllTags(null, null);
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getName()).isEqualTo("Yên tĩnh");
@@ -72,9 +88,10 @@ class TagServiceImplTest {
     @Test
     @DisplayName("createTag - throws exception when tag name already exists")
     void createTag_DuplicateName_ThrowsAppException() {
-        CreateTagRequest request = new CreateTagRequest();
-        request.setName("Yên tĩnh");
-        request.setCategory("VIBE");
+        CreateTagRequest request = CreateTagRequest.builder()
+                .name("Yên tĩnh")
+                .tagCategoryId(categoryId)
+                .build();
 
         when(tagRepository.existsByName("Yên tĩnh")).thenReturn(true);
 
@@ -88,19 +105,21 @@ class TagServiceImplTest {
     @Test
     @DisplayName("createTag - success when tag name does not exist")
     void createTag_Success() {
-        CreateTagRequest request = new CreateTagRequest();
-        request.setName("Sân vườn");
-        request.setCategory("VIBE");
-
-        MasterTag newTag = MasterTag.builder()
+        CreateTagRequest request = CreateTagRequest.builder()
                 .name("Sân vườn")
-                .category("VIBE")
+                .tagCategoryId(categoryId)
+                .build();
+
+        Tag newTag = Tag.builder()
+                .name("Sân vườn")
+                .category(category)
                 .active(true)
                 .build();
 
         when(tagRepository.existsByName("Sân vườn")).thenReturn(false);
+        when(tagCategoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
         when(tagMapper.toEntity(request)).thenReturn(newTag);
-        when(tagRepository.save(any(MasterTag.class))).thenReturn(newTag);
+        when(tagRepository.save(any(Tag.class))).thenReturn(newTag);
         when(tagMapper.toResponse(newTag)).thenReturn(sampleResponse);
 
         TagResponse response = tagService.createTag(request);

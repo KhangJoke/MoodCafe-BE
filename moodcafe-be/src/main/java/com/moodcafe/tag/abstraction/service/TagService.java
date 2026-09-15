@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public interface TagService {
 
-    List<TagResponse> getAllTags(String category);
+    List<TagResponse> getAllTags(UUID categoryId, String categoryCode);
 
     TagResponse getTagById(UUID tagId);
 
