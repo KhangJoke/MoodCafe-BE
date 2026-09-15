@@ -1,5 +1,7 @@
 package com.moodcafe.store.service;
 
+import com.moodcafe.shared.abstraction.service.FileStorageService;
+import com.moodcafe.shared.dto.UploadImageResponse;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
@@ -26,6 +28,7 @@ public class StoreImageServiceImpl implements StoreImageService {
     private final StoreImageRepository storeImageRepository;
     private final StoreImageMapper storeImageMapper;
     private final StoreStaffService storeStaffService;
+    private final FileStorageService fileStorageService;
 
     @Override
     @Transactional
@@ -34,6 +37,10 @@ public class StoreImageServiceImpl implements StoreImageService {
 
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        if (request.getFile() == null || request.getFile().isEmpty()) {
+            throw new AppException(ErrorCode.FILE_EMPTY);
+        }
 
         boolean isPrimary = Boolean.TRUE.equals(request.getIsPrimary());
 
@@ -46,9 +53,12 @@ public class StoreImageServiceImpl implements StoreImageService {
                     });
         }
 
+        // Upload image to Cloudinary
+        UploadImageResponse uploadResponse = fileStorageService.uploadImage(request.getFile(), "stores/" + storeId);
+
         StoreImage image = StoreImage.builder()
                 .store(store)
-                .imageUrl(request.getImageUrl().trim())
+                .imageUrl(uploadResponse.getImageUrl())
                 .primary(isPrimary)
                 .build();
 
@@ -63,6 +73,10 @@ public class StoreImageServiceImpl implements StoreImageService {
 
         StoreImage image = storeImageRepository.findByStoreImageIdAndStoreStoreId(imageId, storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_IMAGE_NOT_FOUND));
+
+        if (image.getImageUrl() != null && !image.getImageUrl().isBlank()) {
+            fileStorageService.deleteImageByUrl(image.getImageUrl());
+        }
 
         storeImageRepository.delete(image);
     }
