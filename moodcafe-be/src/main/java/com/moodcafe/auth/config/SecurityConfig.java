@@ -120,11 +120,10 @@ public class SecurityConfig {
                                 "/api/stores",
                                 "/api/stores/*",
                                 "/api/stores/*/images",
-                                "/api/stores/*/amenities",
+                                "/api/stores/*/attributes",
                                 "/api/stores/*/reviews",
                                 "/api/stores/*/reviews/**",
                                 "/api/stores/reviews/*",
-                                "/api/amenities",
                                 "/api/tags",
                                 "/api/tags/*"
                         ).permitAll()

@@ -1,6 +1,7 @@
 package com.moodcafe.store.dto.response;
 
 import com.moodcafe.store.entity.enums.StoreStatus;
+import com.moodcafe.tag.dto.response.StoreTagResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,7 +34,7 @@ public class StoreResponse {
     private String email;
     private StoreStatus status;
     private List<StoreImageResponse> images;
-    private List<AmenityResponse> amenities;
+    private List<StoreTagResponse> tags;
     private Instant createdAt;
     private Instant updatedAt;
 }

@@ -21,6 +21,7 @@ public class StoreTagResponse {
     private UUID tagId;
     private String tagName;
     private String category;
+    private String categoryCode;
     private StoreTagStatus status;
     private String proofImageUrl;
     private String rejectReason;

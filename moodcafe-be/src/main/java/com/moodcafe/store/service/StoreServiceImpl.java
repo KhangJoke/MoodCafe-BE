@@ -4,7 +4,6 @@ import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
-import com.moodcafe.store.abstraction.repository.StoreAmenityRepository;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
@@ -14,7 +13,6 @@ import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
-import com.moodcafe.store.dto.response.AmenityResponse;
 import com.moodcafe.store.dto.response.StoreImageResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.entity.Store;
@@ -22,9 +20,12 @@ import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.entity.enums.StoreStaffStatus;
 import com.moodcafe.store.entity.enums.StoreStatus;
-import com.moodcafe.store.mapper.AmenityMapper;
 import com.moodcafe.store.mapper.StoreImageMapper;
 import com.moodcafe.store.mapper.StoreMapper;
+import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
+import com.moodcafe.tag.dto.response.StoreTagResponse;
+import com.moodcafe.tag.entity.enums.StoreTagStatus;
+import com.moodcafe.tag.mapper.StoreTagMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,10 +42,10 @@ public class StoreServiceImpl implements StoreService {
     private final StoreRoleRepository storeRoleRepository;
     private final StoreStaffRepository storeStaffRepository;
     private final StoreImageRepository storeImageRepository;
-    private final StoreAmenityRepository storeAmenityRepository;
+    private final StoreTagRepository storeTagRepository;
     private final StoreMapper storeMapper;
     private final StoreImageMapper storeImageMapper;
-    private final AmenityMapper amenityMapper;
+    private final StoreTagMapper storeTagMapper;
     private final StoreStaffService storeStaffService;
     private final CurrentUserService currentUserService;
 
@@ -138,11 +139,11 @@ public class StoreServiceImpl implements StoreService {
                 .toList();
         response.setImages(images);
 
-        List<AmenityResponse> amenities = storeAmenityRepository.findAllByStoreStoreId(store.getStoreId())
+        List<StoreTagResponse> tags = storeTagRepository.findAllByStoreIdAndStatus(store.getStoreId(), StoreTagStatus.APPROVED)
                 .stream()
-                .map(sa -> amenityMapper.toResponse(sa.getAmenity()))
+                .map(storeTagMapper::toResponse)
                 .toList();
-        response.setAmenities(amenities);
+        response.setTags(tags);
 
         return response;
     }

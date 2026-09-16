@@ -27,6 +27,6 @@ public interface StoreMapper {
     void updateEntity(UpdateStoreRequest request, @MappingTarget Store store);
 
     @Mapping(target = "images", ignore = true)
-    @Mapping(target = "amenities", ignore = true)
+    @Mapping(target = "tags", ignore = true)
     StoreResponse toResponse(Store store);
 }
