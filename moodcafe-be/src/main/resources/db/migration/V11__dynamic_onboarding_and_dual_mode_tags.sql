@@ -1,5 +1,5 @@
 -- =========================================================
--- V9: STANDARDIZED TAG SYSTEM & DYNAMIC ONBOARDING
+-- V11: STANDARDIZED TAG SYSTEM & DYNAMIC ONBOARDING
 -- Refactor to Tag Categories, Standard Tags with Scale Values,
 -- Store Tags, Dynamic Onboarding Questions (Slider & Multi-Select),
 -- and User Preferences
@@ -82,6 +82,18 @@ BEGIN
         WHERE category = 'PURPOSE' AND tag_category_id IS NULL;
 
         ALTER TABLE tags DROP COLUMN category;
+    END IF;
+END $$;
+
+-- Drop legacy tag_type column, check constraint and index if exists
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns WHERE table_name = 'tags' AND column_name = 'tag_type'
+    ) THEN
+        ALTER TABLE tags DROP CONSTRAINT IF EXISTS chk_vibe_tag_type;
+        DROP INDEX IF EXISTS idx_vibe_tags_type;
+        ALTER TABLE tags DROP COLUMN tag_type;
     END IF;
 END $$;
 
