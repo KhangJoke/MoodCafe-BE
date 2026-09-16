@@ -1,7 +1,10 @@
 package com.moodcafe.store.entity;
 
+import com.moodcafe.store.entity.enums.StoreStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -71,9 +74,10 @@ public class Store {
         @Column(name = "email", length = 255)
         private String email;
 
+        @Enumerated(EnumType.STRING)
         @Builder.Default
         @Column(name = "status", nullable = false, length = 30)
-        private String status = "PENDING";
+        private StoreStatus status = StoreStatus.PENDING;
 
         @CreationTimestamp
         @Column(name = "created_at", nullable = false, updatable = false)

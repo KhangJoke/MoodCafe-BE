@@ -1,5 +1,6 @@
 package com.moodcafe.tag.dto.response;
 
+import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,7 +21,7 @@ public class StoreTagResponse {
     private UUID tagId;
     private String tagName;
     private String category;
-    private String status;
+    private StoreTagStatus status;
     private String proofImageUrl;
     private String rejectReason;
     private Instant approvedAt;

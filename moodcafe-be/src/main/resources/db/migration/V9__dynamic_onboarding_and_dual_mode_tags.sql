@@ -250,3 +250,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_user_pref_tag
 CREATE UNIQUE INDEX IF NOT EXISTS uq_user_pref_slider 
     ON user_preferences(user_id, question_id) 
     WHERE numeric_value IS NOT NULL;
+
+-- Drop legacy noise_tolerance column from users since noise preferences are now dynamically stored in user_preferences
+ALTER TABLE users DROP COLUMN IF EXISTS noise_tolerance;

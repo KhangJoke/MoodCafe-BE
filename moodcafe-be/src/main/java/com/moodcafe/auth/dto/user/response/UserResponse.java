@@ -22,7 +22,6 @@ public class UserResponse {
     private Boolean active;
     private Boolean emailVerified;
     private Boolean requirePasswordChange;
-    private String noiseTolerance;
 
     @JsonProperty("isFirstLogin")
     private Boolean firstLogin;

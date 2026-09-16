@@ -175,7 +175,7 @@ class StoreImageServiceImplTest {
 
         assertThat(existingPrimary.isPrimary()).isFalse();
         verify(storeImageRepository).save(existingPrimary);
-        verify(storeImageRepository).save(any(StoreImage.class));
+        verify(storeImageRepository, times(2)).save(any(StoreImage.class));
     }
 
     @Test

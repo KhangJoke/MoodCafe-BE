@@ -15,6 +15,7 @@ import com.moodcafe.tag.dto.response.UserPreferenceResponse;
 import com.moodcafe.tag.entity.OnboardingQuestion;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.UserPreference;
+import com.moodcafe.tag.entity.enums.QuestionType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,7 +93,7 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
                 continue;
             }
 
-            if ("SLIDER".equalsIgnoreCase(question.getQuestionType())) {
+            if (question.getQuestionType() == QuestionType.SLIDER) {
                 Integer sliderVal = item.getSliderValue();
                 Tag matchedTag = null;
                 if (item.getSelectedTagIds() != null && !item.getSelectedTagIds().isEmpty()) {

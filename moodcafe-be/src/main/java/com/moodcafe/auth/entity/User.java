@@ -73,9 +73,6 @@ public class User {
     @Column(name = "require_password_change", nullable = false)
     private boolean requirePasswordChange = false;
 
-    @Column(name = "noise_tolerance", length = 20)
-    private String noiseTolerance;
-
     @Builder.Default
     @Column(name = "is_first_login", nullable = false)
     private boolean firstLogin = true;

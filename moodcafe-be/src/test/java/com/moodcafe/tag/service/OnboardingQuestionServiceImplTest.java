@@ -7,11 +7,12 @@ import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.dto.request.CreateOnboardingQuestionRequest;
 import com.moodcafe.tag.dto.response.OnboardingQuestionResponse;
-import com.moodcafe.tag.entity.ApprovalMode;
-import com.moodcafe.tag.entity.ControlType;
 import com.moodcafe.tag.entity.OnboardingQuestion;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
+import com.moodcafe.tag.entity.enums.ApprovalMode;
+import com.moodcafe.tag.entity.enums.ControlType;
+import com.moodcafe.tag.entity.enums.QuestionType;
 import com.moodcafe.tag.mapper.OnboardingQuestionMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -74,7 +75,7 @@ class OnboardingQuestionServiceImplTest {
                 .questionId(questionId)
                 .tagCategory(tagCategory)
                 .title("Gu không gian yêu thích?")
-                .questionType("MULTI_SELECT")
+                .questionType(QuestionType.MULTI_SELECT)
                 .displayOrder(1)
                 .required(true)
                 .active(true)
@@ -85,7 +86,7 @@ class OnboardingQuestionServiceImplTest {
                 .questionId(questionId)
                 .tagCategoryId(tagCategoryId)
                 .title("Gu không gian yêu thích?")
-                .questionType("MULTI_SELECT")
+                .questionType(QuestionType.MULTI_SELECT)
                 .displayOrder(1)
                 .required(true)
                 .active(true)
@@ -150,7 +151,7 @@ class OnboardingQuestionServiceImplTest {
         CreateOnboardingQuestionRequest request = CreateOnboardingQuestionRequest.builder()
                 .tagCategoryId(tagCategoryId)
                 .title("Gu không gian yêu thích?")
-                .questionType("MULTI_SELECT")
+                .questionType(QuestionType.MULTI_SELECT)
                 .displayOrder(1)
                 .required(true)
                 .maxSelections(3)
@@ -173,7 +174,7 @@ class OnboardingQuestionServiceImplTest {
         CreateOnboardingQuestionRequest request = CreateOnboardingQuestionRequest.builder()
                 .tagCategoryId(tagCategoryId)
                 .title("Gu không gian yêu thích?")
-                .questionType("MULTI_SELECT")
+                .questionType(QuestionType.MULTI_SELECT)
                 .build();
 
         when(onboardingQuestionMapper.toEntity(request)).thenReturn(question);

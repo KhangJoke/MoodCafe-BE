@@ -1,7 +1,7 @@
 package com.moodcafe.tag.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import com.moodcafe.tag.entity.enums.StoreTagStatus;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,9 +15,8 @@ import lombok.Setter;
 @Builder
 public class ReviewStoreTagRequest {
 
-    @NotBlank(message = "Status is required")
-    @Pattern(regexp = "^(APPROVED|REJECTED|REVOKED)$", message = "Status must be APPROVED, REJECTED, or REVOKED")
-    private String status;
+    @NotNull(message = "Status is required")
+    private StoreTagStatus status;
 
     private String rejectReason;
 }

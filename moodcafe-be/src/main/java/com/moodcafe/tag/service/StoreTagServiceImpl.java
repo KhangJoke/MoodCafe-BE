@@ -11,10 +11,11 @@ import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
 import com.moodcafe.tag.dto.response.StoreAttributesResponse;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
-import com.moodcafe.tag.entity.ApprovalMode;
-import com.moodcafe.tag.entity.ControlType;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
+import com.moodcafe.tag.entity.enums.ApprovalMode;
+import com.moodcafe.tag.entity.enums.ControlType;
+import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -67,7 +68,7 @@ public class StoreTagServiceImpl implements StoreTagService {
                     storeId, tag.getCategory().getTagCategoryId());
             for (StoreTag st : categoryTags) {
                 if (!st.getTag().getTagId().equals(tag.getTagId())) {
-                    st.setStatus("REVOKED");
+                    st.setStatus(StoreTagStatus.REVOKED);
                     st.setRevokedAt(Instant.now());
                     storeTagRepository.save(st);
                 }
@@ -77,12 +78,12 @@ public class StoreTagServiceImpl implements StoreTagService {
         Optional<StoreTag> existingOpt = storeTagRepository.findByStoreIdAndTagTagId(storeId, request.getTagId());
 
         StoreTag storeTag;
-        String targetStatus = isOwnerCustom ? "APPROVED" : "PENDING";
+        StoreTagStatus targetStatus = isOwnerCustom ? StoreTagStatus.APPROVED : StoreTagStatus.PENDING;
         Instant approvedAt = isOwnerCustom ? Instant.now() : null;
 
         if (existingOpt.isPresent()) {
             storeTag = existingOpt.get();
-            if (!isSliderCategory && ("APPROVED".equalsIgnoreCase(storeTag.getStatus()) || "PENDING".equalsIgnoreCase(storeTag.getStatus()))) {
+            if (!isSliderCategory && (StoreTagStatus.APPROVED.equals(storeTag.getStatus()) || StoreTagStatus.PENDING.equals(storeTag.getStatus()))) {
                 throw new AppException(ErrorCode.STORE_TAG_ALREADY_REQUESTED);
             }
             storeTag.setStatus(targetStatus);
@@ -108,7 +109,7 @@ public class StoreTagServiceImpl implements StoreTagService {
     @Transactional(readOnly = true)
     public List<StoreTagResponse> getPendingStoreTagRequests() {
         currentUserService.requireSystemAdmin();
-        return storeTagRepository.findAllByStatusOrderByCreatedAtDesc("PENDING").stream()
+        return storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.PENDING).stream()
                 .map(storeTagMapper::toResponse)
                 .toList();
     }
@@ -121,15 +122,15 @@ public class StoreTagServiceImpl implements StoreTagService {
         StoreTag storeTag = storeTagRepository.findById(storeTagId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_TAG_NOT_FOUND));
 
-        String targetStatus = request.getStatus().trim().toUpperCase();
+        StoreTagStatus targetStatus = request.getStatus();
         storeTag.setStatus(targetStatus);
 
-        if ("APPROVED".equals(targetStatus)) {
+        if (StoreTagStatus.APPROVED.equals(targetStatus)) {
             storeTag.setApprovedAt(Instant.now());
             storeTag.setRejectReason(null);
-        } else if ("REJECTED".equals(targetStatus) || "REVOKED".equals(targetStatus)) {
+        } else if (StoreTagStatus.REJECTED.equals(targetStatus) || StoreTagStatus.REVOKED.equals(targetStatus)) {
             storeTag.setRejectReason(request.getRejectReason());
-            if ("REVOKED".equals(targetStatus)) {
+            if (StoreTagStatus.REVOKED.equals(targetStatus)) {
                 storeTag.setRevokedAt(Instant.now());
             }
         }

@@ -15,6 +15,7 @@ import com.moodcafe.tag.entity.OnboardingQuestion;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.entity.UserPreference;
+import com.moodcafe.tag.entity.enums.QuestionType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,7 +82,7 @@ class UserPreferenceServiceImplTest {
                 .questionId(questionId)
                 .title("Gu không gian?")
                 .tagCategory(tagCategory)
-                .questionType("MULTI_SELECT")
+                .questionType(QuestionType.MULTI_SELECT)
                 .maxSelections(3)
                 .build();
 
@@ -123,7 +124,7 @@ class UserPreferenceServiceImplTest {
         UUID sliderQId = UUID.randomUUID();
         OnboardingQuestion sliderQ = OnboardingQuestion.builder()
                 .questionId(sliderQId)
-                .questionType("SLIDER")
+                .questionType(QuestionType.SLIDER)
                 .build();
 
         when(onboardingQuestionRepository.findById(sliderQId)).thenReturn(Optional.of(sliderQ));
@@ -171,7 +172,7 @@ class UserPreferenceServiceImplTest {
         OnboardingQuestion limitedQuestion = OnboardingQuestion.builder()
                 .questionId(questionId)
                 .title("Gu không gian?")
-                .questionType("MULTI_SELECT")
+                .questionType(QuestionType.MULTI_SELECT)
                 .maxSelections(2)
                 .build();
 

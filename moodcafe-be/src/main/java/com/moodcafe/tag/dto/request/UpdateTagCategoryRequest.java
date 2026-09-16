@@ -1,7 +1,7 @@
 package com.moodcafe.tag.dto.request;
 
-import com.moodcafe.tag.entity.ApprovalMode;
-import com.moodcafe.tag.entity.ControlType;
+import com.moodcafe.tag.entity.enums.ApprovalMode;
+import com.moodcafe.tag.entity.enums.ControlType;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

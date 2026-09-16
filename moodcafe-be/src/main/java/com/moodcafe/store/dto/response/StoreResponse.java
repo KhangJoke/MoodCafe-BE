@@ -1,5 +1,6 @@
 package com.moodcafe.store.dto.response;
 
+import com.moodcafe.store.entity.enums.StoreStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -30,7 +31,7 @@ public class StoreResponse {
     private String priceRange;
     private String phone;
     private String email;
-    private String status;
+    private StoreStatus status;
     private List<StoreImageResponse> images;
     private List<AmenityResponse> amenities;
     private Instant createdAt;

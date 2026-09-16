@@ -20,6 +20,8 @@ import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
+import com.moodcafe.store.entity.enums.StoreStaffStatus;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.store.mapper.AmenityMapper;
 import com.moodcafe.store.mapper.StoreImageMapper;
 import com.moodcafe.store.mapper.StoreMapper;
@@ -52,7 +54,7 @@ public class StoreServiceImpl implements StoreService {
         User currentUser = currentUserService.getCurrentUser();
 
         Store store = storeMapper.toEntity(request);
-        store.setStatus("PENDING");
+        store.setStatus(StoreStatus.PENDING);
         store = storeRepository.save(store);
 
         // Register the creator as the OWNER in store_staffs
@@ -63,7 +65,7 @@ public class StoreServiceImpl implements StoreService {
                 .store(store)
                 .user(currentUser)
                 .storeRole(ownerRole)
-                .status("ACTIVE")
+                .status(StoreStaffStatus.ACTIVE)
                 .joinedAt(Instant.now())
                 .build();
 
@@ -85,7 +87,12 @@ public class StoreServiceImpl implements StoreService {
     public List<StoreResponse> getAllStores(String status) {
         List<Store> stores;
         if (status != null && !status.isBlank()) {
-            stores = storeRepository.findAllByStatus(status.trim().toUpperCase());
+            try {
+                StoreStatus storeStatus = StoreStatus.valueOf(status.trim().toUpperCase());
+                stores = storeRepository.findAllByStatus(storeStatus);
+            } catch (IllegalArgumentException e) {
+                stores = List.of();
+            }
         } else {
             stores = storeRepository.findAll();
         }
@@ -116,7 +123,7 @@ public class StoreServiceImpl implements StoreService {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
-        store.setStatus(request.getStatus().trim().toUpperCase());
+        store.setStatus(request.getStatus());
         store = storeRepository.save(store);
 
         return toStoreResponse(store);

@@ -1,5 +1,6 @@
 package com.moodcafe.store.dto.response;
 
+import com.moodcafe.store.entity.enums.StoreStaffStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,6 +21,6 @@ public class UserStoreResponse {
     private String storeName;
     private String storeAddress;
     private String storeRole;
-    private String status;
+    private StoreStaffStatus status;
     private Instant joinedAt;
 }

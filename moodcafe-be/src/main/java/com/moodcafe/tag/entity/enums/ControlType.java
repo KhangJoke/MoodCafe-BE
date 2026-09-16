@@ -1,4 +1,4 @@
-package com.moodcafe.tag.entity;
+package com.moodcafe.tag.entity.enums;
 
 public enum ControlType {
     TAG_LIST,

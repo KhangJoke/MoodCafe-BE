@@ -1,7 +1,10 @@
 package com.moodcafe.tag.entity;
 
+import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -48,9 +51,10 @@ public class StoreTag {
     @JoinColumn(name = "tag_id", nullable = false)
     private Tag tag;
 
+    @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(name = "status", nullable = false, length = 30)
-    private String status = "PENDING";
+    private StoreTagStatus status = StoreTagStatus.PENDING;
 
     @Column(name = "proof_image_url", columnDefinition = "TEXT")
     private String proofImageUrl;

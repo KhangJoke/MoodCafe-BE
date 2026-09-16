@@ -289,7 +289,6 @@ public class AuthServiceImpl implements AuthService {
                     .emailVerified(true)
                     .requirePasswordChange(true)
                     .firstLogin(true)
-                    .noiseTolerance("MEDIUM")
                     .build();
 
             user = userRepository.save(user);

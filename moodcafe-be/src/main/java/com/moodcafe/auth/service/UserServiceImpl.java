@@ -63,12 +63,6 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse completeOnboarding(OnboardingRequest request) {
         User user = currentUserService.getCurrentUser();
-
-        if (request.getNoiseTolerance() != null && !request.getNoiseTolerance().isBlank()) {
-
-            user.setNoiseTolerance(request.getNoiseTolerance().trim().toUpperCase());
-        }
-
         user.setFirstLogin(false);
         user = userRepository.save(user);
 

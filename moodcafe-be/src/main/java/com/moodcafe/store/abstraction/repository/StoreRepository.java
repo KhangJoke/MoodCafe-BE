@@ -1,6 +1,7 @@
 package com.moodcafe.store.abstraction.repository;
 
 import com.moodcafe.store.entity.Store;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -10,5 +11,5 @@ import java.util.UUID;
 @Repository
 public interface StoreRepository extends JpaRepository<Store, UUID> {
 
-    List<Store> findAllByStatus(String status);
+    List<Store> findAllByStatus(StoreStatus status);
 }

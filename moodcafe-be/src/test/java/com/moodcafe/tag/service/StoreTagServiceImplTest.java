@@ -10,11 +10,12 @@ import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
 import com.moodcafe.tag.dto.response.StoreAttributesResponse;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
-import com.moodcafe.tag.entity.ApprovalMode;
-import com.moodcafe.tag.entity.ControlType;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
+import com.moodcafe.tag.entity.enums.ApprovalMode;
+import com.moodcafe.tag.entity.enums.ControlType;
+import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -77,7 +78,7 @@ class StoreTagServiceImplTest {
                 .storeTagId(storeTagId)
                 .storeId(storeId)
                 .tag(tag)
-                .status("PENDING")
+                .status(StoreTagStatus.PENDING)
                 .proofImageUrl("https://res.cloudinary.com/proof.jpg")
                 .build();
 
@@ -85,7 +86,7 @@ class StoreTagServiceImplTest {
                 .storeTagId(storeTagId)
                 .tagId(tagId)
                 .tagName("Vintage")
-                .status("PENDING")
+                .status(StoreTagStatus.PENDING)
                 .proofImageUrl("https://res.cloudinary.com/proof.jpg")
                 .build();
     }
@@ -118,7 +119,7 @@ class StoreTagServiceImplTest {
         StoreTagResponse response = storeTagService.requestStoreTag(storeId, request);
 
         assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo("PENDING");
+        assertThat(response.getStatus()).isEqualTo(StoreTagStatus.PENDING);
         verify(storeStaffService).requireStoreAccess(storeId, "OWNER", "MANAGER");
         verify(storeTagRepository).save(any(StoreTag.class));
     }
@@ -133,7 +134,7 @@ class StoreTagServiceImplTest {
         StoreTag existingApproved = StoreTag.builder()
                 .storeId(storeId)
                 .tag(tag)
-                .status("APPROVED")
+                .status(StoreTagStatus.APPROVED)
                 .build();
 
         when(tagRepository.findById(tagId)).thenReturn(Optional.of(tag));
@@ -149,7 +150,7 @@ class StoreTagServiceImplTest {
     @DisplayName("reviewStoreTagRequest - admin approves tag request")
     void reviewStoreTagRequest_approve_success() {
         ReviewStoreTagRequest request = ReviewStoreTagRequest.builder()
-                .status("APPROVED")
+                .status(StoreTagStatus.APPROVED)
                 .build();
 
         when(storeTagRepository.findById(storeTagId)).thenReturn(Optional.of(storeTag));
@@ -159,7 +160,7 @@ class StoreTagServiceImplTest {
         StoreTagResponse response = storeTagService.reviewStoreTagRequest(storeTagId, request);
 
         assertThat(response).isNotNull();
-        assertThat(storeTag.getStatus()).isEqualTo("APPROVED");
+        assertThat(storeTag.getStatus()).isEqualTo(StoreTagStatus.APPROVED);
         assertThat(storeTag.getApprovedAt()).isNotNull();
         verify(currentUserService).requireSystemAdmin();
     }
@@ -168,7 +169,7 @@ class StoreTagServiceImplTest {
     @DisplayName("reviewStoreTagRequest - admin rejects tag request with reason")
     void reviewStoreTagRequest_reject_success() {
         ReviewStoreTagRequest request = ReviewStoreTagRequest.builder()
-                .status("REJECTED")
+                .status(StoreTagStatus.REJECTED)
                 .rejectReason("Ảnh mờ không rõ ràng")
                 .build();
 
@@ -179,7 +180,7 @@ class StoreTagServiceImplTest {
         StoreTagResponse response = storeTagService.reviewStoreTagRequest(storeTagId, request);
 
         assertThat(response).isNotNull();
-        assertThat(storeTag.getStatus()).isEqualTo("REJECTED");
+        assertThat(storeTag.getStatus()).isEqualTo(StoreTagStatus.REJECTED);
         assertThat(storeTag.getRejectReason()).isEqualTo("Ảnh mờ không rõ ràng");
     }
 
@@ -214,7 +215,7 @@ class StoreTagServiceImplTest {
                 .storeTagId(UUID.randomUUID())
                 .storeId(storeId)
                 .tag(oldNoiseTag)
-                .status("APPROVED")
+                .status(StoreTagStatus.APPROVED)
                 .build();
 
         SubmitStoreTagRequest request = SubmitStoreTagRequest.builder()
@@ -229,18 +230,18 @@ class StoreTagServiceImplTest {
         StoreTag newStoreTag = StoreTag.builder()
                 .storeId(storeId)
                 .tag(newNoiseTag)
-                .status("APPROVED")
+                .status(StoreTagStatus.APPROVED)
                 .build();
         when(storeTagRepository.save(any(StoreTag.class))).thenReturn(newStoreTag);
         when(storeTagMapper.toResponse(any(StoreTag.class))).thenReturn(StoreTagResponse.builder()
                 .tagId(noiseTagId2)
-                .status("APPROVED")
+                .status(StoreTagStatus.APPROVED)
                 .build());
 
         StoreTagResponse response = storeTagService.requestStoreTag(storeId, request);
 
         assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isEqualTo("APPROVED");
-        assertThat(oldStoreTag.getStatus()).isEqualTo("REVOKED");
+        assertThat(response.getStatus()).isEqualTo(StoreTagStatus.APPROVED);
+        assertThat(oldStoreTag.getStatus()).isEqualTo(StoreTagStatus.REVOKED);
     }
 }

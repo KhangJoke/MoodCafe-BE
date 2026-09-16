@@ -1,5 +1,6 @@
 package com.moodcafe.tag.dto.response;
 
+import com.moodcafe.tag.entity.enums.QuestionType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -23,7 +24,7 @@ public class OnboardingQuestionResponse {
     private String tagCategoryName;
     private String title;
     private String subtitle;
-    private String questionType;
+    private QuestionType questionType;
     private Integer displayOrder;
     private Boolean required;
     private Boolean active;

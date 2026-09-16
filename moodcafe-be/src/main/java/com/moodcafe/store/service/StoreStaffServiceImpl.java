@@ -21,6 +21,7 @@ import com.moodcafe.store.dto.response.UserStoreResponse;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
+import com.moodcafe.store.entity.enums.StoreStaffStatus;
 import com.moodcafe.store.mapper.StoreStaffMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -86,7 +87,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .store(store)
                 .user(newStaffUser)
                 .storeRole(role)
-                .status("ACTIVE")
+                .status(StoreStaffStatus.ACTIVE)
                 .joinedAt(Instant.now())
                 .build();
 
@@ -115,7 +116,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .store(store)
                 .user(targetUser)
                 .storeRole(role)
-                .status("ACTIVE")
+                .status(StoreStaffStatus.ACTIVE)
                 .joinedAt(Instant.now())
                 .build();
 
@@ -137,8 +138,8 @@ public class StoreStaffServiceImpl implements StoreStaffService {
             staff.setStoreRole(role);
         }
 
-        if (request.getStatus() != null && !request.getStatus().isBlank()) {
-            staff.setStatus(request.getStatus().trim().toUpperCase());
+        if (request.getStatus() != null) {
+            staff.setStatus(request.getStatus());
         }
 
         staff = storeStaffRepository.save(staff);
@@ -206,7 +207,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .orElseThrow(() -> new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS));
 
 
-        if (!"ACTIVE".equalsIgnoreCase(staff.getStatus())) {
+        if (StoreStaffStatus.ACTIVE != staff.getStatus()) {
             throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Store staff status is not active");
         }
 

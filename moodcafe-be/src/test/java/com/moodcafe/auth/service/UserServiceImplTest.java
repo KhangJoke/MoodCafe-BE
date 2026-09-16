@@ -42,7 +42,6 @@ class UserServiceImplTest {
     @InjectMocks
     private UserServiceImpl userService;
 
-
     private User sampleUser;
     private UserResponse sampleResponse;
 
@@ -53,7 +52,6 @@ class UserServiceImplTest {
                 .email("test@moodcafe.vn")
                 .fullName("Minh Khang")
                 .firstLogin(true)
-                .noiseTolerance(null)
                 .active(true)
                 .build();
 
@@ -62,7 +60,6 @@ class UserServiceImplTest {
                 .email(sampleUser.getEmail())
                 .fullName(sampleUser.getFullName())
                 .firstLogin(false)
-                .noiseTolerance("LOW")
                 .build();
     }
 
@@ -72,20 +69,18 @@ class UserServiceImplTest {
     }
 
     @Test
-    @DisplayName("completeOnboarding - successfully updates noise tolerance and sets firstLogin to false")
+    @DisplayName("completeOnboarding - successfully updates user and sets firstLogin to false")
     void completeOnboarding_Success() {
         when(currentUserService.getCurrentUser()).thenReturn(sampleUser);
         when(userRepository.save(any(User.class))).thenReturn(sampleUser);
         when(userMapper.toResponse(sampleUser)).thenReturn(sampleResponse);
 
         OnboardingRequest request = new OnboardingRequest();
-        request.setNoiseTolerance("low");
 
         UserResponse response = userService.completeOnboarding(request);
 
         assertThat(response).isNotNull();
         assertThat(response.getFirstLogin()).isFalse();
-        assertThat(sampleUser.getNoiseTolerance()).isEqualTo("LOW");
         assertThat(sampleUser.isFirstLogin()).isFalse();
         verify(userRepository, times(1)).save(sampleUser);
     }
@@ -96,7 +91,6 @@ class UserServiceImplTest {
         when(currentUserService.getCurrentUser()).thenThrow(new AppException(ErrorCode.USER_NOT_FOUND));
 
         OnboardingRequest request = new OnboardingRequest();
-        request.setNoiseTolerance("HIGH");
 
         assertThatThrownBy(() -> userService.completeOnboarding(request))
                 .isInstanceOf(AppException.class)
@@ -105,4 +99,3 @@ class UserServiceImplTest {
         verify(userRepository, never()).save(any());
     }
 }
-

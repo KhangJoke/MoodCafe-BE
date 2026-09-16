@@ -1,7 +1,8 @@
 package com.moodcafe.tag.dto.request;
 
+import com.moodcafe.tag.entity.enums.QuestionType;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,9 +27,8 @@ public class CreateOnboardingQuestionRequest {
 
     private String subtitle;
 
-    @NotBlank(message = "Question type is required")
-    @Pattern(regexp = "^(SINGLE_SELECT|MULTI_SELECT|SLIDER)$", message = "Question type must be SINGLE_SELECT, MULTI_SELECT, or SLIDER")
-    private String questionType;
+    @NotNull(message = "Question type is required")
+    private QuestionType questionType;
 
     private Integer displayOrder;
 

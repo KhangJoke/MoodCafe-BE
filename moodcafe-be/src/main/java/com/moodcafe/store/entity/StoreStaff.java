@@ -1,8 +1,11 @@
 package com.moodcafe.store.entity;
 
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.store.entity.enums.StoreStaffStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
@@ -63,9 +66,10 @@ public class StoreStaff {
     @JoinColumn(name = "store_role_id", nullable = false, foreignKey = @ForeignKey(name = "fk_store_staffs_role"))
     private StoreRole storeRole;
 
+    @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(name = "status", nullable = false, length = 30)
-    private String status = "ACTIVE";
+    private StoreStaffStatus status = StoreStaffStatus.ACTIVE;
 
     @Builder.Default
     @Column(name = "joined_at", nullable = false)
