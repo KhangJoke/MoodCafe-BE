@@ -6,7 +6,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -14,16 +13,12 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TagResponse {
+public class ExperienceVibeResponse {
 
-    private UUID tagId;
-    private UUID tagCategoryId;
-    private String categoryCode;
-    private String categoryName;
-    private String name;
+    private UUID vibeId;
+    private String vibeName;
+    private String shortName;
     private String description;
-    private Integer scaleValue;
     private String imageUrl;
-    private Boolean active;
-    private Instant createdAt;
+    private long storeCount;
 }

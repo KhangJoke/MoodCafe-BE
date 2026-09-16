@@ -2,6 +2,7 @@ package com.moodcafe.tag.service;
 
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.dto.request.CreateTagRequest;
@@ -34,6 +35,9 @@ class TagServiceImplTest {
 
     @Mock
     private TagCategoryRepository tagCategoryRepository;
+
+    @Mock
+    private StoreTagRepository storeTagRepository;
 
     @Mock
     private TagMapper tagMapper;
@@ -103,16 +107,18 @@ class TagServiceImplTest {
     }
 
     @Test
-    @DisplayName("createTag - success when tag name does not exist")
+    @DisplayName("createTag - success when tag name does not exist and vibe has imageUrl")
     void createTag_Success() {
         CreateTagRequest request = CreateTagRequest.builder()
                 .name("Sân vườn")
                 .tagCategoryId(categoryId)
+                .imageUrl("/images/vibes/garden.jpg")
                 .build();
 
         Tag newTag = Tag.builder()
                 .name("Sân vườn")
                 .category(category)
+                .imageUrl("/images/vibes/garden.jpg")
                 .active(true)
                 .build();
 
@@ -126,6 +132,25 @@ class TagServiceImplTest {
 
         assertThat(response).isNotNull();
         verify(tagRepository, times(1)).save(newTag);
+    }
+
+    @Test
+    @DisplayName("createTag - throws exception when VIBE tag is missing imageUrl")
+    void createTag_VibeMissingImage_ThrowsAppException() {
+        CreateTagRequest request = CreateTagRequest.builder()
+                .name("Sân vườn")
+                .tagCategoryId(categoryId)
+                .imageUrl(null)
+                .build();
+
+        when(tagRepository.existsByName("Sân vườn")).thenReturn(false);
+        when(tagCategoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
+
+        assertThatThrownBy(() -> tagService.createTag(request))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VIBE_IMAGE_REQUIRED);
+
+        verify(tagRepository, never()).save(any());
     }
 
     @Test

@@ -53,6 +53,9 @@ public class Tag {
     @Column(name = "scale_value")
     private Integer scaleValue;
 
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean active = true;

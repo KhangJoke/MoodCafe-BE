@@ -60,6 +60,8 @@ public enum ErrorCode {
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "Review not found"),
     REVIEW_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST,
             "A live photo of the store taken at the moment is required to submit a review"),
+    VIBE_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST,
+            "Hình ảnh đại diện cho phong cách không gian (Vibe) là bắt buộc"),
     FORBIDDEN_REVIEW_ACTION(HttpStatus.FORBIDDEN, "You do not have permission to modify this review"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),

@@ -25,5 +25,8 @@ public class UpdateTagRequest {
 
     private Integer scaleValue;
 
+    @Size(max = 500, message = "Image URL cannot exceed 500 characters")
+    private String imageUrl;
+
     private Boolean active;
 }

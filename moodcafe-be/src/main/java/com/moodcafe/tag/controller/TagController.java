@@ -4,6 +4,7 @@ import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.tag.abstraction.service.TagService;
 import com.moodcafe.tag.dto.request.CreateTagRequest;
 import com.moodcafe.tag.dto.request.UpdateTagRequest;
+import com.moodcafe.tag.dto.response.ExperienceMatcherResponse;
 import com.moodcafe.tag.dto.response.TagResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,12 @@ public class TagController {
     ) {
         List<TagResponse> tags = tagService.getAllTags(categoryId, category);
         return ResponseEntity.ok(ApiResponse.success(tags));
+    }
+
+    @GetMapping("/experience-matcher")
+    public ResponseEntity<ApiResponse<List<ExperienceMatcherResponse>>> getExperienceMatcher() {
+        List<ExperienceMatcherResponse> data = tagService.getExperienceMatcherData();
+        return ResponseEntity.ok(ApiResponse.success(data));
     }
 
     @GetMapping("/{tagId}")

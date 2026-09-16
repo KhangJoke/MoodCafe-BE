@@ -2,6 +2,7 @@ package com.moodcafe.tag.abstraction.service;
 
 import com.moodcafe.tag.dto.request.CreateTagRequest;
 import com.moodcafe.tag.dto.request.UpdateTagRequest;
+import com.moodcafe.tag.dto.response.ExperienceMatcherResponse;
 import com.moodcafe.tag.dto.response.TagResponse;
 
 import java.util.List;
@@ -18,4 +19,6 @@ public interface TagService {
     TagResponse updateTag(UUID tagId, UpdateTagRequest request);
 
     void deleteTag(UUID tagId);
+
+    List<ExperienceMatcherResponse> getExperienceMatcherData();
 }
