@@ -44,4 +44,7 @@ public interface StoreTagRepository extends JpaRepository<StoreTag, UUID> {
             @Param("vibeTagId") UUID vibeTagId,
             @Param("status") StoreTagStatus status
     );
+
+    @Query("SELECT st.tag.tagId, COUNT(DISTINCT st.storeId) FROM StoreTag st WHERE st.status = :status GROUP BY st.tag.tagId")
+    List<Object[]> countDistinctStoresGroupedByTag(@Param("status") StoreTagStatus status);
 }

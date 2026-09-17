@@ -4,6 +4,7 @@ import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.tag.abstraction.service.TagService;
 import com.moodcafe.tag.dto.request.CreateTagRequest;
 import com.moodcafe.tag.dto.request.UpdateTagRequest;
+import com.moodcafe.tag.dto.response.CityTrendingResponse;
 import com.moodcafe.tag.dto.response.ExperienceMatcherResponse;
 import com.moodcafe.tag.dto.response.TagResponse;
 import jakarta.validation.Valid;
@@ -43,6 +44,12 @@ public class TagController {
     @GetMapping("/experience-matcher")
     public ResponseEntity<ApiResponse<List<ExperienceMatcherResponse>>> getExperienceMatcher() {
         List<ExperienceMatcherResponse> data = tagService.getExperienceMatcherData();
+        return ResponseEntity.ok(ApiResponse.success(data));
+    }
+
+    @GetMapping("/city-trending")
+    public ResponseEntity<ApiResponse<List<CityTrendingResponse>>> getCityTrending() {
+        List<CityTrendingResponse> data = tagService.getCityTrendingData();
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

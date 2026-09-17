@@ -206,7 +206,7 @@ class StoreTagServiceImplTest {
         UUID noiseTagId2 = UUID.randomUUID();
         Tag newNoiseTag = Tag.builder()
                 .tagId(noiseTagId2)
-                .name("Vừa phải")
+                .name("Bình thường")
                 .category(noiseCategory)
                 .scaleValue(3)
                 .build();

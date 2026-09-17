@@ -2,10 +2,19 @@ package com.moodcafe.tag.service;
 
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.store.abstraction.repository.FavoriteStoreRepository;
+import com.moodcafe.store.abstraction.repository.StoreImageRepository;
+import com.moodcafe.store.abstraction.repository.StoreRepository;
+import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
+import com.moodcafe.store.entity.Store;
+import com.moodcafe.store.entity.StoreImage;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
+import com.moodcafe.tag.abstraction.repository.UserPreferenceRepository;
 import com.moodcafe.tag.dto.request.CreateTagRequest;
+import com.moodcafe.tag.dto.response.CityTrendingResponse;
 import com.moodcafe.tag.dto.response.TagResponse;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
@@ -38,6 +47,21 @@ class TagServiceImplTest {
 
     @Mock
     private StoreTagRepository storeTagRepository;
+
+    @Mock
+    private UserPreferenceRepository userPreferenceRepository;
+
+    @Mock
+    private FavoriteStoreRepository favoriteStoreRepository;
+
+    @Mock
+    private StoreRepository storeRepository;
+
+    @Mock
+    private StoreReviewRepository storeReviewRepository;
+
+    @Mock
+    private StoreImageRepository storeImageRepository;
 
     @Mock
     private TagMapper tagMapper;
@@ -177,5 +201,111 @@ class TagServiceImplTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.TAG_NOT_FOUND);
 
         verify(tagRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("getCityTrendingData - returns top 2 trending tags and top 2 favorite stores")
+    void getCityTrendingData_Success() {
+        Tag tag1 = Tag.builder().tagId(UUID.randomUUID()).name("Tag 1").category(category).imageUrl("http://img1.jpg").active(true).build();
+        Tag tag2 = Tag.builder().tagId(UUID.randomUUID()).name("Tag 2").category(category).imageUrl("http://img2.jpg").active(true).build();
+
+        when(tagRepository.findAllByActiveTrue()).thenReturn(List.of(tag1, tag2));
+        when(storeTagRepository.countDistinctStoresGroupedByTag(any())).thenReturn(List.of(
+                new Object[]{tag1.getTagId(), 5L},
+                new Object[]{tag2.getTagId(), 3L}
+        ));
+        when(userPreferenceRepository.countPreferencesGroupedByTag()).thenReturn(List.of(
+                new Object[]{tag1.getTagId(), 50L},
+                new Object[]{tag2.getTagId(), 40L}
+        ));
+
+        Store store1 = Store.builder().storeId(UUID.randomUUID()).name("Store 1").address("123 Street").status(StoreStatus.ACTIVE).build();
+        Store store2 = Store.builder().storeId(UUID.randomUUID()).name("Store 2").address("456 Avenue").status(StoreStatus.ACTIVE).build();
+
+        when(storeRepository.findAllByStatus(StoreStatus.ACTIVE)).thenReturn(List.of(store1, store2));
+        when(favoriteStoreRepository.countFavoritesGroupedByStore()).thenReturn(List.of(
+                new Object[]{store1.getStoreId(), 25L},
+                new Object[]{store2.getStoreId(), 15L}
+        ));
+        when(storeReviewRepository.findOverallRatingAndCountGroupedByStore()).thenReturn(List.of(
+                new Object[]{store1.getStoreId(), 4.8, 12L},
+                new Object[]{store2.getStoreId(), 4.5, 8L}
+        ));
+        when(storeImageRepository.findByStoreStoreIdAndPrimaryTrue(any())).thenReturn(Optional.empty());
+        when(storeImageRepository.findAllByStoreStoreId(any())).thenReturn(List.of());
+
+        List<CityTrendingResponse> result = tagService.getCityTrendingData();
+
+        assertThat(result).hasSize(4);
+        assertThat(result.get(0).getItemType()).isEqualTo("TAG");
+        assertThat(result.get(0).getBadgeText()).isEqualTo("Đang quan tâm");
+        assertThat(result.get(0).getInterestedCount()).isEqualTo(50L);
+        assertThat(result.get(0).getStoreCount()).isEqualTo(5L);
+
+        assertThat(result.get(1).getItemType()).isEqualTo("TAG");
+        assertThat(result.get(1).getBadgeText()).isEqualTo("Đang quan tâm");
+        assertThat(result.get(1).getInterestedCount()).isEqualTo(40L);
+        assertThat(result.get(1).getStoreCount()).isEqualTo(3L);
+
+        assertThat(result.get(2).getItemType()).isEqualTo("STORE");
+        assertThat(result.get(2).getBadgeText()).isEqualTo("Được lưu nhiều");
+        assertThat(result.get(2).getStoreName()).isEqualTo("Store 1");
+        assertThat(result.get(2).getInterestedCount()).isEqualTo(25L);
+        assertThat(result.get(2).getRating()).isEqualTo(4.8);
+
+        assertThat(result.get(3).getItemType()).isEqualTo("STORE");
+        assertThat(result.get(3).getBadgeText()).isEqualTo("Được lưu nhiều");
+        assertThat(result.get(3).getStoreName()).isEqualTo("Store 2");
+        assertThat(result.get(3).getInterestedCount()).isEqualTo(15L);
+        assertThat(result.get(3).getRating()).isEqualTo(4.5);
+    }
+
+    @Test
+    @DisplayName("getCityTrendingData - verifies tie-breaking rules and strict limit of exactly 4 cards (2 tags + 2 stores)")
+    void getCityTrendingData_TieBreaking_AppliesOrderRulesAndStrictLimit4() {
+        Tag tagA = Tag.builder().tagId(UUID.randomUUID()).name("Tag A").category(category).active(true).build();
+        Tag tagB = Tag.builder().tagId(UUID.randomUUID()).name("Tag B").category(category).active(true).build();
+        Tag tagC = Tag.builder().tagId(UUID.randomUUID()).name("Tag C").category(category).active(true).build();
+
+        when(tagRepository.findAllByActiveTrue()).thenReturn(List.of(tagA, tagB, tagC));
+        when(storeTagRepository.countDistinctStoresGroupedByTag(any())).thenReturn(List.of(
+                new Object[]{tagA.getTagId(), 5L},
+                new Object[]{tagB.getTagId(), 10L}, // tie on preferences with tagA, but tagB has more stores
+                new Object[]{tagC.getTagId(), 2L}
+        ));
+        when(userPreferenceRepository.countPreferencesGroupedByTag()).thenReturn(List.of(
+                new Object[]{tagA.getTagId(), 10L},
+                new Object[]{tagB.getTagId(), 10L},
+                new Object[]{tagC.getTagId(), 20L} // highest preferences
+        ));
+
+        Store storeA = Store.builder().storeId(UUID.randomUUID()).name("Store A").address("A").status(StoreStatus.ACTIVE).build();
+        Store storeB = Store.builder().storeId(UUID.randomUUID()).name("Store B").address("B").status(StoreStatus.ACTIVE).build();
+        Store storeC = Store.builder().storeId(UUID.randomUUID()).name("Store C").address("C").status(StoreStatus.ACTIVE).build();
+
+        when(storeRepository.findAllByStatus(StoreStatus.ACTIVE)).thenReturn(List.of(storeA, storeB, storeC));
+        when(favoriteStoreRepository.countFavoritesGroupedByStore()).thenReturn(List.of(
+                new Object[]{storeA.getStoreId(), 5L},
+                new Object[]{storeB.getStoreId(), 5L}, // tie on favorites with storeA, but storeA has higher rating
+                new Object[]{storeC.getStoreId(), 12L} // highest favorites
+        ));
+        when(storeReviewRepository.findOverallRatingAndCountGroupedByStore()).thenReturn(List.of(
+                new Object[]{storeA.getStoreId(), 4.9, 20L},
+                new Object[]{storeB.getStoreId(), 4.2, 10L},
+                new Object[]{storeC.getStoreId(), 4.0, 5L}
+        ));
+        when(storeImageRepository.findByStoreStoreIdAndPrimaryTrue(any())).thenReturn(Optional.empty());
+        when(storeImageRepository.findAllByStoreStoreId(any())).thenReturn(List.of());
+
+        List<CityTrendingResponse> result = tagService.getCityTrendingData();
+
+        assertThat(result).hasSize(4);
+        // Top 2 Tags: tagC (20 prefs), tagB (10 prefs, 10 stores)
+        assertThat(result.get(0).getTagName()).isEqualTo("Tag C");
+        assertThat(result.get(1).getTagName()).isEqualTo("Tag B");
+
+        // Top 2 Stores: storeC (12 favs), storeA (5 favs, 4.9 rating)
+        assertThat(result.get(2).getStoreName()).isEqualTo("Store C");
+        assertThat(result.get(3).getStoreName()).isEqualTo("Store A");
     }
 }

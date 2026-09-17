@@ -25,4 +25,7 @@ public interface StoreReviewRepository extends JpaRepository<StoreReview, UUID> 
     @Query("SELECT AVG(r.overallRating), AVG(r.quietnessRating), AVG(r.lightingRating), AVG(r.seatingRating), AVG(r.outletRating), COUNT(r) " +
            "FROM StoreReview r WHERE r.store.storeId = :storeId")
     List<Object[]> getReviewSummaryByStoreId(@Param("storeId") UUID storeId);
+
+    @Query("SELECT r.store.storeId, AVG(r.overallRating), COUNT(r) FROM StoreReview r GROUP BY r.store.storeId")
+    List<Object[]> findOverallRatingAndCountGroupedByStore();
 }
