@@ -1,7 +1,5 @@
 package com.moodcafe.store.dto.response;
 
-import com.moodcafe.store.entity.enums.StoreStatus;
-import com.moodcafe.tag.dto.response.StoreTagResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,7 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StoreResponse {
+public class StoreSearchItemResponse {
 
     private UUID storeId;
     private String name;
@@ -28,16 +26,29 @@ public class StoreResponse {
     private String district;
     private BigDecimal latitude;
     private BigDecimal longitude;
-    private LocalTime openingTime;
-    private LocalTime closingTime;
     private String priceRange;
     private Long priceFrom;
     private Long priceTo;
-    private String phone;
-    private String email;
-    private StoreStatus status;
-    private List<StoreImageResponse> images;
-    private List<StoreTagResponse> tags;
+    private LocalTime openingTime;
+    private LocalTime closingTime;
+    private boolean isOpenNow;
+    private Double overallRating;
+    private Long reviewCount;
+    private Long favoriteCount;
+    private Integer matchScore;
+    private String primaryImageUrl;
+    private List<StoreSearchTagItem> highlightTags;
     private Instant createdAt;
-    private Instant updatedAt;
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class StoreSearchTagItem {
+        private UUID tagId;
+        private String name;
+        private String categoryCode;
+        private String categoryName;
+    }
 }

@@ -1,12 +1,15 @@
 package com.moodcafe.store.controller;
 
 import com.moodcafe.shared.response.ApiResponse;
+import com.moodcafe.shared.response.PageResponse;
 import com.moodcafe.store.abstraction.service.StoreService;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
+import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
 import com.moodcafe.store.dto.response.StoreResponse;
+import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 import com.moodcafe.store.dto.response.UserStoreResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +41,19 @@ public class StoreController {
         StoreResponse response = storeService.createStore(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Store created successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<StoreSearchItemResponse>>> searchStores(
+            StoreSearchRequest request) {
+        PageResponse<StoreSearchItemResponse> response = storeService.searchStores(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/districts")
+    public ResponseEntity<ApiResponse<List<String>>> getActiveDistricts() {
+        List<String> districts = storeService.getActiveDistricts();
+        return ResponseEntity.ok(ApiResponse.success(districts));
     }
 
     @GetMapping

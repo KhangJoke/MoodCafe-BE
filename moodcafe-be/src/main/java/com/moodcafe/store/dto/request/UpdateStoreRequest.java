@@ -26,6 +26,9 @@ public class UpdateStoreRequest {
     @Size(max = 500, message = "Address cannot exceed 500 characters")
     private String address;
 
+    @Size(max = 100, message = "District cannot exceed 100 characters")
+    private String district;
+
     private BigDecimal latitude;
 
     private BigDecimal longitude;
@@ -36,6 +39,10 @@ public class UpdateStoreRequest {
 
     @Size(max = 50, message = "Price range cannot exceed 50 characters")
     private String priceRange;
+
+    private Long priceFrom;
+
+    private Long priceTo;
 
     @Size(max = 20, message = "Phone cannot exceed 20 characters")
     private String phone;

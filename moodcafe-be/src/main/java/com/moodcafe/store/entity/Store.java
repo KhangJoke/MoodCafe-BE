@@ -53,6 +53,9 @@ public class Store {
         @Column(name = "address", nullable = false, length = 500)
         private String address;
 
+        @Column(name = "district", length = 100)
+        private String district;
+
         @Column(name = "latitude", precision = 10, scale = 7)
         private BigDecimal latitude;
 
@@ -67,6 +70,12 @@ public class Store {
 
         @Column(name = "price_range", length = 50)
         private String priceRange;
+
+        @Column(name = "price_from")
+        private Long priceFrom;
+
+        @Column(name = "price_to")
+        private Long priceTo;
 
         @Column(name = "phone", length = 20)
         private String phone;

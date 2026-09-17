@@ -18,6 +18,8 @@ public interface StoreTagRepository extends JpaRepository<StoreTag, UUID> {
 
     List<StoreTag> findAllByStoreIdAndStatus(UUID storeId, StoreTagStatus status);
 
+    List<StoreTag> findAllByStoreIdAndStatusAndHighlightedTrue(UUID storeId, StoreTagStatus status);
+
     Optional<StoreTag> findByStoreIdAndTagTagId(UUID storeId, UUID tagId);
 
     List<StoreTag> findAllByStoreIdAndTagCategoryTagCategoryId(UUID storeId, UUID tagCategoryId);

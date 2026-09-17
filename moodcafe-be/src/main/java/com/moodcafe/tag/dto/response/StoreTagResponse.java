@@ -27,4 +27,5 @@ public class StoreTagResponse {
     private String rejectReason;
     private Instant approvedAt;
     private Instant createdAt;
+    private boolean highlighted;
 }

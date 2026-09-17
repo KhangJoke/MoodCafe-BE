@@ -9,6 +9,7 @@ import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.service.StoreTagService;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
+import com.moodcafe.tag.dto.request.UpdateStoreHighlightTagsRequest;
 import com.moodcafe.tag.dto.response.StoreAttributesResponse;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import com.moodcafe.tag.entity.StoreTag;
@@ -22,9 +23,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -137,5 +141,42 @@ public class StoreTagServiceImpl implements StoreTagService {
 
         storeTag = storeTagRepository.save(storeTag);
         return storeTagMapper.toResponse(storeTag);
+    }
+
+    @Override
+    @Transactional
+    public List<StoreTagResponse> updateStoreHighlightTags(UUID storeId, UpdateStoreHighlightTagsRequest request) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        List<UUID> targetTagIds = (request != null && request.getTagIds() != null) ? request.getTagIds() : List.of();
+        if (targetTagIds.size() > 4) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Tối đa chỉ được chọn 4 thẻ hiển thị trên thẻ quán");
+        }
+
+        List<StoreTag> storeTags = storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED);
+        Set<UUID> approvedTagIds = storeTags.stream()
+                .filter(st -> st.getTag() != null)
+                .map(st -> st.getTag().getTagId())
+                .collect(Collectors.toSet());
+
+        for (UUID tagId : targetTagIds) {
+            if (!approvedTagIds.contains(tagId)) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Thẻ được chọn phải thuộc danh sách thẻ đã được duyệt của quán");
+            }
+        }
+
+        Set<UUID> targetSet = new HashSet<>(targetTagIds);
+        for (StoreTag st : storeTags) {
+            if (st.getTag() == null) continue;
+            boolean shouldHighlight = targetSet.contains(st.getTag().getTagId());
+            if (st.isHighlighted() != shouldHighlight) {
+                st.setHighlighted(shouldHighlight);
+                storeTagRepository.save(st);
+            }
+        }
+
+        return storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED).stream()
+                .map(storeTagMapper::toResponse)
+                .toList();
     }
 }

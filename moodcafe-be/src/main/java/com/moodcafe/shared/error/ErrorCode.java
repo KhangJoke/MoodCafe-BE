@@ -6,6 +6,8 @@ public enum ErrorCode {
 
     // System Config
     SYSTEM_CONFIG_NOT_INITIALIZED(HttpStatus.INTERNAL_SERVER_ERROR, "System configuration not initialized"),
+    SYSTEM_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, "System configuration not found"),
+    INVALID_CONFIG_VALUE(HttpStatus.BAD_REQUEST, "Invalid configuration value"),
     // Token
     TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "Token has expired"),
     TOKEN_NOT_FOUND(HttpStatus.NOT_FOUND, "Token not found"),

@@ -4,6 +4,7 @@ import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.tag.abstraction.service.StoreTagService;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
+import com.moodcafe.tag.dto.request.UpdateStoreHighlightTagsRequest;
 import com.moodcafe.tag.dto.response.StoreAttributesResponse;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import jakarta.validation.Valid;
@@ -42,6 +43,16 @@ public class StoreTagController {
         StoreTagResponse response = storeTagService.requestStoreTag(storeId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Store tag request submitted successfully"));
+    }
+
+    @PutMapping("/api/stores/{storeId}/highlight-tags")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<StoreTagResponse>>> updateHighlightTags(
+            @PathVariable UUID storeId,
+            @Valid @RequestBody UpdateStoreHighlightTagsRequest request
+    ) {
+        List<StoreTagResponse> response = storeTagService.updateStoreHighlightTags(storeId, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật thẻ nổi bật thành công"));
     }
 
     @GetMapping("/api/admin/store-tags/pending")

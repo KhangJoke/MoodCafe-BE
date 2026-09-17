@@ -8,6 +8,7 @@ import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
+import com.moodcafe.tag.dto.request.UpdateStoreHighlightTagsRequest;
 import com.moodcafe.tag.dto.response.StoreAttributesResponse;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import com.moodcafe.tag.entity.StoreTag;
@@ -243,5 +244,77 @@ class StoreTagServiceImplTest {
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo(StoreTagStatus.APPROVED);
         assertThat(oldStoreTag.getStatus()).isEqualTo(StoreTagStatus.REVOKED);
+    }
+
+    @Test
+    @DisplayName("updateStoreHighlightTags - owner successfully sets highlight tags")
+    void updateStoreHighlightTags_success() {
+        StoreTag tag1 = StoreTag.builder()
+                .storeId(storeId)
+                .tag(tag)
+                .status(StoreTagStatus.APPROVED)
+                .highlighted(false)
+                .build();
+
+        UUID tagId2 = UUID.randomUUID();
+        Tag secondTag = Tag.builder().tagId(tagId2).name("Yên tĩnh").build();
+        StoreTag tag2 = StoreTag.builder()
+                .storeId(storeId)
+                .tag(secondTag)
+                .status(StoreTagStatus.APPROVED)
+                .highlighted(false)
+                .build();
+
+        UpdateStoreHighlightTagsRequest request = UpdateStoreHighlightTagsRequest.builder()
+                .tagIds(List.of(tagId))
+                .build();
+
+        when(storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED))
+                .thenReturn(List.of(tag1, tag2));
+        when(storeTagMapper.toResponse(any(StoreTag.class))).thenAnswer(inv -> {
+            StoreTag st = inv.getArgument(0);
+            return StoreTagResponse.builder()
+                    .tagId(st.getTag().getTagId())
+                    .highlighted(st.isHighlighted())
+                    .build();
+        });
+
+        List<StoreTagResponse> result = storeTagService.updateStoreHighlightTags(storeId, request);
+
+        assertThat(result).hasSize(2);
+        assertThat(tag1.isHighlighted()).isTrue();
+        assertThat(tag2.isHighlighted()).isFalse();
+        verify(storeStaffService).requireStoreAccess(storeId, "OWNER", "MANAGER");
+        verify(storeTagRepository).save(tag1);
+    }
+
+    @Test
+    @DisplayName("updateStoreHighlightTags - throws exception if more than 4 tags")
+    void updateStoreHighlightTags_moreThan4_throwsException() {
+        UpdateStoreHighlightTagsRequest request = UpdateStoreHighlightTagsRequest.builder()
+                .tagIds(List.of(
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()
+                ))
+                .build();
+
+        assertThatThrownBy(() -> storeTagService.updateStoreHighlightTags(storeId, request))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
+    }
+
+    @Test
+    @DisplayName("updateStoreHighlightTags - throws exception if tag is not approved for store")
+    void updateStoreHighlightTags_unapprovedTag_throwsException() {
+        UUID unapprovedTagId = UUID.randomUUID();
+        UpdateStoreHighlightTagsRequest request = UpdateStoreHighlightTagsRequest.builder()
+                .tagIds(List.of(unapprovedTagId))
+                .build();
+
+        when(storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED))
+                .thenReturn(List.of(storeTag)); // storeTag has tagId, not unapprovedTagId
+
+        assertThatThrownBy(() -> storeTagService.updateStoreHighlightTags(storeId, request))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
     }
 }

@@ -71,4 +71,8 @@ public class StoreTag {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Builder.Default
+    @Column(name = "is_highlighted", nullable = false)
+    private boolean highlighted = false;
 }
