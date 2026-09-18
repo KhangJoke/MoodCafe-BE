@@ -50,5 +50,6 @@ public class StoreSearchItemResponse {
         private String name;
         private String categoryCode;
         private String categoryName;
+        private Integer scaleValue;
     }
 }

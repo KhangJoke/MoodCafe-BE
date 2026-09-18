@@ -347,6 +347,7 @@ public class StoreServiceImpl implements StoreService {
                             .name(st.getTag().getName())
                             .categoryCode(st.getTag().getCategory() != null ? st.getTag().getCategory().getCode() : "")
                             .categoryName(st.getTag().getCategory() != null ? st.getTag().getCategory().getName() : "")
+                            .scaleValue(st.getTag().getScaleValue())
                             .build())
                     .limit(4)
                     .toList();
@@ -369,6 +370,7 @@ public class StoreServiceImpl implements StoreService {
                                 .name(st.getTag().getName())
                                 .categoryCode(st.getTag().getCategory() != null ? st.getTag().getCategory().getCode() : "")
                                 .categoryName(st.getTag().getCategory() != null ? st.getTag().getCategory().getName() : "")
+                                .scaleValue(st.getTag().getScaleValue())
                                 .build())
                         .limit(4)
                         .toList();
@@ -382,6 +384,7 @@ public class StoreServiceImpl implements StoreService {
                                     .name(st.getTag().getName())
                                     .categoryCode(st.getTag().getCategory() != null ? st.getTag().getCategory().getCode() : "")
                                     .categoryName(st.getTag().getCategory() != null ? st.getTag().getCategory().getName() : "")
+                                    .scaleValue(st.getTag().getScaleValue())
                                     .build())
                             .limit(4 - highlightTags.size())
                             .toList();
