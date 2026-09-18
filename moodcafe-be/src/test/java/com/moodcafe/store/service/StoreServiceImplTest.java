@@ -13,11 +13,17 @@ import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
+import com.moodcafe.store.dto.response.StoreResponse;
+import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 import com.moodcafe.store.entity.Store;
+import com.moodcafe.store.entity.StoreReview;
 import com.moodcafe.store.entity.enums.StoreStatus;
+import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.mapper.StoreImageMapper;
 import com.moodcafe.store.mapper.StoreMapper;
+import com.moodcafe.store.mapper.StoreReviewMapper;
+import com.moodcafe.tag.dto.response.StoreTagResponse;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.repository.UserPreferenceRepository;
@@ -39,6 +45,7 @@ import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -78,6 +85,10 @@ class StoreServiceImplTest {
     private UserPreferenceRepository userPreferenceRepository;
     @Mock
     private SystemConfigurationService configurationService;
+    @Mock
+    private StoreReviewMapper storeReviewMapper;
+    @Mock
+    private TagRatingRepository tagRatingRepository;
 
     @InjectMocks
     private StoreServiceImpl storeService;
@@ -187,5 +198,57 @@ class StoreServiceImplTest {
         assertThat(item.getMatchScore()).isGreaterThanOrEqualTo(70);
         assertThat(item.getFavoriteCount()).isEqualTo(100L);
         assertThat(item.getOverallRating()).isEqualTo(4.8);
+    }
+
+    @Test
+    @DisplayName("getStoreById - returns store detail with reviews, summary, and tag scores")
+    void getStoreById_ReturnsDetailWithReviewsAndTagScores() {
+        UUID storeId = store1.getStoreId();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
+        when(storeMapper.toResponse(store1)).thenReturn(StoreResponse.builder().storeId(storeId).name(store1.getName()).build());
+        when(storeImageRepository.findAllByStoreStoreId(storeId)).thenReturn(List.of());
+
+        StoreTag approvedTag = StoreTag.builder()
+                .storeId(storeId)
+                .tag(vibeTag)
+                .status(StoreTagStatus.APPROVED)
+                .avgScore(4.5)
+                .reviewCount(10)
+                .build();
+        when(storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED)).thenReturn(List.of(approvedTag));
+        when(storeTagMapper.toResponse(approvedTag)).thenReturn(StoreTagResponse.builder()
+                .tagId(vibeTag.getTagId())
+                .tagName(vibeTag.getName())
+                .averageScore(4.5)
+                .reviewCount(10)
+                .build());
+
+        when(tagRatingRepository.getAllTagRatingSummariesForStore(storeId)).thenReturn(Collections.singletonList(
+                new Object[]{vibeTag.getTagId(), 4.8, 12L}
+        ));
+
+        StoreReview mockReview = StoreReview.builder().reviewId(UUID.randomUUID()).store(store1).build();
+        when(storeReviewRepository.findAllByStoreStoreIdOrderByCreatedAtDesc(storeId)).thenReturn(List.of(mockReview));
+        when(storeReviewMapper.toResponse(mockReview)).thenReturn(StoreReviewResponse.builder()
+                .reviewId(mockReview.getReviewId())
+                .storeId(storeId)
+                .build());
+
+        when(storeReviewRepository.getReviewSummaryByStoreId(storeId)).thenReturn(Collections.singletonList(
+                new Object[]{4.8, 5.0, 4.0, 4.0, 5.0, 1L}
+        ));
+
+        StoreResponse response = storeService.getStoreById(storeId);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStoreId()).isEqualTo(storeId);
+        assertThat(response.getTags()).hasSize(1);
+        assertThat(response.getTags().get(0).getAverageScore()).isEqualTo(4.8);
+        assertThat(response.getTags().get(0).getReviewCount()).isEqualTo(12);
+        assertThat(response.getReviews()).hasSize(1);
+        assertThat(response.getReviewSummary()).isNotNull();
+        assertThat(response.getReviewSummary().getAverageRating()).isEqualTo(4.8);
+        assertThat(response.getOverallRating()).isEqualTo(4.8);
+        assertThat(response.getReviewCount()).isEqualTo(1L);
     }
 }

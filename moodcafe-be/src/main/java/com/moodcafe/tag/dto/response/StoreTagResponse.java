@@ -28,4 +28,18 @@ public class StoreTagResponse {
     private Instant approvedAt;
     private Instant createdAt;
     private boolean highlighted;
+
+    @Builder.Default
+    private Double averageScore = 0.0;
+
+    @Builder.Default
+    private Integer reviewCount = 0;
+
+    public Double getAvgRating() {
+        return averageScore;
+    }
+
+    public Double getAvgPoint() {
+        return averageScore;
+    }
 }

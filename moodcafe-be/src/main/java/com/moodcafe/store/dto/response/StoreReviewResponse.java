@@ -32,6 +32,7 @@ public class StoreReviewResponse {
     private Integer outletRating;
     private String content;
     private List<String> imageUrls;
+    private List<ReviewTagResponse> tagRatings;
     private Instant createdAt;
     private Instant updatedAt;
 }

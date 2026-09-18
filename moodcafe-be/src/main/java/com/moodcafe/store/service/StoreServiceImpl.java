@@ -15,22 +15,27 @@ import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreService;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
+import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
 import com.moodcafe.store.dto.response.StoreImageResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
+import com.moodcafe.store.dto.response.StoreReviewResponse;
+import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse.StoreSearchTagItem;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreImage;
+import com.moodcafe.store.entity.StoreReview;
 import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.entity.enums.StoreStaffStatus;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.store.mapper.StoreImageMapper;
 import com.moodcafe.store.mapper.StoreMapper;
+import com.moodcafe.store.mapper.StoreReviewMapper;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.repository.UserPreferenceRepository;
@@ -79,6 +84,8 @@ public class StoreServiceImpl implements StoreService {
     private final StoreReviewRepository storeReviewRepository;
     private final UserPreferenceRepository userPreferenceRepository;
     private final SystemConfigurationService configurationService;
+    private final StoreReviewMapper storeReviewMapper;
+    private final TagRatingRepository tagRatingRepository;
 
     @Override
     @Transactional
@@ -111,7 +118,7 @@ public class StoreServiceImpl implements StoreService {
     public StoreResponse getStoreById(UUID storeId) {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
-        return toStoreResponse(store);
+        return toStoreDetailResponse(store);
     }
 
     @Override
@@ -588,6 +595,73 @@ public class StoreServiceImpl implements StoreService {
                 .map(storeTagMapper::toResponse)
                 .toList();
         response.setTags(tags);
+
+        return response;
+    }
+
+    private StoreResponse toStoreDetailResponse(Store store) {
+        StoreResponse response = toStoreResponse(store);
+        UUID storeId = store.getStoreId();
+
+        // 1. Sync live tag scores if available
+        List<Object[]> tagStats = tagRatingRepository.getAllTagRatingSummariesForStore(storeId);
+        if (tagStats != null && !tagStats.isEmpty()) {
+            Map<UUID, Object[]> tagScoreMap = new HashMap<>();
+            for (Object[] row : tagStats) {
+                if (row != null && row.length >= 3 && row[0] != null) {
+                    tagScoreMap.put((UUID) row[0], row);
+                }
+            }
+
+            if (response.getTags() != null) {
+                for (StoreTagResponse tagResp : response.getTags()) {
+                    if (tagResp != null && tagScoreMap.containsKey(tagResp.getTagId())) {
+                        Object[] s = tagScoreMap.get(tagResp.getTagId());
+                        tagResp.setAverageScore(Math.round(((Number) s[1]).doubleValue() * 10.0) / 10.0);
+                        tagResp.setReviewCount(((Number) s[2]).intValue());
+                    }
+                }
+            }
+        }
+
+        // 2. Load reviews for this store
+        List<StoreReview> reviews = storeReviewRepository.findAllByStoreStoreIdOrderByCreatedAtDesc(storeId);
+        List<StoreReviewResponse> reviewResponses = (reviews != null)
+                ? reviews.stream().map(storeReviewMapper::toResponse).toList()
+                : Collections.emptyList();
+        response.setReviews(reviewResponses);
+
+        // 3. Load review summary and root ratings
+        List<Object[]> summary = storeReviewRepository.getReviewSummaryByStoreId(storeId);
+        if (summary != null && !summary.isEmpty() && summary.get(0)[5] != null && ((Number) summary.get(0)[5]).longValue() > 0) {
+            Object[] row = summary.get(0);
+            double avg = row[0] != null ? Math.round(((Number) row[0]).doubleValue() * 10.0) / 10.0 : 0.0;
+            long count = ((Number) row[5]).longValue();
+            StoreReviewSummaryResponse summaryResponse = StoreReviewSummaryResponse.builder()
+                    .storeId(storeId)
+                    .averageRating(avg)
+                    .averageQuietness(row[1] != null ? Math.round(((Number) row[1]).doubleValue() * 10.0) / 10.0 : null)
+                    .averageLighting(row[2] != null ? Math.round(((Number) row[2]).doubleValue() * 10.0) / 10.0 : null)
+                    .averageSeating(row[3] != null ? Math.round(((Number) row[3]).doubleValue() * 10.0) / 10.0 : null)
+                    .averageOutlet(row[4] != null ? Math.round(((Number) row[4]).doubleValue() * 10.0) / 10.0 : null)
+                    .totalReviews(count)
+                    .build();
+            response.setReviewSummary(summaryResponse);
+            response.setOverallRating(avg);
+            response.setReviewCount(count);
+        } else {
+            response.setReviewSummary(StoreReviewSummaryResponse.builder()
+                    .storeId(storeId)
+                    .averageRating(0.0)
+                    .totalReviews(0L)
+                    .averageQuietness(0.0)
+                    .averageLighting(0.0)
+                    .averageSeating(0.0)
+                    .averageOutlet(0.0)
+                    .build());
+            response.setOverallRating(0.0);
+            response.setReviewCount(0L);
+        }
 
         return response;
     }

@@ -3,6 +3,7 @@ package com.moodcafe.store.controller;
 import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.store.abstraction.service.StoreReviewService;
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
+import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
 import jakarta.validation.Valid;
@@ -62,6 +63,25 @@ public class StoreReviewController {
     ) {
         StoreReviewResponse review = storeReviewService.getReviewById(reviewId);
         return ResponseEntity.ok(ApiResponse.success(review));
+    }
+
+    @PutMapping(value = "/reviews/{reviewId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<StoreReviewResponse>> updateReview(
+            @PathVariable UUID reviewId,
+            @RequestParam(value = "newImages", required = false) List<MultipartFile> newImages,
+            @Valid @ModelAttribute UpdateStoreReviewRequest request
+    ) {
+        StoreReviewResponse response = storeReviewService.updateReview(reviewId, request, newImages);
+        return ResponseEntity.ok(ApiResponse.success(response, "Review updated successfully"));
+    }
+
+    @PutMapping(value = "/reviews/{reviewId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<StoreReviewResponse>> updateReviewJson(
+            @PathVariable UUID reviewId,
+            @Valid @RequestBody UpdateStoreReviewRequest request
+    ) {
+        StoreReviewResponse response = storeReviewService.updateReview(reviewId, request, null);
+        return ResponseEntity.ok(ApiResponse.success(response, "Review updated successfully"));
     }
 
     @DeleteMapping("/reviews/{reviewId}")

@@ -87,6 +87,10 @@ public class StoreReview {
     private List<ReviewImage> images = new ArrayList<>();
 
     @Builder.Default
+    @OneToMany(mappedBy = "review", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TagRating> tagRatings = new ArrayList<>();
+
+    @Builder.Default
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;
 
@@ -101,5 +105,10 @@ public class StoreReview {
     public void addImage(ReviewImage image) {
         images.add(image);
         image.setReview(this);
+    }
+
+    public void addTagRating(TagRating tagRating) {
+        tagRatings.add(tagRating);
+        tagRating.setReview(this);
     }
 }

@@ -38,6 +38,10 @@ public class StoreResponse {
     private StoreStatus status;
     private List<StoreImageResponse> images;
     private List<StoreTagResponse> tags;
+    private List<StoreReviewResponse> reviews;
+    private StoreReviewSummaryResponse reviewSummary;
+    private Double overallRating;
+    private Long reviewCount;
     private Instant createdAt;
     private Instant updatedAt;
 }

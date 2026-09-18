@@ -4,20 +4,22 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.math.BigDecimal;
-import java.util.UUID;
+import java.util.List;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateStoreReviewRequest {
+public class UpdateStoreReviewRequest {
 
-    @NotNull(message = "Overall rating is required")
     @DecimalMin(value = "1.0", message = "Overall rating must be between 1.0 and 5.0")
     @DecimalMax(value = "5.0", message = "Overall rating must be between 1.0 and 5.0")
     private BigDecimal overallRating;
@@ -40,9 +42,7 @@ public class CreateStoreReviewRequest {
 
     private String content;
 
-    private UUID visitVerificationId;
-
-    private java.util.List<ReviewTagRatingRequest> tagRatings;
+    private List<ReviewTagRatingRequest> tagRatings;
 
     private String tagRatingsRaw;
 }

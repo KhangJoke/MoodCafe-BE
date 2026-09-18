@@ -1,5 +1,7 @@
 package com.moodcafe.store.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.abstraction.service.FileStorageService;
@@ -8,14 +10,22 @@ import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
+import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.abstraction.service.StoreReviewService;
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
+import com.moodcafe.store.dto.request.ReviewTagRatingRequest;
+import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
 import com.moodcafe.store.entity.ReviewImage;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreReview;
+import com.moodcafe.store.entity.TagRating;
 import com.moodcafe.store.mapper.StoreReviewMapper;
+import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
+import com.moodcafe.tag.entity.StoreTag;
+import com.moodcafe.tag.entity.Tag;
+import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,8 +34,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +53,9 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     private final FileStorageService fileStorageService;
     private final CurrentUserService currentUserService;
     private final StoreReviewMapper storeReviewMapper;
+    private final TagRatingRepository tagRatingRepository;
+    private final StoreTagRepository storeTagRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -91,8 +110,70 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             }
         }
 
+        // Attach tag ratings if provided
+        List<ReviewTagRatingRequest> resolvedTagRatings = resolveTagRatings(request.getTagRatings(), request.getTagRatingsRaw());
+        if (!resolvedTagRatings.isEmpty()) {
+            applyTagRatingsToReview(review, storeId, resolvedTagRatings);
+        }
+
         review = storeReviewRepository.save(review);
-        log.info("User {} submitted review {} for store {}", currentUser.getUserId(), review.getReviewId(), storeId);
+        if (!resolvedTagRatings.isEmpty()) {
+            recalculateStoreTagScores(storeId);
+        }
+
+        log.info("User {} submitted review {} with {} tag ratings for store {}",
+                currentUser.getUserId(), review.getReviewId(), review.getTagRatings().size(), storeId);
+
+        return storeReviewMapper.toResponse(review);
+    }
+
+    @Override
+    @Transactional
+    public StoreReviewResponse updateReview(UUID reviewId, UpdateStoreReviewRequest request, List<MultipartFile> newImages) {
+        StoreReview review = storeReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
+
+        User currentUser = currentUserService.getCurrentUser();
+        boolean isAuthor = review.getUser().getUserId().equals(currentUser.getUserId());
+        boolean isAdmin = currentUser.getRole() != null && "ADMIN".equalsIgnoreCase(currentUser.getRole().getName());
+
+        if (!isAuthor && !isAdmin) {
+            throw new AppException(ErrorCode.FORBIDDEN_REVIEW_ACTION);
+        }
+
+        UUID storeId = review.getStore().getStoreId();
+
+        if (request != null) {
+            if (request.getOverallRating() != null) review.setOverallRating(request.getOverallRating());
+            if (request.getQuietnessRating() != null) review.setQuietnessRating(request.getQuietnessRating());
+            if (request.getLightingRating() != null) review.setLightingRating(request.getLightingRating());
+            if (request.getSeatingRating() != null) review.setSeatingRating(request.getSeatingRating());
+            if (request.getOutletRating() != null) review.setOutletRating(request.getOutletRating());
+            if (request.getContent() != null) review.setContent(request.getContent());
+
+            List<ReviewTagRatingRequest> resolvedTagRatings = resolveTagRatings(request.getTagRatings(), request.getTagRatingsRaw());
+            if (resolvedTagRatings != null && !resolvedTagRatings.isEmpty()) {
+                review.getTagRatings().clear();
+                applyTagRatingsToReview(review, storeId, resolvedTagRatings);
+            }
+        }
+
+        if (newImages != null && !newImages.isEmpty()) {
+            for (MultipartFile newImage : newImages) {
+                if (newImage != null && !newImage.isEmpty()) {
+                    UploadImageResponse additionalUpload = fileStorageService.uploadImage(newImage, "reviews");
+                    ReviewImage extraImage = ReviewImage.builder()
+                            .review(review)
+                            .imageUrl(additionalUpload.getImageUrl())
+                            .build();
+                    review.addImage(extraImage);
+                }
+            }
+        }
+
+        review = storeReviewRepository.save(review);
+        recalculateStoreTagScores(storeId);
+        log.info("Review {} updated by user {}", reviewId, currentUser.getUserId());
 
         return storeReviewMapper.toResponse(review);
     }
@@ -163,8 +244,93 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             throw new AppException(ErrorCode.FORBIDDEN_REVIEW_ACTION);
         }
 
+        UUID storeId = review.getStore().getStoreId();
         storeReviewRepository.delete(review);
+        recalculateStoreTagScores(storeId);
         log.info("Review {} soft deleted by user {}", reviewId, currentUser.getUserId());
+    }
+
+    private void applyTagRatingsToReview(StoreReview review, UUID storeId, List<ReviewTagRatingRequest> ratingRequests) {
+        List<StoreTag> approvedStoreTags = storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED);
+        Map<UUID, Tag> approvedTagMap = approvedStoreTags.stream()
+                .filter(st -> st.getTag() != null)
+                .collect(Collectors.toMap(st -> st.getTag().getTagId(), StoreTag::getTag, (a, b) -> a));
+        Map<UUID, Tag> storeTagIdMap = approvedStoreTags.stream()
+                .filter(st -> st.getTag() != null)
+                .collect(Collectors.toMap(StoreTag::getStoreTagId, StoreTag::getTag, (a, b) -> a));
+
+        Set<UUID> seenTagIds = new HashSet<>();
+        for (ReviewTagRatingRequest req : ratingRequests) {
+            if (req == null) continue;
+
+            Tag tag = null;
+            if (req.getTagId() != null) {
+                tag = approvedTagMap.get(req.getTagId());
+            }
+            if (tag == null && req.getStoreTagId() != null) {
+                tag = storeTagIdMap.get(req.getStoreTagId());
+            }
+
+            if (tag == null) {
+                throw new AppException(ErrorCode.INVALID_INPUT,
+                        "Tag " + (req.getTagId() != null ? req.getTagId() : req.getStoreTagId()) + " is not an approved tag for this store");
+            }
+
+            if (req.getScore() == null || req.getScore() < 1 || req.getScore() > 5) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Tag score must be between 1 and 5");
+            }
+
+            if (seenTagIds.add(tag.getTagId())) {
+                TagRating tr = TagRating.builder()
+                        .review(review)
+                        .tag(tag)
+                        .score(req.getScore())
+                        .build();
+                review.addTagRating(tr);
+            }
+        }
+    }
+
+    private void recalculateStoreTagScores(UUID storeId) {
+        List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
+        if (storeTags.isEmpty()) return;
+
+        List<Object[]> summaries = tagRatingRepository.getAllTagRatingSummariesForStore(storeId);
+        Map<UUID, Object[]> scoreMap = new HashMap<>();
+        for (Object[] row : summaries) {
+            if (row != null && row.length >= 3 && row[0] != null) {
+                scoreMap.put((UUID) row[0], row);
+            }
+        }
+
+        for (StoreTag st : storeTags) {
+            if (st.getTag() == null) continue;
+            Object[] stats = scoreMap.get(st.getTag().getTagId());
+            if (stats != null && stats[1] != null && stats[2] != null) {
+                double avg = roundToOneDecimal(((Number) stats[1]).doubleValue());
+                int count = ((Number) stats[2]).intValue();
+                st.setAvgScore(avg);
+                st.setReviewCount(count);
+            } else {
+                st.setAvgScore(0.0);
+                st.setReviewCount(0);
+            }
+            storeTagRepository.save(st);
+        }
+    }
+
+    private List<ReviewTagRatingRequest> resolveTagRatings(List<ReviewTagRatingRequest> list, String rawJson) {
+        if (list != null && !list.isEmpty()) {
+            return list;
+        }
+        if (rawJson != null && !rawJson.isBlank()) {
+            try {
+                return objectMapper.readValue(rawJson, new TypeReference<List<ReviewTagRatingRequest>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse tagRatingsRaw JSON: {}", e.getMessage());
+            }
+        }
+        return Collections.emptyList();
     }
 
     private Double roundToOneDecimal(Double value) {

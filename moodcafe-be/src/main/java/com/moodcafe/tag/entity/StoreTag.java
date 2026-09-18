@@ -75,4 +75,12 @@ public class StoreTag {
     @Builder.Default
     @Column(name = "is_highlighted", nullable = false)
     private boolean highlighted = false;
+
+    @Builder.Default
+    @Column(name = "avg_score")
+    private Double avgScore = 0.0;
+
+    @Builder.Default
+    @Column(name = "review_count")
+    private Integer reviewCount = 0;
 }
