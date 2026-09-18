@@ -20,6 +20,7 @@ import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
+import com.moodcafe.store.dto.response.FeaturedMoodStoreResponse;
 import com.moodcafe.store.dto.response.StoreImageResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
@@ -37,11 +38,13 @@ import com.moodcafe.store.mapper.StoreImageMapper;
 import com.moodcafe.store.mapper.StoreMapper;
 import com.moodcafe.store.mapper.StoreReviewMapper;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
+import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.repository.UserPreferenceRepository;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
+import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.entity.UserPreference;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
@@ -75,6 +78,7 @@ public class StoreServiceImpl implements StoreService {
     private final StoreImageRepository storeImageRepository;
     private final StoreTagRepository storeTagRepository;
     private final TagRepository tagRepository;
+    private final TagCategoryRepository tagCategoryRepository;
     private final StoreMapper storeMapper;
     private final StoreImageMapper storeImageMapper;
     private final StoreTagMapper storeTagMapper;
@@ -176,9 +180,20 @@ public class StoreServiceImpl implements StoreService {
         String keyword = (request.getKeyword() != null && !request.getKeyword().isBlank())
                 ? request.getKeyword().trim().toLowerCase()
                 : null;
-        String district = (request.getDistrict() != null && !request.getDistrict().isBlank())
-                ? request.getDistrict().trim().toLowerCase()
-                : null;
+        List<String> targetDistricts = new ArrayList<>();
+        if (request.getDistricts() != null && !request.getDistricts().isEmpty()) {
+            for (String d : request.getDistricts()) {
+                if (d != null && !d.isBlank() && !d.equalsIgnoreCase("all") && !d.equalsIgnoreCase("tất cả khu vực")) {
+                    targetDistricts.add(d.trim().toLowerCase());
+                }
+            }
+        }
+        if (request.getDistrict() != null && !request.getDistrict().isBlank() && !request.getDistrict().equalsIgnoreCase("all") && !request.getDistrict().equalsIgnoreCase("tất cả khu vực")) {
+            String singleD = request.getDistrict().trim().toLowerCase();
+            if (!targetDistricts.contains(singleD)) {
+                targetDistricts.add(singleD);
+            }
+        }
         String priceRange = (request.getPriceRange() != null && !request.getPriceRange().isBlank())
                 ? request.getPriceRange().trim()
                 : null;
@@ -256,11 +271,14 @@ public class StoreServiceImpl implements StoreService {
             List<StoreTag> tags = storeTagsMap.getOrDefault(storeId, Collections.emptyList());
 
             // 1. Filter district (if not specified or "all", match all districts)
-            if (district != null) {
+            if (!targetDistricts.isEmpty()) {
                 String storeDist = store.getDistrict() != null ? store.getDistrict().toLowerCase() : "";
                 String address = store.getAddress() != null ? store.getAddress().toLowerCase() : "";
                 String extracted = extractDistrictFromAddress(store.getAddress()).toLowerCase();
-                if (!storeDist.contains(district) && !address.contains(district) && !extracted.contains(district)) {
+                boolean matchesAny = targetDistricts.stream().anyMatch(
+                        d -> storeDist.contains(d) || address.contains(d) || extracted.contains(d)
+                );
+                if (!matchesAny) {
                     continue;
                 }
             }
@@ -758,6 +776,206 @@ public class StoreServiceImpl implements StoreService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FeaturedMoodStoreResponse> getFeaturedMoodStores() {
+        List<TagCategory> activeCategories = tagCategoryRepository.findAllByActiveTrueOrderByDisplayOrderAsc();
+        if (activeCategories.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // 1. Thống kê lượt quan tâm từ sở thích Onboarding người dùng (user_preferences)
+        Map<UUID, Long> preferenceCounts = new HashMap<>();
+        for (Object[] row : userPreferenceRepository.countPreferencesGroupedByTag()) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                preferenceCounts.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        }
+
+        // 2. Thống kê số lượng quán sở hữu từng tag (cho tiêu chí tie-break 2A)
+        Map<UUID, Long> storeCounts = new HashMap<>();
+        for (Object[] row : storeTagRepository.countDistinctStoresGroupedByTag(StoreTagStatus.APPROVED)) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                storeCounts.put((UUID) row[0], ((Number) row[1]).longValue());
+            }
+        }
+
+        // 3. Toàn bộ approved tags của từng quán để tra cứu chính xác
+        List<StoreTag> allApprovedStoreTags = storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.APPROVED);
+        Map<UUID, List<StoreTag>> storeTagsMap = allApprovedStoreTags.stream()
+                .collect(Collectors.groupingBy(StoreTag::getStoreId));
+
+        // 4. Lấy danh sách quán active đã được tính toán đầy đủ rating, reviews, favs, images
+        StoreSearchRequest searchReq = StoreSearchRequest.builder()
+                .page(0)
+                .size(100)
+                .build();
+        PageResponse<StoreSearchItemResponse> pageResp = searchStores(searchReq);
+        List<StoreSearchItemResponse> allStores = (pageResp != null && pageResp.getItems() != null)
+                ? new ArrayList<>(pageResp.getItems())
+                : Collections.emptyList();
+
+        if (allStores.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Comparator sắp xếp quán theo thứ bậc chặt chẽ:
+        // 1. overallRating DESC -> 2. reviewCount DESC -> 3. favoriteCount DESC -> 4. Tên quán A-Z -> 5. storeId
+        Comparator<StoreSearchItemResponse> storeComparator = (a, b) -> {
+            double ratingA = a.getOverallRating() != null ? a.getOverallRating() : 0.0;
+            double ratingB = b.getOverallRating() != null ? b.getOverallRating() : 0.0;
+            if (Double.compare(ratingB, ratingA) != 0) {
+                return Double.compare(ratingB, ratingA);
+            }
+
+            long reviewsA = a.getReviewCount() != null ? a.getReviewCount() : 0L;
+            long reviewsB = b.getReviewCount() != null ? b.getReviewCount() : 0L;
+            if (Long.compare(reviewsB, reviewsA) != 0) {
+                return Long.compare(reviewsB, reviewsA);
+            }
+
+            long favsA = a.getFavoriteCount() != null ? a.getFavoriteCount() : 0L;
+            long favsB = b.getFavoriteCount() != null ? b.getFavoriteCount() : 0L;
+            if (Long.compare(favsB, favsA) != 0) {
+                return Long.compare(favsB, favsA);
+            }
+
+            String nameA = a.getName() != null ? a.getName().toLowerCase() : "";
+            String nameB = b.getName() != null ? b.getName().toLowerCase() : "";
+            int nameCompare = nameA.compareTo(nameB);
+            if (nameCompare != 0) {
+                return nameCompare;
+            }
+
+            return a.getStoreId().compareTo(b.getStoreId());
+        };
+
+        Set<UUID> usedStoreIds = new HashSet<>();
+        List<FeaturedMoodStoreResponse> result = new ArrayList<>();
+
+        for (TagCategory category : activeCategories) {
+            // 5a. Lấy toàn bộ tags active thuộc category này
+            List<Tag> categoryTags = new ArrayList<>(
+                    tagRepository.findAllByCategoryTagCategoryIdAndActiveTrue(category.getTagCategoryId())
+            );
+
+            // 5b. Sắp xếp tags tìm tag Onboarding phổ biến nhất:
+            // 1. Số lượt chọn trong user_preferences DESC
+            // 2. Tiêu chí 2A: Số quán sở hữu tag DESC
+            // 3. Tên tag A-Z
+            // 4. Ngày tạo ASC
+            categoryTags.sort((t1, t2) -> {
+                long pref1 = preferenceCounts.getOrDefault(t1.getTagId(), 0L);
+                long pref2 = preferenceCounts.getOrDefault(t2.getTagId(), 0L);
+                if (Long.compare(pref2, pref1) != 0) {
+                    return Long.compare(pref2, pref1);
+                }
+
+                long stores1 = storeCounts.getOrDefault(t1.getTagId(), 0L);
+                long stores2 = storeCounts.getOrDefault(t2.getTagId(), 0L);
+                if (Long.compare(stores2, stores1) != 0) {
+                    return Long.compare(stores2, stores1);
+                }
+
+                String name1 = t1.getName() != null ? t1.getName().toLowerCase() : "";
+                String name2 = t2.getName() != null ? t2.getName().toLowerCase() : "";
+                int nameCompare = name1.compareTo(name2);
+                if (nameCompare != 0) {
+                    return nameCompare;
+                }
+
+                Instant c1 = t1.getCreatedAt() != null ? t1.getCreatedAt() : Instant.EPOCH;
+                Instant c2 = t2.getCreatedAt() != null ? t2.getCreatedAt() : Instant.EPOCH;
+                return c1.compareTo(c2);
+            });
+
+            Tag topTag = categoryTags.isEmpty() ? null : categoryTags.get(0);
+            long topTagPrefCount = topTag != null ? preferenceCounts.getOrDefault(topTag.getTagId(), 0L) : 0L;
+
+            StoreSearchItemResponse selectedStore = null;
+            String moodBadgeText = topTag != null ? cleanMoodBadgeText(topTag.getName()) : category.getName();
+
+            // Ưu tiên 1: Tìm quán chưa chọn chứa đúng topTag phổ biến nhất
+            if (topTag != null) {
+                UUID topTagId = topTag.getTagId();
+                List<StoreSearchItemResponse> exactMatches = allStores.stream()
+                        .filter(s -> !usedStoreIds.contains(s.getStoreId()))
+                        .filter(s -> {
+                            List<StoreTag> sTags = storeTagsMap.getOrDefault(s.getStoreId(), Collections.emptyList());
+                            return sTags.stream().anyMatch(st -> st.getTag() != null && topTagId.equals(st.getTag().getTagId()));
+                        })
+                        .sorted(storeComparator)
+                        .toList();
+
+                if (!exactMatches.isEmpty()) {
+                    selectedStore = exactMatches.get(0);
+                    moodBadgeText = cleanMoodBadgeText(topTag.getName());
+                }
+            }
+
+            // Ưu tiên 2: Tìm quán chưa chọn chứa BẤT KỲ tag nào thuộc category này
+            if (selectedStore == null) {
+                UUID catId = category.getTagCategoryId();
+                List<StoreSearchItemResponse> categoryMatches = allStores.stream()
+                        .filter(s -> !usedStoreIds.contains(s.getStoreId()))
+                        .filter(s -> {
+                            List<StoreTag> sTags = storeTagsMap.getOrDefault(s.getStoreId(), Collections.emptyList());
+                            return sTags.stream().anyMatch(st -> st.getTag() != null && st.getTag().getCategory() != null
+                                    && catId.equals(st.getTag().getCategory().getTagCategoryId()));
+                        })
+                        .sorted(storeComparator)
+                        .toList();
+
+                if (!categoryMatches.isEmpty()) {
+                    selectedStore = categoryMatches.get(0);
+                    List<StoreTag> sTags = storeTagsMap.getOrDefault(selectedStore.getStoreId(), Collections.emptyList());
+                    moodBadgeText = sTags.stream()
+                            .filter(st -> st.getTag() != null && st.getTag().getCategory() != null
+                                    && catId.equals(st.getTag().getCategory().getTagCategoryId()))
+                            .map(st -> cleanMoodBadgeText(st.getTag().getName()))
+                            .findFirst()
+                            .orElse(moodBadgeText);
+                }
+            }
+
+            // TH cuối (Fallback): Lấy quán chưa chọn có rating cao nhất toàn hệ thống
+            if (selectedStore == null) {
+                List<StoreSearchItemResponse> remaining = allStores.stream()
+                        .filter(s -> !usedStoreIds.contains(s.getStoreId()))
+                        .sorted(storeComparator)
+                        .toList();
+
+                if (!remaining.isEmpty()) {
+                    selectedStore = remaining.get(0);
+                } else {
+                    // Trường hợp cực đoan: Số lượng quán ít hơn số category
+                    int fallbackIndex = result.size() % allStores.size();
+                    selectedStore = allStores.get(fallbackIndex);
+                }
+            }
+
+            usedStoreIds.add(selectedStore.getStoreId());
+            result.add(FeaturedMoodStoreResponse.builder()
+                    .categoryCode(category.getCode())
+                    .categoryName(category.getName())
+                    .moodBadgeText(cleanMoodBadgeText(moodBadgeText))
+                    .preferenceCount(topTagPrefCount)
+                    .store(selectedStore)
+                    .build());
+        }
+
+        return result;
+    }
+
+    private String cleanMoodBadgeText(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.replaceAll("^#+", "")
+                .replaceAll("\\s*\\([^)]*\\)", "")
+                .trim();
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
+import com.moodcafe.store.dto.response.FeaturedMoodStoreResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 
@@ -24,6 +25,8 @@ public interface StoreService {
     StoreResponse changeStoreStatus(UUID storeId, UpdateStoreStatusRequest request);
 
     PageResponse<StoreSearchItemResponse> searchStores(StoreSearchRequest request);
+
+    List<FeaturedMoodStoreResponse> getFeaturedMoodStores();
 
     List<String> getActiveDistricts();
 }

@@ -116,6 +116,7 @@ public class OnboardingQuestionServiceImpl implements OnboardingQuestionService 
                             .tagId(t.getTagId())
                             .name(t.getName())
                             .description(t.getDescription())
+                            .imageUrl(t.getImageUrl())
                             .scaleValue(t.getScaleValue())
                             .build())
                     .toList();

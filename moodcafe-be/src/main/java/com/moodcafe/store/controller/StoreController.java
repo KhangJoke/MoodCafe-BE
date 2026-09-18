@@ -8,6 +8,7 @@ import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
+import com.moodcafe.store.dto.response.FeaturedMoodStoreResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 import com.moodcafe.store.dto.response.UserStoreResponse;
@@ -47,6 +48,12 @@ public class StoreController {
     public ResponseEntity<ApiResponse<PageResponse<StoreSearchItemResponse>>> searchStores(
             StoreSearchRequest request) {
         PageResponse<StoreSearchItemResponse> response = storeService.searchStores(request);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/featured-moods")
+    public ResponseEntity<ApiResponse<List<FeaturedMoodStoreResponse>>> getFeaturedMoodStores() {
+        List<FeaturedMoodStoreResponse> response = storeService.getFeaturedMoodStores();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 

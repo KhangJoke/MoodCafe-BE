@@ -18,6 +18,7 @@ public class StoreSearchRequest {
 
     private String keyword;
     private String district;
+    private List<String> districts;
     private List<UUID> tagIds;
     private Boolean openNow;
     private Boolean highRatingOnly;
