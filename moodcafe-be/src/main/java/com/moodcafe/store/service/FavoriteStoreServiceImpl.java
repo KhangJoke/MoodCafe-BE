@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +33,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class FavoriteStoreServiceImpl implements FavoriteStoreService {
+
+    private static final ZoneId STORE_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final FavoriteStoreRepository favoriteStoreRepository;
     private final StoreRepository storeRepository;
@@ -99,8 +102,7 @@ public class FavoriteStoreServiceImpl implements FavoriteStoreService {
                 reviewCountMap.put(sId, count);
             }
         }
-
-        LocalTime now = LocalTime.now();
+        LocalTime now = LocalTime.now(STORE_ZONE);
 
         return favorites.stream()
                 .map(fav -> {

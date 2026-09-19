@@ -54,6 +54,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -569,9 +570,11 @@ public class StoreServiceImpl implements StoreService {
         return Math.min(100, Math.max(0, result));
     }
 
+    private static final ZoneId STORE_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+
     private boolean checkIsOpenNow(LocalTime open, LocalTime close) {
         if (open == null || close == null) return true;
-        LocalTime now = LocalTime.now();
+        LocalTime now = LocalTime.now(STORE_ZONE);
         if (close.isAfter(open)) {
             return !now.isBefore(open) && !now.isAfter(close);
         } else {

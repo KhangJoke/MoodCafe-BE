@@ -19,6 +19,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import java.io.IOException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -60,7 +62,7 @@ public class JwtFilter extends OncePerRequestFilter {
 
             String jti = jwtService.extractJwtId(token);
             if (redisTokenService.isBlacklisted(jti)) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                sendUnauthorizedResponse(request, response, "Token has been revoked", "TOKEN_REVOKED");
                 return;
             }
             String email = jwtService.extractUsername(token);
@@ -96,16 +98,42 @@ public class JwtFilter extends OncePerRequestFilter {
                         }
                     }
                 } else {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    sendUnauthorizedResponse(request, response, "Token is invalid or expired", "TOKEN_INVALID");
                     return;
                 }
             }
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT token expired for URI {}: {}", request.getRequestURI(), e.getMessage());
+            sendUnauthorizedResponse(request, response, "Token has expired", "TOKEN_EXPIRED");
+            return;
+        } catch (JwtException e) {
+            log.warn("Invalid JWT token for URI {}: {}", request.getRequestURI(), e.getMessage());
+            sendUnauthorizedResponse(request, response, "Invalid authentication token", "TOKEN_INVALID");
+            return;
         } catch (Exception e) {
             log.error("JWT Filter validation failed for URI {}: {}", request.getRequestURI(), e.getMessage(), e);
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            sendUnauthorizedResponse(request, response, "Authentication failed", "UNAUTHORIZED");
             return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void sendUnauthorizedResponse(HttpServletRequest request,
+                                          HttpServletResponse response,
+                                          String message,
+                                          String errorCode) throws IOException {
+        response.setContentType("application/json;charset=UTF-8");
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+
+        ApiResponse<Void> apiResponse = ApiResponse.failed(
+                HttpServletResponse.SC_UNAUTHORIZED,
+                message,
+                errorCode,
+                request.getRequestURI());
+
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
     }
 }
