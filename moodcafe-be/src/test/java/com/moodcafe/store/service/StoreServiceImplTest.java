@@ -250,5 +250,39 @@ class StoreServiceImplTest {
         assertThat(response.getReviewSummary().getAverageRating()).isEqualTo(4.8);
         assertThat(response.getOverallRating()).isEqualTo(4.8);
         assertThat(response.getReviewCount()).isEqualTo(1L);
+        assertThat(response.getHasReviewed()).isFalse();
+        assertThat(response.getUserReview()).isNull();
+    }
+
+    @Test
+    @DisplayName("getStoreById - authenticated user has reviewed - returns hasReviewed true and userReview")
+    void getStoreById_AuthenticatedUser_HasReviewed_ReturnsTrueAndUserReview() {
+        UUID storeId = store1.getStoreId();
+        UUID userId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
+        when(storeMapper.toResponse(store1)).thenReturn(StoreResponse.builder().storeId(storeId).name(store1.getName()).build());
+        when(storeImageRepository.findAllByStoreStoreId(storeId)).thenReturn(List.of());
+        when(storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED)).thenReturn(List.of());
+        when(tagRatingRepository.getAllTagRatingSummariesForStore(storeId)).thenReturn(List.of());
+        when(storeReviewRepository.findAllByStoreStoreIdOrderByCreatedAtDesc(storeId)).thenReturn(List.of());
+        when(storeReviewRepository.getReviewSummaryByStoreId(storeId)).thenReturn(List.of());
+
+        StoreReview myReview = StoreReview.builder().reviewId(UUID.randomUUID()).store(store1).build();
+        StoreReviewResponse myReviewResponse = StoreReviewResponse.builder().reviewId(myReview.getReviewId()).storeId(storeId).build();
+
+        when(currentUserService.isAuthenticated()).thenReturn(true);
+        when(currentUserService.getCurrentUserId()).thenReturn(userId);
+        when(storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, userId))
+                .thenReturn(Optional.of(myReview));
+        when(storeReviewMapper.toResponse(myReview)).thenReturn(myReviewResponse);
+
+        StoreResponse response = storeService.getStoreById(storeId);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getHasReviewed()).isTrue();
+        assertThat(response.getUserReview()).isNotNull();
+        assertThat(response.getUserReview().getReviewId()).isEqualTo(myReview.getReviewId());
+        assertThat(response.getHasUserReviewed()).isTrue();
+        assertThat(response.getMyReview()).isNotNull();
     }
 }

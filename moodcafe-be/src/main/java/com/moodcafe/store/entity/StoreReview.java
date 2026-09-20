@@ -36,7 +36,8 @@ import java.util.UUID;
         indexes = {
                 @Index(name = "idx_reviews_store_id", columnList = "store_id"),
                 @Index(name = "idx_reviews_user_id", columnList = "user_id"),
-                @Index(name = "idx_reviews_created_at", columnList = "created_at")
+                @Index(name = "idx_reviews_created_at", columnList = "created_at"),
+                @Index(name = "idx_reviews_user_store", columnList = "user_id, store_id")
         }
 )
 @SQLDelete(sql = "UPDATE reviews SET is_deleted = true WHERE review_id = ?")
