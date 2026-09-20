@@ -48,8 +48,11 @@ public class TagController {
     }
 
     @GetMapping("/city-trending")
-    public ResponseEntity<ApiResponse<List<CityTrendingResponse>>> getCityTrending() {
-        List<CityTrendingResponse> data = tagService.getCityTrendingData();
+    public ResponseEntity<ApiResponse<List<CityTrendingResponse>>> getCityTrending(
+            @RequestParam(name = "tagLimit", defaultValue = "2") int tagLimit,
+            @RequestParam(name = "storeLimit", defaultValue = "2") int storeLimit
+    ) {
+        List<CityTrendingResponse> data = tagService.getCityTrendingData(tagLimit, storeLimit);
         return ResponseEntity.ok(ApiResponse.success(data));
     }
 

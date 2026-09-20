@@ -320,6 +320,22 @@ public class StoreServiceImpl implements StoreService {
                 }
             }
 
+            // 5b. Filter noiseLevel (1 to 5)
+            if (request.getNoiseLevel() != null) {
+                int targetNoise = request.getNoiseLevel();
+                boolean matchesNoise = tags.stream().anyMatch(st -> {
+                    Tag t = st.getTag();
+                    return t != null
+                            && t.getCategory() != null
+                            && "NOISE".equalsIgnoreCase(t.getCategory().getCode())
+                            && t.getScaleValue() != null
+                            && t.getScaleValue() == targetNoise;
+                });
+                if (!matchesNoise) {
+                    continue;
+                }
+            }
+
             Double rating = ratingMap.get(storeId);
             Long reviewCount = reviewCountMap.getOrDefault(storeId, 0L);
             Long favCount = favoriteCounts.getOrDefault(storeId, 0L);
@@ -364,7 +380,6 @@ public class StoreServiceImpl implements StoreService {
                     distinctCatTags.putIfAbsent(catCode, st);
                     if (distinctCatTags.size() >= 4) break;
                 }
-
                 highlightTags = distinctCatTags.values().stream()
                         .map(st -> StoreSearchTagItem.builder()
                                 .tagId(st.getTag().getTagId())
