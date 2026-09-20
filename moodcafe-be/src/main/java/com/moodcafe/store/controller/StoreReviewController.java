@@ -49,6 +49,22 @@ public class StoreReviewController {
         return ResponseEntity.ok(ApiResponse.success(reviews));
     }
 
+    @GetMapping("/{storeId}/reviews/me")
+    public ResponseEntity<ApiResponse<StoreReviewResponse>> getMyReviewForStore(
+            @PathVariable UUID storeId
+    ) {
+        StoreReviewResponse response = storeReviewService.getMyReviewForStore(storeId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @DeleteMapping("/{storeId}/reviews/me")
+    public ResponseEntity<ApiResponse<Void>> deleteMyReviewForStore(
+            @PathVariable UUID storeId
+    ) {
+        storeReviewService.deleteMyReviewForStore(storeId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Review removed successfully"));
+    }
+
     @GetMapping("/{storeId}/reviews/summary")
     public ResponseEntity<ApiResponse<StoreReviewSummaryResponse>> getStoreReviewSummary(
             @PathVariable UUID storeId

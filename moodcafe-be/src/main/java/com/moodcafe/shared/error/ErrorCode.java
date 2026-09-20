@@ -60,6 +60,8 @@ public enum ErrorCode {
     STORE_TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "Store tag association not found"),
     // Review
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "Review not found"),
+    USER_ALREADY_REVIEWED(HttpStatus.CONFLICT,
+            "Bạn đã gửi đánh giá cho quán này rồi. Mỗi người dùng chỉ được đánh giá 1 lần."),
     REVIEW_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST,
             "A live photo of the store taken at the moment is required to submit a review"),
     VIBE_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST,

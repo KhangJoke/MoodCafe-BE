@@ -1,7 +1,9 @@
 package com.moodcafe.shared.response;
 
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 import java.time.Instant;
 
@@ -17,7 +19,13 @@ public class ApiResponse<T> {
 
     private String message;
 
+    @JsonAlias({"result"})
     private T data;
+
+    @JsonProperty("result")
+    public T getResult() {
+        return data;
+    }
 
     // Optional error fields
     private String errorCode;

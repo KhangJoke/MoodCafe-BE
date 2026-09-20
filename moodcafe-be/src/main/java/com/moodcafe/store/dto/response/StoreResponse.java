@@ -1,5 +1,7 @@
 package com.moodcafe.store.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import lombok.AllArgsConstructor;
@@ -42,6 +44,23 @@ public class StoreResponse {
     private StoreReviewSummaryResponse reviewSummary;
     private Double overallRating;
     private Long reviewCount;
+
+    @JsonAlias({"hasUserReviewed"})
+    private Boolean hasReviewed;
+
+    @JsonAlias({"myReview"})
+    private StoreReviewResponse userReview;
+
     private Instant createdAt;
     private Instant updatedAt;
+
+    @JsonProperty("hasUserReviewed")
+    public Boolean getHasUserReviewed() {
+        return hasReviewed;
+    }
+
+    @JsonProperty("myReview")
+    public StoreReviewResponse getMyReview() {
+        return userReview;
+    }
 }

@@ -23,5 +23,9 @@ public interface StoreReviewService {
 
     StoreReviewSummaryResponse getStoreReviewSummary(UUID storeId);
 
+    StoreReviewResponse getMyReviewForStore(UUID storeId);
+
+    void deleteMyReviewForStore(UUID storeId);
+
     void deleteReview(UUID reviewId);
 }

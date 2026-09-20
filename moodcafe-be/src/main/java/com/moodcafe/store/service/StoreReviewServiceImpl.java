@@ -70,6 +70,10 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
+        if (storeReviewRepository.existsByStoreStoreIdAndUserUserId(storeId, currentUser.getUserId())) {
+            throw new AppException(ErrorCode.USER_ALREADY_REVIEWED);
+        }
+
         // Validation: A photo taken at the moment is strictly required
         if (image == null || image.isEmpty()) {
             throw new AppException(ErrorCode.REVIEW_IMAGE_REQUIRED);
@@ -248,6 +252,27 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         storeReviewRepository.delete(review);
         recalculateStoreTagScores(storeId);
         log.info("Review {} soft deleted by user {}", reviewId, currentUser.getUserId());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StoreReviewResponse getMyReviewForStore(UUID storeId) {
+        User currentUser = currentUserService.getCurrentUser();
+        return storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId())
+                .map(storeReviewMapper::toResponse)
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public void deleteMyReviewForStore(UUID storeId) {
+        User currentUser = currentUserService.getCurrentUser();
+        StoreReview review = storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
+
+        storeReviewRepository.delete(review);
+        recalculateStoreTagScores(storeId);
+        log.info("User {} deleted review {} for store {}", currentUser.getUserId(), review.getReviewId(), storeId);
     }
 
     private void applyTagRatingsToReview(StoreReview review, UUID storeId, List<ReviewTagRatingRequest> ratingRequests) {

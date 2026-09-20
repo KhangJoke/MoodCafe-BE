@@ -6,6 +6,7 @@ import com.moodcafe.auth.entity.Role;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.abstraction.service.FileStorageService;
 import com.moodcafe.shared.dto.UploadImageResponse;
+import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
@@ -270,5 +271,96 @@ class StoreReviewServiceImplTest {
         verify(storeTagRepository).save(storeTagQuiet);
         assertThat(storeTagQuiet.getAvgScore()).isEqualTo(0.0);
         assertThat(storeTagQuiet.getReviewCount()).isEqualTo(0);
+    }
+
+    @Test
+    @DisplayName("createReview - user already reviewed store - throws USER_ALREADY_REVIEWED")
+    void createReview_UserAlreadyReviewed_ThrowsAppException() {
+        CreateStoreReviewRequest request = CreateStoreReviewRequest.builder()
+                .overallRating(BigDecimal.valueOf(4.5))
+                .content("Review lại")
+                .build();
+        MockMultipartFile image = new MockMultipartFile("image", "test.jpg", "image/jpeg", "dummy".getBytes());
+
+        when(currentUserService.getCurrentUser()).thenReturn(currentUser);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+        when(storeReviewRepository.existsByStoreStoreIdAndUserUserId(storeId, currentUser.getUserId())).thenReturn(true);
+
+        assertThatThrownBy(() -> storeReviewService.createReview(storeId, request, image, null))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_ALREADY_REVIEWED);
+    }
+
+    @Test
+    @DisplayName("getMyReviewForStore - review exists - returns StoreReviewResponse")
+    void getMyReviewForStore_Found_ReturnsResponse() {
+        StoreReview userReview = StoreReview.builder()
+                .reviewId(UUID.randomUUID())
+                .store(store)
+                .user(currentUser)
+                .overallRating(BigDecimal.valueOf(5.0))
+                .content("Quán tuyệt vời")
+                .build();
+
+        when(currentUserService.getCurrentUser()).thenReturn(currentUser);
+        when(storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId()))
+                .thenReturn(Optional.of(userReview));
+        when(storeReviewMapper.toResponse(userReview)).thenReturn(StoreReviewResponse.builder()
+                .reviewId(userReview.getReviewId())
+                .storeId(storeId)
+                .overallRating(BigDecimal.valueOf(5.0))
+                .content("Quán tuyệt vời")
+                .build());
+
+        StoreReviewResponse response = storeReviewService.getMyReviewForStore(storeId);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getReviewId()).isEqualTo(userReview.getReviewId());
+        assertThat(response.getOverallRating()).isEqualTo(BigDecimal.valueOf(5.0));
+    }
+
+    @Test
+    @DisplayName("getMyReviewForStore - no review - returns null")
+    void getMyReviewForStore_NotFound_ReturnsNull() {
+        when(currentUserService.getCurrentUser()).thenReturn(currentUser);
+        when(storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId()))
+                .thenReturn(Optional.empty());
+
+        StoreReviewResponse response = storeReviewService.getMyReviewForStore(storeId);
+
+        assertThat(response).isNull();
+    }
+
+    @Test
+    @DisplayName("deleteMyReviewForStore - review exists - soft deletes and recalculates")
+    void deleteMyReviewForStore_Success() {
+        StoreReview userReview = StoreReview.builder()
+                .reviewId(UUID.randomUUID())
+                .store(store)
+                .user(currentUser)
+                .build();
+
+        when(currentUserService.getCurrentUser()).thenReturn(currentUser);
+        when(storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId()))
+                .thenReturn(Optional.of(userReview));
+        when(storeTagRepository.findAllByStoreId(storeId)).thenReturn(List.of(storeTagQuiet));
+        when(tagRatingRepository.getAllTagRatingSummariesForStore(storeId)).thenReturn(List.of());
+
+        storeReviewService.deleteMyReviewForStore(storeId);
+
+        verify(storeReviewRepository).delete(userReview);
+        verify(storeTagRepository).save(storeTagQuiet);
+    }
+
+    @Test
+    @DisplayName("deleteMyReviewForStore - no review - throws REVIEW_NOT_FOUND")
+    void deleteMyReviewForStore_NotFound_ThrowsAppException() {
+        when(currentUserService.getCurrentUser()).thenReturn(currentUser);
+        when(storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId()))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> storeReviewService.deleteMyReviewForStore(storeId))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.REVIEW_NOT_FOUND);
     }
 }

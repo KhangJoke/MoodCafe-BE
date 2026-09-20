@@ -687,6 +687,28 @@ public class StoreServiceImpl implements StoreService {
             response.setReviewCount(0L);
         }
 
+        // 4. Resolve current user review status (Duplicate review prevention / My review status)
+        boolean hasReviewed = false;
+        StoreReviewResponse userReview = null;
+
+        if (currentUserService.isAuthenticated()) {
+            try {
+                UUID currentUserId = currentUserService.getCurrentUserId();
+                if (currentUserId != null) {
+                    Optional<StoreReview> userReviewOpt = storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUserId);
+                    if (userReviewOpt.isPresent()) {
+                        hasReviewed = true;
+                        userReview = storeReviewMapper.toResponse(userReviewOpt.get());
+                    }
+                }
+            } catch (Exception ignored) {
+                // Anonymous or unauthenticated request
+            }
+        }
+
+        response.setHasReviewed(hasReviewed);
+        response.setUserReview(userReview);
+
         return response;
     }
 
