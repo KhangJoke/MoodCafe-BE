@@ -15,6 +15,7 @@ import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.repository.UserPreferenceRepository;
 import com.moodcafe.tag.dto.request.CreateTagRequest;
 import com.moodcafe.tag.dto.response.CityTrendingResponse;
+import com.moodcafe.tag.dto.response.ExperienceMatcherResponse;
 import com.moodcafe.tag.dto.response.TagResponse;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
@@ -234,7 +235,7 @@ class TagServiceImplTest {
         when(storeImageRepository.findByStoreStoreIdAndPrimaryTrue(any())).thenReturn(Optional.empty());
         when(storeImageRepository.findAllByStoreStoreId(any())).thenReturn(List.of());
 
-        List<CityTrendingResponse> result = tagService.getCityTrendingData();
+        List<CityTrendingResponse> result = tagService.getCityTrendingData(2, 2);
 
         assertThat(result).hasSize(4);
         assertThat(result.get(0).getItemType()).isEqualTo("TAG");
@@ -297,7 +298,7 @@ class TagServiceImplTest {
         when(storeImageRepository.findByStoreStoreIdAndPrimaryTrue(any())).thenReturn(Optional.empty());
         when(storeImageRepository.findAllByStoreStoreId(any())).thenReturn(List.of());
 
-        List<CityTrendingResponse> result = tagService.getCityTrendingData();
+        List<CityTrendingResponse> result = tagService.getCityTrendingData(2, 2);
 
         assertThat(result).hasSize(4);
         // Top 2 Tags: tagC (20 prefs), tagB (10 prefs, 10 stores)
@@ -307,5 +308,67 @@ class TagServiceImplTest {
         // Top 2 Stores: storeC (12 favs), storeA (5 favs, 4.9 rating)
         assertThat(result.get(2).getStoreName()).isEqualTo("Store C");
         assertThat(result.get(3).getStoreName()).isEqualTo("Store A");
+    }
+
+    @Test
+    @DisplayName("getCityTrendingData - supports dynamic custom limits e.g. 4 tags and 4 stores")
+    void getCityTrendingData_CustomLimits_ReturnsRequestedCount() {
+        Tag t1 = Tag.builder().tagId(UUID.randomUUID()).name("T1").category(category).active(true).build();
+        Tag t2 = Tag.builder().tagId(UUID.randomUUID()).name("T2").category(category).active(true).build();
+        Tag t3 = Tag.builder().tagId(UUID.randomUUID()).name("T3").category(category).active(true).build();
+
+        when(tagRepository.findAllByActiveTrue()).thenReturn(List.of(t1, t2, t3));
+        when(storeTagRepository.countDistinctStoresGroupedByTag(any())).thenReturn(List.of());
+        when(userPreferenceRepository.countPreferencesGroupedByTag()).thenReturn(List.of());
+
+        Store s1 = Store.builder().storeId(UUID.randomUUID()).name("S1").status(StoreStatus.ACTIVE).build();
+        Store s2 = Store.builder().storeId(UUID.randomUUID()).name("S2").status(StoreStatus.ACTIVE).build();
+        Store s3 = Store.builder().storeId(UUID.randomUUID()).name("S3").status(StoreStatus.ACTIVE).build();
+
+        when(storeRepository.findAllByStatus(StoreStatus.ACTIVE)).thenReturn(List.of(s1, s2, s3));
+        when(favoriteStoreRepository.countFavoritesGroupedByStore()).thenReturn(List.of());
+        when(storeReviewRepository.findOverallRatingAndCountGroupedByStore()).thenReturn(List.of());
+        when(storeImageRepository.findByStoreStoreIdAndPrimaryTrue(any())).thenReturn(Optional.empty());
+        when(storeImageRepository.findAllByStoreStoreId(any())).thenReturn(List.of());
+
+        List<CityTrendingResponse> result = tagService.getCityTrendingData(3, 3);
+
+        assertThat(result).hasSize(6);
+        long tagCount = result.stream().filter(r -> "TAG".equals(r.getItemType())).count();
+        long storeCount = result.stream().filter(r -> "STORE".equals(r.getItemType())).count();
+        assertThat(tagCount).isEqualTo(3);
+        assertThat(storeCount).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("getExperienceMatcherData - maps purpose and vibes correctly with imageUrl")
+    void getExperienceMatcherData_ReturnsPopulatedResponses() {
+        Tag purpose = Tag.builder()
+                .tagId(UUID.randomUUID())
+                .name("Học bài / Chạy deadline")
+                .description("Tập trung học tập")
+                .imageUrl("https://example.com/purpose.jpg")
+                .active(true)
+                .build();
+        Tag vibe = Tag.builder()
+                .tagId(UUID.randomUUID())
+                .name("Tối giản (Minimalism)")
+                .description("Nhẹ nhàng tinh tế")
+                .imageUrl("https://example.com/vibe.jpg")
+                .active(true)
+                .build();
+
+        when(tagRepository.findAllByCategoryCodeAndActiveTrue("PURPOSE")).thenReturn(List.of(purpose));
+        when(tagRepository.findAllByCategoryCodeAndActiveTrue("VIBE")).thenReturn(List.of(vibe));
+        when(storeTagRepository.countDistinctStoresByTagIdAndStatus(any(), any())).thenReturn(5L);
+        when(storeTagRepository.countStoresWithBothTags(any(), any(), any())).thenReturn(3L);
+
+        List<ExperienceMatcherResponse> result = tagService.getExperienceMatcherData();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getImageUrl()).isEqualTo("https://example.com/purpose.jpg");
+        assertThat(result.get(0).getTotalStoreCount()).isEqualTo(5L);
+        assertThat(result.get(0).getVibes()).hasSize(1);
+        assertThat(result.get(0).getVibes().get(0).getStoreCount()).isEqualTo(3L);
     }
 }

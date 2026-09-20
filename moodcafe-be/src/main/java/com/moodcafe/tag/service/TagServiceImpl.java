@@ -187,6 +187,7 @@ public class TagServiceImpl implements TagService {
                     .purposeName(purpose.getName())
                     .shortName(resolveShortName(purpose.getName()))
                     .subtitle(purpose.getDescription())
+                    .imageUrl(resolveTagImageUrl(purpose))
                     .totalStoreCount(totalStoreCount)
                     .vibes(vibeResponses)
                     .build());
@@ -203,7 +204,10 @@ public class TagServiceImpl implements TagService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CityTrendingResponse> getCityTrendingData() {
+    public List<CityTrendingResponse> getCityTrendingData(int tagLimit, int storeLimit) {
+        int safeTagLimit = Math.max(1, Math.min(tagLimit, 50));
+        int safeStoreLimit = Math.max(1, Math.min(storeLimit, 50));
+
         // 1. Lấy tất cả các thẻ đang hoạt động (tất cả các loại: VIBE, PURPOSE, AMENITY...)
         List<Tag> allActiveTags = tagRepository.findAllByActiveTrue();
         if (allActiveTags.isEmpty()) {
@@ -228,7 +232,7 @@ public class TagServiceImpl implements TagService {
 
         List<CityTrendingResponse> trendingList = new ArrayList<>();
 
-        // 4. Nhóm 1: đúng top 2 thẻ Tag (tất cả các loại)
+        // 4. Nhóm 1: Top thẻ Tag (tất cả các loại) theo safeTagLimit
         // Xếp theo:
         //  1) lượt UserPreference giảm dần
         //  2) nếu bằng nhau: tag nhiều quán hơn (storeCounts giảm dần)
@@ -240,7 +244,7 @@ public class TagServiceImpl implements TagService {
                         .thenComparing(t -> t.getCategory() != null && t.getCategory().getDisplayOrder() != null ? t.getCategory().getDisplayOrder() : 99)
                         .thenComparing(t -> t.getCreatedAt() != null ? t.getCreatedAt() : Instant.EPOCH)
                         .thenComparing(t -> t.getName() != null ? t.getName() : ""))
-                .limit(2)
+                .limit(safeTagLimit)
                 .toList();
 
         for (Tag tag : topTags) {
@@ -263,7 +267,7 @@ public class TagServiceImpl implements TagService {
                     .build());
         }
 
-        // 5. Nhóm 2: đúng top 2 Quán cà phê cụ thể
+        // 5. Nhóm 2: Top Quán cà phê cụ thể theo safeStoreLimit
         // Xếp theo:
         //  1) lượt FavoriteStore giảm dần
         //  2) nếu bằng nhau: quán có rating tổng cao hơn
@@ -295,7 +299,7 @@ public class TagServiceImpl implements TagService {
                         .thenComparing(Comparator.comparingDouble((Store s) -> storeRatings.getOrDefault(s.getStoreId(), 0.0)).reversed())
                         .thenComparing(s -> s.getCreatedAt() != null ? s.getCreatedAt() : Instant.EPOCH)
                         .thenComparing(s -> s.getName() != null ? s.getName() : ""))
-                .limit(2)
+                .limit(safeStoreLimit)
                 .toList();
 
         for (Store store : topStores) {

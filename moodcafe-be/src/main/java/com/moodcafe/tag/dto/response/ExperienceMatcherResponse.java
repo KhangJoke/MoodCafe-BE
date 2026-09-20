@@ -20,6 +20,7 @@ public class ExperienceMatcherResponse {
     private String purposeName;
     private String shortName;
     private String subtitle;
+    private String imageUrl;
     private long totalStoreCount;
     private List<ExperienceVibeResponse> vibes;
 }

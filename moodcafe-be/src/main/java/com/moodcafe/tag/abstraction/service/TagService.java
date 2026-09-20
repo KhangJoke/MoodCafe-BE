@@ -23,5 +23,5 @@ public interface TagService {
 
     List<ExperienceMatcherResponse> getExperienceMatcherData();
 
-    List<CityTrendingResponse> getCityTrendingData();
+    List<CityTrendingResponse> getCityTrendingData(int tagLimit, int storeLimit);
 }

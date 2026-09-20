@@ -20,6 +20,7 @@ public class StoreSearchRequest {
     private String district;
     private List<String> districts;
     private List<UUID> tagIds;
+    private Integer noiseLevel;
     private Boolean openNow;
     private Boolean highRatingOnly;
     private Boolean matchPersonalGuOnly;
