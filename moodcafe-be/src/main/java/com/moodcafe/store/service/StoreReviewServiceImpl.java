@@ -26,6 +26,10 @@ import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
+import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
+import com.moodcafe.store.abstraction.repository.VisitVerificationRepository;
+import com.moodcafe.store.entity.VisitVerification;
+import com.moodcafe.store.entity.enums.VisitVerificationStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,6 +38,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -50,6 +56,8 @@ public class StoreReviewServiceImpl implements StoreReviewService {
 
     private final StoreReviewRepository storeReviewRepository;
     private final StoreRepository storeRepository;
+    private final StoreStaffRepository storeStaffRepository;
+    private final VisitVerificationRepository visitVerificationRepository;
     private final FileStorageService fileStorageService;
     private final CurrentUserService currentUserService;
     private final StoreReviewMapper storeReviewMapper;
@@ -70,22 +78,99 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
+        // 1. Business Rule: Owner or Staff cannot review their own store
+        if (storeStaffRepository.existsByStoreStoreIdAndUserUserId(storeId, currentUser.getUserId())) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_STAFF_ACTION,
+                    "Chủ quán hoặc nhân viên không được phép đánh giá quán của mình");
+        }
+
+        // 2. Business Rule: Only 1 review per user per store
         if (storeReviewRepository.existsByStoreStoreIdAndUserUserId(storeId, currentUser.getUserId())) {
             throw new AppException(ErrorCode.USER_ALREADY_REVIEWED);
         }
 
-        // Validation: A photo taken at the moment is strictly required
-        if (image == null || image.isEmpty()) {
-            throw new AppException(ErrorCode.REVIEW_IMAGE_REQUIRED);
+        // 3. Validate VisitVerification if provided (Verified Review path)
+        VisitVerification visitVerification = null;
+        if (request.getVisitVerificationId() != null) {
+            visitVerification = visitVerificationRepository.findById(request.getVisitVerificationId())
+                    .orElseThrow(() -> new AppException(ErrorCode.VISIT_VERIFICATION_NOT_FOUND));
+
+            if (!visitVerification.getUser().getUserId().equals(currentUser.getUserId())) {
+                throw new AppException(ErrorCode.VISIT_VERIFICATION_USER_MISMATCH);
+            }
+
+            if (!visitVerification.getStore().getStoreId().equals(storeId)) {
+                throw new AppException(ErrorCode.VISIT_VERIFICATION_STORE_MISMATCH);
+            }
+
+            if (visitVerification.getStatus() != VisitVerificationStatus.VERIFIED) {
+                throw new AppException(ErrorCode.VISIT_VERIFICATION_INVALID);
+            }
+
+            if (visitVerification.getExpiresAt().isBefore(Instant.now())) {
+                throw new AppException(ErrorCode.VISIT_VERIFICATION_EXPIRED);
+            }
+
+            if (visitVerification.isUsed()) {
+                throw new AppException(ErrorCode.VISIT_VERIFICATION_ALREADY_USED);
+            }
         }
 
-        // Upload live moment photo to Cloudinary
-        UploadImageResponse primaryUpload = fileStorageService.uploadImage(image, "reviews");
+        // 4. Validate image counts (Max 3 images rule)
+        boolean hasPrimaryFile = image != null && !image.isEmpty();
+        int additionalFilesCount = additionalImages != null
+                ? (int) additionalImages.stream().filter(f -> f != null && !f.isEmpty()).count()
+                : 0;
+        int totalProvidedFiles = (hasPrimaryFile ? 1 : 0) + additionalFilesCount;
+        int totalImagesCount = totalProvidedFiles + (!hasPrimaryFile && visitVerification != null ? 1 : 0);
 
+        if (totalImagesCount > 3) {
+            throw new AppException(ErrorCode.MAX_REVIEW_IMAGES_EXCEEDED, "Đánh giá chỉ được tải lên tối đa 3 ảnh");
+        }
+
+        if (totalImagesCount == 0) {
+            throw new AppException(ErrorCode.REVIEW_IMAGE_REQUIRED, "A live photo of the store taken at the moment is required to submit a review");
+        }
+
+        // 5. Upload images to Cloudinary with orphan protection
+        List<String> uploadedImageUrls = new ArrayList<>();
+        List<ReviewImage> reviewImages = new ArrayList<>();
+
+        try {
+            if (hasPrimaryFile) {
+                UploadImageResponse primaryUpload = fileStorageService.uploadImage(image, "reviews");
+                uploadedImageUrls.add(primaryUpload.getImageUrl());
+                reviewImages.add(ReviewImage.builder().imageUrl(primaryUpload.getImageUrl()).build());
+            } else if (visitVerification != null) {
+                // Reuse photo from verified snap
+                reviewImages.add(ReviewImage.builder().imageUrl(visitVerification.getImageUrl()).build());
+            }
+
+            if (additionalImages != null && !additionalImages.isEmpty()) {
+                for (MultipartFile additionalFile : additionalImages) {
+                    if (additionalFile != null && !additionalFile.isEmpty()) {
+                        UploadImageResponse additionalUpload = fileStorageService.uploadImage(additionalFile, "reviews");
+                        uploadedImageUrls.add(additionalUpload.getImageUrl());
+                        reviewImages.add(ReviewImage.builder().imageUrl(additionalUpload.getImageUrl()).build());
+                    }
+                }
+            }
+        } catch (Exception uploadEx) {
+            for (String url : uploadedImageUrls) {
+                try {
+                    fileStorageService.deleteImageByUrl(url);
+                } catch (Exception ex) {
+                    log.warn("Failed to cleanup image {}: {}", url, ex.getMessage());
+                }
+            }
+            throw uploadEx;
+        }
+
+        // 6. Build and persist review, then mark visit as used
         StoreReview review = StoreReview.builder()
                 .store(store)
                 .user(currentUser)
-                .visitVerificationId(request.getVisitVerificationId())
+                .visitVerificationId(visitVerification != null ? visitVerification.getVisitVerificationId() : null)
                 .overallRating(request.getOverallRating())
                 .quietnessRating(request.getQuietnessRating())
                 .lightingRating(request.getLightingRating())
@@ -94,39 +179,39 @@ public class StoreReviewServiceImpl implements StoreReviewService {
                 .content(request.getContent())
                 .build();
 
-        ReviewImage primaryImage = ReviewImage.builder()
-                .review(review)
-                .imageUrl(primaryUpload.getImageUrl())
-                .build();
-        review.addImage(primaryImage);
-
-        // Upload any extra images if provided
-        if (additionalImages != null && !additionalImages.isEmpty()) {
-            for (MultipartFile additionalFile : additionalImages) {
-                if (additionalFile != null && !additionalFile.isEmpty()) {
-                    UploadImageResponse additionalUpload = fileStorageService.uploadImage(additionalFile, "reviews");
-                    ReviewImage extraImage = ReviewImage.builder()
-                            .review(review)
-                            .imageUrl(additionalUpload.getImageUrl())
-                            .build();
-                    review.addImage(extraImage);
-                }
-            }
+        for (ReviewImage img : reviewImages) {
+            review.addImage(img);
         }
 
-        // Attach tag ratings if provided
         List<ReviewTagRatingRequest> resolvedTagRatings = resolveTagRatings(request.getTagRatings(), request.getTagRatingsRaw());
         if (!resolvedTagRatings.isEmpty()) {
             applyTagRatingsToReview(review, storeId, resolvedTagRatings);
         }
 
-        review = storeReviewRepository.save(review);
+        try {
+            review = storeReviewRepository.save(review);
+            if (visitVerification != null) {
+                visitVerification.setUsed(true);
+                visitVerificationRepository.save(visitVerification);
+            }
+        } catch (Exception dbEx) {
+            log.error("Failed to persist StoreReview. Cleaning up uploaded images: {}", dbEx.getMessage());
+            for (String url : uploadedImageUrls) {
+                try {
+                    fileStorageService.deleteImageByUrl(url);
+                } catch (Exception ex) {
+                    log.warn("Failed to cleanup image {}: {}", url, ex.getMessage());
+                }
+            }
+            throw dbEx;
+        }
+
         if (!resolvedTagRatings.isEmpty()) {
             recalculateStoreTagScores(storeId);
         }
 
-        log.info("User {} submitted review {} with {} tag ratings for store {}",
-                currentUser.getUserId(), review.getReviewId(), review.getTagRatings().size(), storeId);
+        log.info("User {} submitted review {} (verified: {}) with {} tag ratings for store {}",
+                currentUser.getUserId(), review.getReviewId(), visitVerification != null, review.getTagRatings().size(), storeId);
 
         return storeReviewMapper.toResponse(review);
     }

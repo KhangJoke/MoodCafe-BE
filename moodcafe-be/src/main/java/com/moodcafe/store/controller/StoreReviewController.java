@@ -6,6 +6,8 @@ import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -24,14 +26,17 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/stores")
 @RequiredArgsConstructor
+@Tag(name = "Store Reviews", description = "Quản lý đánh giá quán cà phê và Verified Reviews")
 public class StoreReviewController {
 
     private final StoreReviewService storeReviewService;
 
+    @Operation(summary = "Gửi đánh giá quán (Hỗ trợ Verified Review với visitVerificationId, tối đa 3 ảnh)",
+            description = "Nếu có visitVerificationId từ bước Snap/Survey, đánh giá sẽ được đánh dấu Verified. Có thể tái sử dụng ảnh Snap nếu không tải lên ảnh mới.")
     @PostMapping(value = "/{storeId}/reviews", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<StoreReviewResponse>> createReview(
             @PathVariable UUID storeId,
-            @RequestParam("image") MultipartFile image,
+            @RequestParam(value = "image", required = false) MultipartFile image,
             @RequestParam(value = "additionalImages", required = false) List<MultipartFile> additionalImages,
             @Valid @ModelAttribute CreateStoreReviewRequest request
     ) {

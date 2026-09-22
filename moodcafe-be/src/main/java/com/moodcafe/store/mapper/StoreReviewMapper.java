@@ -22,6 +22,7 @@ public interface StoreReviewMapper {
     @Mapping(source = "user.avatarUrl", target = "userAvatarUrl")
     @Mapping(source = "images", target = "imageUrls", qualifiedByName = "mapImagesToUrls")
     @Mapping(source = "tagRatings", target = "tagRatings", qualifiedByName = "mapTagRatingsToResponse")
+    @Mapping(target = "verified", expression = "java(review.getVisitVerificationId() != null)")
     StoreReviewResponse toResponse(StoreReview review);
 
     @Named("mapImagesToUrls")

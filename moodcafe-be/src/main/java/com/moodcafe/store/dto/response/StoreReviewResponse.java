@@ -25,6 +25,7 @@ public class StoreReviewResponse {
     private String userFullName;
     private String userAvatarUrl;
     private UUID visitVerificationId;
+    private boolean verified;
     private BigDecimal overallRating;
     private Integer quietnessRating;
     private Integer lightingRating;

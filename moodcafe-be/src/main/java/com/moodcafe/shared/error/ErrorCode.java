@@ -67,6 +67,18 @@ public enum ErrorCode {
     VIBE_IMAGE_REQUIRED(HttpStatus.BAD_REQUEST,
             "Hình ảnh đại diện cho phong cách không gian (Vibe) là bắt buộc"),
     FORBIDDEN_REVIEW_ACTION(HttpStatus.FORBIDDEN, "You do not have permission to modify this review"),
+    MAX_REVIEW_IMAGES_EXCEEDED(HttpStatus.BAD_REQUEST, "Đánh giá chỉ được tải lên tối đa 3 ảnh"),
+    // Visit Verification & Snap
+    LOCATION_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "Khoảng cách hiện tại vượt quá bán kính cho phép (50m) của quán"),
+    STORE_LOCATION_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "Quán chưa cập nhật tọa độ vị trí GPS"),
+    FORBIDDEN_STORE_STAFF_ACTION(HttpStatus.FORBIDDEN, "Chủ quán hoặc nhân viên không được phép thực hiện hành động này trên quán của mình"),
+    VISIT_VERIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy thông tin xác thực lần ghé thăm"),
+    VISIT_VERIFICATION_EXPIRED(HttpStatus.BAD_REQUEST, "Xác thực lần ghé thăm đã hết hạn (chỉ có hiệu lực trong 24 giờ)"),
+    VISIT_VERIFICATION_ALREADY_USED(HttpStatus.BAD_REQUEST, "Xác thực lần ghé thăm này đã được dùng cho một đánh giá khác"),
+    VISIT_VERIFICATION_INVALID(HttpStatus.BAD_REQUEST, "Xác thực lần ghé thăm chưa hợp lệ hoặc đã bị từ chối"),
+    VISIT_VERIFICATION_STORE_MISMATCH(HttpStatus.BAD_REQUEST, "Xác thực ghé thăm không thuộc về quán này"),
+    VISIT_VERIFICATION_USER_MISMATCH(HttpStatus.FORBIDDEN, "Xác thực ghé thăm không thuộc về tài khoản của bạn"),
+    SURVEY_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "Khảo sát cho lần ghé thăm này đã được hoàn thành"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 5MB limit"),
