@@ -62,6 +62,10 @@ public class StoreTag {
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
 
+    @Builder.Default
+    @Column(name = "allow_resubmit", nullable = false)
+    private boolean allowResubmit = true;
+
     @Column(name = "approved_at")
     private Instant approvedAt;
 

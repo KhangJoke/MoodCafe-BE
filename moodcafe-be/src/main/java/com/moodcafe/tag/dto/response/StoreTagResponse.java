@@ -25,6 +25,8 @@ public class StoreTagResponse {
     private StoreTagStatus status;
     private String proofImageUrl;
     private String rejectReason;
+    @Builder.Default
+    private boolean allowResubmit = true;
     private Instant approvedAt;
     private Instant createdAt;
     private boolean highlighted;

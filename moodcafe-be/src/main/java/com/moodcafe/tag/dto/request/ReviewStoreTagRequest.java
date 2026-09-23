@@ -19,4 +19,7 @@ public class ReviewStoreTagRequest {
     private StoreTagStatus status;
 
     private String rejectReason;
+
+    @Builder.Default
+    private Boolean allowResubmit = true;
 }

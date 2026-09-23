@@ -68,8 +68,6 @@ public class Store {
         @Column(name = "closing_time")
         private LocalTime closingTime;
 
-        @Column(name = "price_range", length = 50)
-        private String priceRange;
 
         @Column(name = "price_from")
         private Long priceFrom;
@@ -87,6 +85,13 @@ public class Store {
         @Builder.Default
         @Column(name = "status", nullable = false, length = 30)
         private StoreStatus status = StoreStatus.PENDING;
+
+        @Column(name = "reject_reason", columnDefinition = "TEXT")
+        private String rejectReason;
+
+        @Builder.Default
+        @Column(name = "allow_resubmit", nullable = false)
+        private boolean allowResubmit = true;
 
         @CreationTimestamp
         @Column(name = "created_at", nullable = false, updatable = false)

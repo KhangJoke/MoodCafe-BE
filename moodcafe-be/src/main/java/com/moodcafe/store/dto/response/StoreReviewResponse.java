@@ -34,6 +34,8 @@ public class StoreReviewResponse {
     private String content;
     private List<String> imageUrls;
     private List<ReviewTagResponse> tagRatings;
+    private String merchantReply;
+    private Instant replyAt;
     private Instant createdAt;
     private Instant updatedAt;
 }

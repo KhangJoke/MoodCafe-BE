@@ -27,6 +27,7 @@ import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse.StoreSearchTagItem;
+import com.moodcafe.store.entity.ReviewImage;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreImage;
 import com.moodcafe.store.entity.StoreReview;
@@ -41,11 +42,23 @@ import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.repository.UserPreferenceRepository;
+import com.moodcafe.store.abstraction.repository.VisitVerificationRepository;
+import com.moodcafe.store.dto.request.RegisterStoreTagItem;
+import com.moodcafe.store.dto.request.StoreRegisterRequest;
+import com.moodcafe.store.dto.request.StoreResubmitRequest;
+import com.moodcafe.store.dto.response.MerchantDashboardResponse;
+import com.moodcafe.store.dto.response.MerchantDashboardResponse.MerchantMetrics;
+import com.moodcafe.store.dto.response.MerchantDashboardResponse.MerchantRecentReview;
+import com.moodcafe.store.dto.response.MerchantDashboardResponse.MerchantRecentSnap;
+import com.moodcafe.store.dto.response.MerchantDashboardResponse.MerchantStoreSummary;
+import com.moodcafe.store.dto.response.StoreRegistrationStatusResponse;
+import com.moodcafe.store.entity.VisitVerification;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.entity.UserPreference;
+import com.moodcafe.tag.entity.enums.ControlType;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
 import lombok.RequiredArgsConstructor;
@@ -91,6 +104,7 @@ public class StoreServiceImpl implements StoreService {
     private final SystemConfigurationService configurationService;
     private final StoreReviewMapper storeReviewMapper;
     private final TagRatingRepository tagRatingRepository;
+    private final VisitVerificationRepository visitVerificationRepository;
 
     @Override
     @Transactional
@@ -98,6 +112,18 @@ public class StoreServiceImpl implements StoreService {
         User currentUser = currentUserService.getCurrentUser();
 
         Store store = storeMapper.toEntity(request);
+        Long priceFrom = request.getPriceFrom();
+        Long priceTo = request.getPriceTo();
+        if (priceFrom == null && priceTo == null) {
+            priceFrom = 30000L;
+            priceTo = 65000L;
+        } else if (priceFrom != null && priceTo == null) {
+            priceTo = priceFrom;
+        } else if (priceTo != null && priceFrom == null) {
+            priceFrom = priceTo;
+        }
+        store.setPriceFrom(priceFrom);
+        store.setPriceTo(priceTo);
         store.setStatus(StoreStatus.PENDING);
         store = storeRepository.save(store);
 
@@ -116,6 +142,300 @@ public class StoreServiceImpl implements StoreService {
         storeStaffRepository.save(staff);
 
         return toStoreResponse(store);
+    }
+
+    @Override
+    @Transactional
+    public StoreRegistrationStatusResponse registerStore(StoreRegisterRequest request) {
+        User currentUser = currentUserService.getCurrentUser();
+
+        if (request.getTags() == null || request.getTags().isEmpty()) {
+            throw new AppException(ErrorCode.STORE_TAG_REQUIRED);
+        }
+
+        // Validate each tag
+        for (RegisterStoreTagItem item : request.getTags()) {
+            Tag tag = tagRepository.findById(item.getTagId())
+                    .orElseThrow(() -> new AppException(ErrorCode.TAG_NOT_FOUND));
+
+            boolean isSliderCategory = tag.getCategory() != null &&
+                    ControlType.SLIDER.equals(tag.getCategory().getControlType());
+
+            if (!isSliderCategory && (item.getProofImageUrl() == null || item.getProofImageUrl().isBlank())) {
+                throw new AppException(ErrorCode.STORE_TAG_PROOF_REQUIRED,
+                        "Thẻ " + tag.getName() + " yêu cầu đính kèm ảnh minh chứng thực tế");
+            }
+        }
+
+        Long priceFrom = request.getPriceFrom();
+        Long priceTo = request.getPriceTo();
+        if (priceFrom == null && priceTo == null) {
+            priceFrom = 30000L;
+            priceTo = 65000L;
+        } else if (priceFrom != null && priceTo == null) {
+            priceTo = priceFrom;
+        } else if (priceTo != null && priceFrom == null) {
+            priceFrom = priceTo;
+        }
+        Store store = Store.builder()
+                .name(request.getName())
+                .description(request.getDescription())
+                .address(request.getAddress())
+                .district(request.getDistrict())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .openingTime(request.getOpeningTime())
+                .closingTime(request.getClosingTime())
+                .priceFrom(priceFrom)
+                .priceTo(priceTo)
+                .phone(request.getPhone())
+                .email(request.getEmail())
+                .status(StoreStatus.PENDING)
+                .allowResubmit(true)
+                .build();
+        store = storeRepository.save(store);
+
+        // Save store images
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            boolean first = true;
+            for (String url : request.getImageUrls()) {
+                if (url != null && !url.isBlank()) {
+                    StoreImage img = StoreImage.builder()
+                            .store(store)
+                            .imageUrl(url)
+                            .primary(first)
+                            .build();
+                    storeImageRepository.save(img);
+                    first = false;
+                }
+            }
+        }
+
+        // Save store tags
+        for (RegisterStoreTagItem item : request.getTags()) {
+            Tag tag = tagRepository.findById(item.getTagId()).orElseThrow();
+            StoreTag st = StoreTag.builder()
+                    .storeId(store.getStoreId())
+                    .tag(tag)
+                    .status(StoreTagStatus.PENDING)
+                    .proofImageUrl(item.getProofImageUrl())
+                    .allowResubmit(true)
+                    .build();
+            storeTagRepository.save(st);
+        }
+
+        // Assign user as OWNER in store_staffs
+        StoreRole ownerRole = storeRoleRepository.findByName("OWNER")
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_ROLE_NOT_FOUND, "OWNER role not found"));
+
+        StoreStaff staff = StoreStaff.builder()
+                .store(store)
+                .user(currentUser)
+                .storeRole(ownerRole)
+                .status(StoreStaffStatus.ACTIVE)
+                .joinedAt(Instant.now())
+                .build();
+        storeStaffRepository.save(staff);
+
+        return toStoreRegistrationStatusResponse(store);
+    }
+
+    @Override
+    @Transactional
+    public StoreRegistrationStatusResponse resubmitStore(UUID storeId, StoreResubmitRequest request) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER");
+
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        if (store.getStatus() != StoreStatus.REJECTED) {
+            throw new AppException(ErrorCode.STORE_NOT_REJECTED);
+        }
+
+        if (!store.isAllowResubmit()) {
+            throw new AppException(ErrorCode.STORE_RESUBMIT_NOT_ALLOWED);
+        }
+
+        if (request.getTags() == null || request.getTags().isEmpty()) {
+            throw new AppException(ErrorCode.STORE_TAG_REQUIRED);
+        }
+
+        for (RegisterStoreTagItem item : request.getTags()) {
+            Tag tag = tagRepository.findById(item.getTagId())
+                    .orElseThrow(() -> new AppException(ErrorCode.TAG_NOT_FOUND));
+
+            boolean isSliderCategory = tag.getCategory() != null &&
+                    ControlType.SLIDER.equals(tag.getCategory().getControlType());
+
+            if (!isSliderCategory && (item.getProofImageUrl() == null || item.getProofImageUrl().isBlank())) {
+                throw new AppException(ErrorCode.STORE_TAG_PROOF_REQUIRED,
+                        "Thẻ " + tag.getName() + " yêu cầu đính kèm ảnh minh chứng thực tế");
+            }
+        }
+
+        store.setName(request.getName());
+        store.setDescription(request.getDescription());
+        store.setAddress(request.getAddress());
+        store.setDistrict(request.getDistrict());
+        store.setLatitude(request.getLatitude());
+        store.setLongitude(request.getLongitude());
+        store.setOpeningTime(request.getOpeningTime());
+        store.setClosingTime(request.getClosingTime());
+        Long priceFrom = request.getPriceFrom();
+        Long priceTo = request.getPriceTo();
+        if (priceFrom == null && priceTo == null) {
+            priceFrom = store.getPriceFrom() != null ? store.getPriceFrom() : 30000L;
+            priceTo = store.getPriceTo() != null ? store.getPriceTo() : 65000L;
+        } else if (priceFrom != null && priceTo == null) {
+            priceTo = priceFrom;
+        } else if (priceTo != null && priceFrom == null) {
+            priceFrom = priceTo;
+        }
+        store.setPriceFrom(priceFrom);
+        store.setPriceTo(priceTo);
+        store.setPhone(request.getPhone());
+        store.setEmail(request.getEmail());
+        store.setStatus(StoreStatus.PENDING);
+        store.setRejectReason(null);
+        store = storeRepository.save(store);
+
+        // Update images if provided
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            List<StoreImage> oldImages = storeImageRepository.findAllByStoreStoreId(storeId);
+            storeImageRepository.deleteAll(oldImages);
+
+            boolean first = true;
+            for (String url : request.getImageUrls()) {
+                if (url != null && !url.isBlank()) {
+                    StoreImage img = StoreImage.builder()
+                            .store(store)
+                            .imageUrl(url)
+                            .primary(first)
+                            .build();
+                    storeImageRepository.save(img);
+                    first = false;
+                }
+            }
+        }
+
+        // Update tags
+        List<StoreTag> currentStoreTags = storeTagRepository.findAllByStoreId(storeId);
+        storeTagRepository.deleteAll(currentStoreTags);
+
+        for (RegisterStoreTagItem item : request.getTags()) {
+            Tag tag = tagRepository.findById(item.getTagId()).orElseThrow();
+            StoreTag st = StoreTag.builder()
+                    .storeId(store.getStoreId())
+                    .tag(tag)
+                    .status(StoreTagStatus.PENDING)
+                    .proofImageUrl(item.getProofImageUrl())
+                    .allowResubmit(true)
+                    .build();
+            storeTagRepository.save(st);
+        }
+
+        return toStoreRegistrationStatusResponse(store);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StoreRegistrationStatusResponse getStoreRegistrationStatus(UUID storeId) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+        return toStoreRegistrationStatusResponse(store);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StoreRegistrationStatusResponse getMyRegistration() {
+        User currentUser = currentUserService.getCurrentUser();
+        StoreStaff staff = storeStaffRepository.findFirstByUserUserIdAndStoreRoleNameOrderByJoinedAtDesc(currentUser.getUserId(), "OWNER")
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Bạn chưa đăng ký quán nào"));
+        return toStoreRegistrationStatusResponse(staff.getStore());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MerchantDashboardResponse getMerchantDashboard(UUID storeId) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        String coverImageUrl = resolveStorePrimaryImage(storeId);
+
+        MerchantStoreSummary summary = MerchantStoreSummary.builder()
+                .storeId(store.getStoreId())
+                .name(store.getName())
+                .address(store.getAddress())
+                .district(store.getDistrict())
+                .status(store.getStatus())
+                .coverImageUrl(coverImageUrl)
+                .latitude(store.getLatitude())
+                .longitude(store.getLongitude())
+                .build();
+
+        long totalSnaps = visitVerificationRepository.countByStoreStoreId(storeId);
+        long totalReviews = storeReviewRepository.countByStoreStoreId(storeId);
+
+        List<Object[]> reviewSummary = storeReviewRepository.getReviewSummaryByStoreId(storeId);
+        double avgRating = 0.0;
+        if (reviewSummary != null && !reviewSummary.isEmpty() && reviewSummary.get(0)[0] != null) {
+            avgRating = Math.round(((Number) reviewSummary.get(0)[0]).doubleValue() * 10.0) / 10.0;
+        }
+
+        List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
+        long activeTagsCount = storeTags.stream()
+                .filter(st -> StoreTagStatus.APPROVED.equals(st.getStatus()))
+                .count();
+
+        MerchantMetrics metrics = MerchantMetrics.builder()
+                .totalSnaps(totalSnaps)
+                .totalReviews(totalReviews)
+                .averageRating(avgRating)
+                .activeTagsCount(activeTagsCount)
+                .build();
+
+        List<VisitVerification> snaps = visitVerificationRepository.findTop10ByStoreStoreIdOrderByCreatedAtDesc(storeId);
+        List<MerchantRecentSnap> recentSnaps = snaps.stream()
+                .map(v -> MerchantRecentSnap.builder()
+                        .visitVerificationId(v.getVisitVerificationId())
+                        .imageUrl(v.getImageUrl())
+                        .userId(v.getUser().getUserId())
+                        .userFullName(v.getUser().getFullName())
+                        .userAvatarUrl(v.getUser().getAvatarUrl())
+                        .capturedAt(v.getCapturedAt())
+                        .distanceFromStoreMeters(v.getDistanceFromStoreMeters())
+                        .build())
+                .toList();
+
+        List<StoreReview> reviews = storeReviewRepository.findTop10ByStoreStoreIdOrderByCreatedAtDesc(storeId);
+        List<MerchantRecentReview> recentReviews = reviews.stream()
+                .map(r -> MerchantRecentReview.builder()
+                        .reviewId(r.getReviewId())
+                        .userId(r.getUser().getUserId())
+                        .userFullName(r.getUser().getFullName())
+                        .userAvatarUrl(r.getUser().getAvatarUrl())
+                        .overallRating(r.getOverallRating())
+                        .content(r.getContent())
+                        .imageUrls(r.getImages().stream().map(ReviewImage::getImageUrl).toList())
+                        .merchantReply(r.getMerchantReply())
+                        .replyAt(r.getReplyAt())
+                        .createdAt(r.getCreatedAt())
+                        .build())
+                .toList();
+
+        List<StoreTagResponse> tagResponses = storeTags.stream()
+                .map(storeTagMapper::toResponse)
+                .toList();
+
+        return MerchantDashboardResponse.builder()
+                .store(summary)
+                .metrics(metrics)
+                .recentSnaps(recentSnaps)
+                .recentReviews(recentReviews)
+                .tags(tagResponses)
+                .build();
     }
 
     @Override
@@ -168,6 +488,26 @@ public class StoreServiceImpl implements StoreService {
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
         store.setStatus(request.getStatus());
+        if (request.getStatus() == StoreStatus.REJECTED) {
+            store.setRejectReason(request.getRejectReason());
+            store.setAllowResubmit(request.getAllowResubmit() != null ? request.getAllowResubmit() : true);
+        } else if (request.getStatus() == StoreStatus.ACTIVE) {
+            store.setRejectReason(null);
+            store.setAllowResubmit(true);
+
+            // Auto-approve slider/noise tags when store is approved
+            List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
+            for (StoreTag st : storeTags) {
+                if (st.getTag() != null && st.getTag().getCategory() != null) {
+                    String catCode = st.getTag().getCategory().getCode();
+                    if ("NOISE".equalsIgnoreCase(catCode) && StoreTagStatus.PENDING.equals(st.getStatus())) {
+                        st.setStatus(StoreTagStatus.APPROVED);
+                        st.setApprovedAt(Instant.now());
+                        storeTagRepository.save(st);
+                    }
+                }
+            }
+        }
         store = storeRepository.save(store);
 
         return toStoreResponse(store);
@@ -195,9 +535,6 @@ public class StoreServiceImpl implements StoreService {
                 targetDistricts.add(singleD);
             }
         }
-        String priceRange = (request.getPriceRange() != null && !request.getPriceRange().isBlank())
-                ? request.getPriceRange().trim()
-                : null;
         Long priceFrom = request.getPriceFrom();
         Long priceTo = request.getPriceTo();
         boolean openNow = Boolean.TRUE.equals(request.getOpenNow());
@@ -284,8 +621,8 @@ public class StoreServiceImpl implements StoreService {
                 }
             }
 
-            // 2. Filter price (supports exact numeric range [priceFrom, priceTo] and presets)
-            if (!matchesPrice(priceFrom, priceTo, priceRange, store)) {
+            // 2. Filter price
+            if (!matchesPrice(priceFrom, priceTo, store)) {
                 continue;
             }
 
@@ -402,7 +739,6 @@ public class StoreServiceImpl implements StoreService {
                     .district(store.getDistrict() != null && !store.getDistrict().isBlank() ? store.getDistrict() : extractDistrictFromAddress(store.getAddress()))
                     .latitude(store.getLatitude())
                     .longitude(store.getLongitude())
-                    .priceRange(store.getPriceRange())
                     .priceFrom(store.getPriceFrom())
                     .priceTo(store.getPriceTo())
                     .openingTime(store.getOpeningTime())
@@ -622,6 +958,41 @@ public class StoreServiceImpl implements StoreService {
         return response;
     }
 
+    private StoreRegistrationStatusResponse toStoreRegistrationStatusResponse(Store store) {
+        List<StoreImageResponse> images = storeImageRepository.findAllByStoreStoreId(store.getStoreId())
+                .stream()
+                .map(storeImageMapper::toResponse)
+                .toList();
+
+        List<StoreTagResponse> tags = storeTagRepository.findAllByStoreId(store.getStoreId())
+                .stream()
+                .map(storeTagMapper::toResponse)
+                .toList();
+
+        return StoreRegistrationStatusResponse.builder()
+                .storeId(store.getStoreId())
+                .name(store.getName())
+                .description(store.getDescription())
+                .address(store.getAddress())
+                .district(store.getDistrict())
+                .latitude(store.getLatitude())
+                .longitude(store.getLongitude())
+                .openingTime(store.getOpeningTime())
+                .closingTime(store.getClosingTime())
+                .priceFrom(store.getPriceFrom())
+                .priceTo(store.getPriceTo())
+                .phone(store.getPhone())
+                .email(store.getEmail())
+                .status(store.getStatus())
+                .rejectReason(store.getRejectReason())
+                .allowResubmit(store.isAllowResubmit())
+                .images(images)
+                .tags(tags)
+                .createdAt(store.getCreatedAt())
+                .updatedAt(store.getUpdatedAt())
+                .build();
+    }
+
     private StoreResponse toStoreDetailResponse(Store store) {
         StoreResponse response = toStoreResponse(store);
         UUID storeId = store.getStoreId();
@@ -711,98 +1082,31 @@ public class StoreServiceImpl implements StoreService {
         return response;
     }
 
-    private boolean matchesPrice(Long filterFrom, Long filterTo, String legacyRange, Store store) {
+    private boolean matchesPrice(Long filterFrom, Long filterTo, Store store) {
         // If neither filter is provided, accept all stores
-        if (filterFrom == null && filterTo == null && (legacyRange == null || legacyRange.isBlank())) {
+        if (filterFrom == null && filterTo == null) {
             return true;
         }
 
         Long storeFrom = store.getPriceFrom();
         Long storeTo = store.getPriceTo();
 
-        // Fallback: extract numeric bounds from store.getPriceRange() if numeric fields are not set
-        if (storeFrom == null || storeTo == null) {
-            long[] parsed = parsePriceRangeString(store.getPriceRange());
-            if (parsed != null) {
-                if (storeFrom == null) storeFrom = parsed[0];
-                if (storeTo == null) storeTo = parsed[1];
-            }
+        // If store has no price info, cannot match filter
+        if (storeFrom == null && storeTo == null) {
+            return false;
         }
 
-        // 1. If numeric filter bounds (filterFrom, filterTo) are provided
-        if (filterFrom != null || filterTo != null) {
-            if (storeFrom == null && storeTo == null) {
-                return false;
-            }
-            long sMin = storeFrom != null ? storeFrom : storeTo;
-            long sMax = storeTo != null ? storeTo : storeFrom;
+        long sMin = storeFrom != null ? storeFrom : (storeTo != null ? storeTo : 0L);
+        long sMax = storeTo != null ? storeTo : (storeFrom != null ? storeFrom : Long.MAX_VALUE);
 
-            // If store's maximum price is strictly below user's minimum budget
-            if (filterFrom != null && sMax < filterFrom) {
-                return false;
-            }
-            // If store's minimum price is strictly above user's maximum budget
-            if (filterTo != null && sMin > filterTo) {
-                return false;
-            }
-            return true;
+        if (filterFrom != null && sMax < filterFrom) {
+            return false;
+        }
+        if (filterTo != null && sMin > filterTo) {
+            return false;
         }
 
-        // 2. Legacy string preset matching
-        return matchesPriceRange(legacyRange, store.getPriceRange(), storeFrom, storeTo);
-    }
-
-    private boolean matchesPriceRange(String filterRange, String storePriceRange, Long storeFrom, Long storeTo) {
-        if (filterRange == null || filterRange.isBlank()) return true;
-        if (storePriceRange != null && filterRange.equalsIgnoreCase(storePriceRange)) return true;
-
-        long sMin = storeFrom != null ? storeFrom : 0L;
-        long sMax = storeTo != null ? storeTo : Long.MAX_VALUE;
-
-        if (storeFrom == null || storeTo == null) {
-            long[] parsed = parsePriceRangeString(storePriceRange);
-            if (parsed != null) {
-                sMin = parsed[0];
-                sMax = parsed[1];
-            } else {
-                return storePriceRange != null && storePriceRange.toLowerCase().contains(filterRange.toLowerCase());
-            }
-        }
-
-        switch (filterRange.toUpperCase()) {
-            case "UNDER_30K":
-                return sMin <= 30000;
-            case "30K_50K":
-                return sMin <= 50000 && sMax >= 30000;
-            case "50K_80K":
-                return sMin <= 80000 && sMax >= 50000;
-            case "ABOVE_80K":
-                return sMax >= 80000;
-            default:
-                return storePriceRange != null && storePriceRange.toLowerCase().contains(filterRange.toLowerCase());
-        }
-    }
-
-    private long[] parsePriceRangeString(String storePriceRange) {
-        if (storePriceRange == null || storePriceRange.isBlank()) return null;
-        try {
-            String[] parts = storePriceRange.split("-");
-            long storeMin = 0;
-            long storeMax = Long.MAX_VALUE;
-            if (parts.length >= 1) {
-                String clean0 = parts[0].replaceAll("[^0-9]", "");
-                if (!clean0.isBlank()) storeMin = Long.parseLong(clean0);
-            }
-            if (parts.length >= 2) {
-                String clean1 = parts[1].replaceAll("[^0-9]", "");
-                if (!clean1.isBlank()) storeMax = Long.parseLong(clean1);
-            } else {
-                storeMax = storeMin;
-            }
-            return new long[]{storeMin, storeMax};
-        } catch (Exception ignored) {
-            return null;
-        }
+        return true;
     }
 
     @Override

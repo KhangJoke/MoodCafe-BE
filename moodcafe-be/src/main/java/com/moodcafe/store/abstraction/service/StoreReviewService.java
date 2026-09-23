@@ -1,7 +1,10 @@
 package com.moodcafe.store.abstraction.service;
 
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
+import com.moodcafe.store.dto.request.MerchantReplyReviewRequest;
+import com.moodcafe.store.dto.request.ReportReviewRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
+import com.moodcafe.store.dto.response.ReviewReportResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
 import org.springframework.data.domain.Page;
@@ -24,6 +27,10 @@ public interface StoreReviewService {
     StoreReviewSummaryResponse getStoreReviewSummary(UUID storeId);
 
     StoreReviewResponse getMyReviewForStore(UUID storeId);
+
+    StoreReviewResponse replyToReview(UUID storeId, UUID reviewId, MerchantReplyReviewRequest request);
+
+    ReviewReportResponse reportReview(UUID storeId, UUID reviewId, ReportReviewRequest request);
 
     void deleteMyReviewForStore(UUID storeId);
 

@@ -13,7 +13,11 @@ public interface StoreTagService {
 
     StoreAttributesResponse getStoreAttributes(UUID storeId);
 
+    List<StoreTagResponse> getStoreTagsManagement(UUID storeId);
+
     StoreTagResponse requestStoreTag(UUID storeId, SubmitStoreTagRequest request);
+
+    StoreTagResponse resubmitStoreTag(UUID storeId, UUID storeTagId, SubmitStoreTagRequest request);
 
     List<StoreTagResponse> getPendingStoreTagRequests();
 

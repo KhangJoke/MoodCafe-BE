@@ -12,15 +12,22 @@ import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
 import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.abstraction.service.StoreReviewService;
+import com.moodcafe.store.abstraction.repository.ReviewReportRepository;
+import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
+import com.moodcafe.store.dto.request.MerchantReplyReviewRequest;
+import com.moodcafe.store.dto.request.ReportReviewRequest;
 import com.moodcafe.store.dto.request.ReviewTagRatingRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
+import com.moodcafe.store.dto.response.ReviewReportResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
 import com.moodcafe.store.entity.ReviewImage;
+import com.moodcafe.store.entity.ReviewReport;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreReview;
 import com.moodcafe.store.entity.TagRating;
+import com.moodcafe.store.entity.enums.ReviewReportStatus;
 import com.moodcafe.store.mapper.StoreReviewMapper;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.entity.StoreTag;
@@ -63,6 +70,8 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     private final StoreReviewMapper storeReviewMapper;
     private final TagRatingRepository tagRatingRepository;
     private final StoreTagRepository storeTagRepository;
+    private final ReviewReportRepository reviewReportRepository;
+    private final StoreStaffService storeStaffService;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -346,6 +355,68 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         return storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId())
                 .map(storeReviewMapper::toResponse)
                 .orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public StoreReviewResponse replyToReview(UUID storeId, UUID reviewId, MerchantReplyReviewRequest request) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        StoreReview review = storeReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
+
+        if (!review.getStore().getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Đánh giá không thuộc về quán này");
+        }
+
+        review.setMerchantReply(request.getReply());
+        review.setReplyAt(Instant.now());
+        review = storeReviewRepository.save(review);
+
+        return storeReviewMapper.toResponse(review);
+    }
+
+    @Override
+    @Transactional
+    public ReviewReportResponse reportReview(UUID storeId, UUID reviewId, ReportReviewRequest request) {
+        User currentUser = currentUserService.getCurrentUser();
+
+        StoreReview review = storeReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
+
+        if (!review.getStore().getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Đánh giá không thuộc về quán này");
+        }
+
+        if (reviewReportRepository.existsByReviewReviewIdAndReporterUserId(reviewId, currentUser.getUserId())) {
+            throw new AppException(ErrorCode.REPORT_ALREADY_SUBMITTED);
+        }
+
+        ReviewReport report = ReviewReport.builder()
+                .review(review)
+                .reporter(currentUser)
+                .store(review.getStore())
+                .reason(request.getReason())
+                .details(request.getDetails())
+                .status(ReviewReportStatus.PENDING)
+                .build();
+
+        report = reviewReportRepository.save(report);
+
+        return ReviewReportResponse.builder()
+                .reportId(report.getReportId())
+                .reviewId(review.getReviewId())
+                .reporterUserId(currentUser.getUserId())
+                .reporterFullName(currentUser.getFullName())
+                .storeId(storeId)
+                .storeName(review.getStore().getName())
+                .reason(report.getReason())
+                .details(report.getDetails())
+                .status(report.getStatus())
+                .adminNote(report.getAdminNote())
+                .createdAt(report.getCreatedAt())
+                .resolvedAt(report.getResolvedAt())
+                .build();
     }
 
     @Override

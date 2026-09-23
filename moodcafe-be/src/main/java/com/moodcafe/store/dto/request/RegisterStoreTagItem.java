@@ -1,6 +1,5 @@
 package com.moodcafe.store.dto.request;
 
-import com.moodcafe.store.entity.enums.StoreStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,18 +7,17 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UpdateStoreStatusRequest {
+public class RegisterStoreTagItem {
 
-    @NotNull(message = "Status is required")
-    private StoreStatus status;
+    @NotNull(message = "Tag ID is required")
+    private UUID tagId;
 
-    private String rejectReason;
-
-    @Builder.Default
-    private Boolean allowResubmit = true;
+    private String proofImageUrl;
 }

@@ -70,6 +70,12 @@ public class VisitVerificationServiceImpl implements VisitVerificationService {
                     "Chủ quán hoặc nhân viên không được phép tự chụp ảnh xác thực tại quán của mình");
         }
 
+        // 2. Business Rule: Cooldown 24h per user per store
+        Instant cooldownThreshold = Instant.now().minus(24, ChronoUnit.HOURS);
+        if (visitVerificationRepository.existsByStoreStoreIdAndUserUserIdAndCapturedAtAfter(storeId, currentUser.getUserId(), cooldownThreshold)) {
+            throw new AppException(ErrorCode.SNAP_COOLDOWN_ACTIVE);
+        }
+
         // 2. Validate Store GPS configuration
         if (store.getLatitude() == null || store.getLongitude() == null) {
             throw new AppException(ErrorCode.STORE_LOCATION_NOT_CONFIGURED,

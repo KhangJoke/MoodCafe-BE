@@ -26,7 +26,6 @@ public class FavoriteStoreResponse {
     private String storeAddress;
     private String district;
     private String primaryImageUrl;
-    private String priceRange;
     private Long priceFrom;
     private Long priceTo;
     private LocalTime openingTime;

@@ -34,6 +34,13 @@ public class StoreTagController {
         return ResponseEntity.ok(ApiResponse.success(attributes));
     }
 
+    @GetMapping("/api/stores/{storeId}/tags/management")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<StoreTagResponse>>> getStoreTagsManagement(@PathVariable UUID storeId) {
+        List<StoreTagResponse> tags = storeTagService.getStoreTagsManagement(storeId);
+        return ResponseEntity.ok(ApiResponse.success(tags));
+    }
+
     @PostMapping("/api/stores/{storeId}/tag-requests")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreTagResponse>> submitTagRequest(
@@ -43,6 +50,17 @@ public class StoreTagController {
         StoreTagResponse response = storeTagService.requestStoreTag(storeId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Store tag request submitted successfully"));
+    }
+
+    @PutMapping("/api/stores/{storeId}/tags/{storeTagId}/resubmit")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<StoreTagResponse>> resubmitStoreTag(
+            @PathVariable UUID storeId,
+            @PathVariable UUID storeTagId,
+            @Valid @RequestBody SubmitStoreTagRequest request
+    ) {
+        StoreTagResponse response = storeTagService.resubmitStoreTag(storeId, storeTagId, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Nộp lại minh chứng thẻ vibe thành công"));
     }
 
     @PutMapping("/api/stores/{storeId}/highlight-tags")

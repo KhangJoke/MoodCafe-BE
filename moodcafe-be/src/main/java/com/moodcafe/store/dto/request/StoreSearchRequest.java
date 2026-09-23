@@ -23,7 +23,6 @@ public class StoreSearchRequest {
     private Boolean openNow;
     private Boolean highRatingOnly;
     private Boolean matchPersonalGuOnly;
-    private String priceRange;
     private Long priceFrom;
     private Long priceTo;
 

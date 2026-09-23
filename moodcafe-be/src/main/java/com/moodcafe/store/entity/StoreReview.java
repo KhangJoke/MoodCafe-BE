@@ -83,6 +83,12 @@ public class StoreReview {
     @Column(name = "content", columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "merchant_reply", columnDefinition = "TEXT")
+    private String merchantReply;
+
+    @Column(name = "reply_at")
+    private Instant replyAt;
+
     @Builder.Default
     @OneToMany(mappedBy = "review", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReviewImage> images = new ArrayList<>();

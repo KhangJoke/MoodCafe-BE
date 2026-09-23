@@ -1,6 +1,7 @@
 package com.moodcafe.store.dto.response;
 
 import com.moodcafe.store.entity.enums.StoreStaffStatus;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,5 +23,11 @@ public class UserStoreResponse {
     private String storeAddress;
     private String storeRole;
     private StoreStaffStatus status;
+    private StoreStatus storeStatus;
+    private String rejectReason;
+
+    @Builder.Default
+    private boolean allowResubmit = true;
+
     private Instant joinedAt;
 }

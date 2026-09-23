@@ -25,4 +25,10 @@ public interface VisitVerificationRepository extends JpaRepository<VisitVerifica
     List<VisitVerification> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId);
 
     List<VisitVerification> findAllByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
+
+    long countByStoreStoreId(UUID storeId);
+
+    boolean existsByStoreStoreIdAndUserUserIdAndCapturedAtAfter(UUID storeId, UUID userId, Instant after);
+
+    List<VisitVerification> findTop10ByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
 }

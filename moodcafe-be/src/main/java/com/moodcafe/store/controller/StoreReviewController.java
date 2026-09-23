@@ -3,7 +3,10 @@ package com.moodcafe.store.controller;
 import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.store.abstraction.service.StoreReviewService;
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
+import com.moodcafe.store.dto.request.MerchantReplyReviewRequest;
+import com.moodcafe.store.dto.request.ReportReviewRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
+import com.moodcafe.store.dto.response.ReviewReportResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,7 +20,17 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -111,5 +124,30 @@ public class StoreReviewController {
     ) {
         storeReviewService.deleteReview(reviewId);
         return ResponseEntity.ok(ApiResponse.success(null, "Review deleted successfully"));
+    }
+
+    @Operation(summary = "Chủ quán/Quản lý phản hồi đánh giá")
+    @PostMapping("/{storeId}/reviews/{reviewId}/reply")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<StoreReviewResponse>> replyToReview(
+            @PathVariable UUID storeId,
+            @PathVariable UUID reviewId,
+            @Valid @RequestBody MerchantReplyReviewRequest request
+    ) {
+        StoreReviewResponse response = storeReviewService.replyToReview(storeId, reviewId, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Phản hồi đánh giá thành công"));
+    }
+
+    @Operation(summary = "Báo cáo đánh giá gian lận / vi phạm")
+    @PostMapping("/{storeId}/reviews/{reviewId}/report")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<ReviewReportResponse>> reportReview(
+            @PathVariable UUID storeId,
+            @PathVariable UUID reviewId,
+            @Valid @RequestBody ReportReviewRequest request
+    ) {
+        ReviewReportResponse response = storeReviewService.reportReview(storeId, reviewId, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response, "Gửi báo cáo đánh giá thành công, ban quản trị sẽ xem xét"));
     }
 }

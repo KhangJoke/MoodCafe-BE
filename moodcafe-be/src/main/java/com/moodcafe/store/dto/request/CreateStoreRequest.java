@@ -40,8 +40,6 @@ public class CreateStoreRequest {
 
     private LocalTime closingTime;
 
-    @Size(max = 50, message = "Price range cannot exceed 50 characters")
-    private String priceRange;
 
     private Long priceFrom;
 

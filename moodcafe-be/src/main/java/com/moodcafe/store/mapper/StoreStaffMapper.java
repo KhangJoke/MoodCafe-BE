@@ -20,5 +20,8 @@ public interface StoreStaffMapper {
     @Mapping(source = "store.name", target = "storeName")
     @Mapping(source = "store.address", target = "storeAddress")
     @Mapping(source = "storeRole.name", target = "storeRole")
+    @Mapping(source = "store.status", target = "storeStatus")
+    @Mapping(source = "store.rejectReason", target = "rejectReason")
+    @Mapping(source = "store.allowResubmit", target = "allowResubmit")
     UserStoreResponse toUserStoreResponse(StoreStaff storeStaff);
 }

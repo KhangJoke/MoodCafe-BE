@@ -26,7 +26,6 @@ public class StoreSearchItemResponse {
     private String district;
     private BigDecimal latitude;
     private BigDecimal longitude;
-    private String priceRange;
     private Long priceFrom;
     private Long priceTo;
     private LocalTime openingTime;

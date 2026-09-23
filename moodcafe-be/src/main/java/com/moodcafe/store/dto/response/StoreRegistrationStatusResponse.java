@@ -1,7 +1,5 @@
 package com.moodcafe.store.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import lombok.AllArgsConstructor;
@@ -13,6 +11,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,7 +20,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StoreResponse {
+public class StoreRegistrationStatusResponse {
 
     private UUID storeId;
     private String name;
@@ -38,31 +37,16 @@ public class StoreResponse {
     private String email;
     private StoreStatus status;
     private String rejectReason;
+
     @Builder.Default
     private boolean allowResubmit = true;
-    private List<StoreImageResponse> images;
-    private List<StoreTagResponse> tags;
-    private List<StoreReviewResponse> reviews;
-    private StoreReviewSummaryResponse reviewSummary;
-    private Double overallRating;
-    private Long reviewCount;
 
-    @JsonAlias({"hasUserReviewed"})
-    private Boolean hasReviewed;
+    @Builder.Default
+    private List<StoreImageResponse> images = new ArrayList<>();
 
-    @JsonAlias({"myReview"})
-    private StoreReviewResponse userReview;
+    @Builder.Default
+    private List<StoreTagResponse> tags = new ArrayList<>();
 
     private Instant createdAt;
     private Instant updatedAt;
-
-    @JsonProperty("hasUserReviewed")
-    public Boolean getHasUserReviewed() {
-        return hasReviewed;
-    }
-
-    @JsonProperty("myReview")
-    public StoreReviewResponse getMyReview() {
-        return userReview;
-    }
 }

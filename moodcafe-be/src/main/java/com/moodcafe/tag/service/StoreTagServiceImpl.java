@@ -111,6 +111,49 @@ public class StoreTagServiceImpl implements StoreTagService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<StoreTagResponse> getStoreTagsManagement(UUID storeId) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        return storeTagRepository.findAllByStoreId(storeId).stream()
+                .map(storeTagMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public StoreTagResponse resubmitStoreTag(UUID storeId, UUID storeTagId, SubmitStoreTagRequest request) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        StoreTag storeTag = storeTagRepository.findById(storeTagId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_TAG_NOT_FOUND));
+
+        if (!storeTag.getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS);
+        }
+
+        if (!StoreTagStatus.REJECTED.equals(storeTag.getStatus())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Chỉ có thẻ vibe bị từ chối mới có thể nộp lại");
+        }
+
+        if (!storeTag.isAllowResubmit()) {
+            throw new AppException(ErrorCode.STORE_TAG_RESUBMIT_NOT_ALLOWED);
+        }
+
+        Tag tag = storeTag.getTag();
+        boolean isSliderCategory = tag.getCategory() != null && ControlType.SLIDER.equals(tag.getCategory().getControlType());
+        if (!isSliderCategory && (request.getProofImageUrl() == null || request.getProofImageUrl().isBlank())) {
+            throw new AppException(ErrorCode.STORE_TAG_PROOF_REQUIRED);
+        }
+
+        storeTag.setProofImageUrl(request.getProofImageUrl());
+        storeTag.setStatus(StoreTagStatus.PENDING);
+        storeTag.setRejectReason(null);
+        storeTag = storeTagRepository.save(storeTag);
+
+        return storeTagMapper.toResponse(storeTag);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<StoreTagResponse> getPendingStoreTagRequests() {
         currentUserService.requireSystemAdmin();
         return storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.PENDING).stream()
@@ -132,8 +175,10 @@ public class StoreTagServiceImpl implements StoreTagService {
         if (StoreTagStatus.APPROVED.equals(targetStatus)) {
             storeTag.setApprovedAt(Instant.now());
             storeTag.setRejectReason(null);
+            storeTag.setAllowResubmit(true);
         } else if (StoreTagStatus.REJECTED.equals(targetStatus) || StoreTagStatus.REVOKED.equals(targetStatus)) {
             storeTag.setRejectReason(request.getRejectReason());
+            storeTag.setAllowResubmit(request.getAllowResubmit() != null ? request.getAllowResubmit() : true);
             if (StoreTagStatus.REVOKED.equals(targetStatus)) {
                 storeTag.setRevokedAt(Instant.now());
             }

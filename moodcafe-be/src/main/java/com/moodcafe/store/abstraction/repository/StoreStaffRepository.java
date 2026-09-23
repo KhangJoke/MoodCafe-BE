@@ -15,6 +15,10 @@ public interface StoreStaffRepository extends JpaRepository<StoreStaff, UUID> {
 
     List<StoreStaff> findAllByUserUserId(UUID userId);
 
+    List<StoreStaff> findAllByUserUserIdOrderByJoinedAtDesc(UUID userId);
+
+    Optional<StoreStaff> findFirstByUserUserIdAndStoreRoleNameOrderByJoinedAtDesc(UUID userId, String roleName);
+
     Optional<StoreStaff> findByStoreStoreIdAndUserUserId(UUID storeId, UUID userId);
 
     boolean existsByStoreStoreIdAndUserUserId(UUID storeId, UUID userId);
