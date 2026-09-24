@@ -12,6 +12,8 @@ import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
 import com.moodcafe.tag.dto.request.UpdateStoreHighlightTagsRequest;
 import com.moodcafe.tag.dto.response.StoreAttributesResponse;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
+import com.moodcafe.store.abstraction.repository.StoreRepository;
+import com.moodcafe.store.entity.Store;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.enums.ApprovalMode;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -39,6 +42,7 @@ public class StoreTagServiceImpl implements StoreTagService {
     private final StoreTagMapper storeTagMapper;
     private final StoreStaffService storeStaffService;
     private final CurrentUserService currentUserService;
+    private final StoreRepository storeRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -156,8 +160,23 @@ public class StoreTagServiceImpl implements StoreTagService {
     @Transactional(readOnly = true)
     public List<StoreTagResponse> getPendingStoreTagRequests() {
         currentUserService.requireSystemAdmin();
-        return storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.PENDING).stream()
-                .map(storeTagMapper::toResponse)
+        List<StoreTag> pendingTags = storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.PENDING);
+        if (pendingTags.isEmpty()) {
+            return List.of();
+        }
+
+        Set<UUID> storeIds = pendingTags.stream()
+                .map(StoreTag::getStoreId)
+                .collect(Collectors.toSet());
+        Map<UUID, String> storeNames = storeRepository.findAllById(storeIds).stream()
+                .collect(Collectors.toMap(Store::getStoreId, Store::getName, (a, b) -> a));
+
+        return pendingTags.stream()
+                .map(st -> {
+                    StoreTagResponse resp = storeTagMapper.toResponse(st);
+                    resp.setStoreName(storeNames.get(st.getStoreId()));
+                    return resp;
+                })
                 .toList();
     }
 

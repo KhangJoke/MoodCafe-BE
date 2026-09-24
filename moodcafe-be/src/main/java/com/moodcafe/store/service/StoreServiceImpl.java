@@ -297,12 +297,14 @@ public class StoreServiceImpl implements StoreService {
         store.setEmail(request.getEmail());
         store.setStatus(StoreStatus.PENDING);
         store.setRejectReason(null);
+        store.setAllowResubmit(true);
         store = storeRepository.save(store);
 
         // Update images if provided
         if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
             List<StoreImage> oldImages = storeImageRepository.findAllByStoreStoreId(storeId);
             storeImageRepository.deleteAll(oldImages);
+            storeImageRepository.flush();
 
             boolean first = true;
             for (String url : request.getImageUrls()) {
@@ -316,23 +318,59 @@ public class StoreServiceImpl implements StoreService {
                     first = false;
                 }
             }
+            storeImageRepository.flush();
         }
 
-        // Update tags
-        List<StoreTag> currentStoreTags = storeTagRepository.findAllByStoreId(storeId);
-        storeTagRepository.deleteAll(currentStoreTags);
-
+        // Deduplicate requested tags by tagId
+        Map<UUID, RegisterStoreTagItem> requestedTagMap = new LinkedHashMap<>();
         for (RegisterStoreTagItem item : request.getTags()) {
-            Tag tag = tagRepository.findById(item.getTagId()).orElseThrow();
-            StoreTag st = StoreTag.builder()
-                    .storeId(store.getStoreId())
-                    .tag(tag)
-                    .status(StoreTagStatus.PENDING)
-                    .proofImageUrl(item.getProofImageUrl())
-                    .allowResubmit(true)
-                    .build();
-            storeTagRepository.save(st);
+            if (item != null && item.getTagId() != null) {
+                requestedTagMap.put(item.getTagId(), item);
+            }
         }
+
+        // Synchronize store tags in-place to avoid uq_store_vibe_tag unique constraint violation
+        List<StoreTag> currentStoreTags = storeTagRepository.findAllByStoreId(storeId);
+        Map<UUID, StoreTag> existingTagMap = currentStoreTags.stream()
+                .filter(st -> st.getTag() != null && st.getTag().getTagId() != null)
+                .collect(Collectors.toMap(st -> st.getTag().getTagId(), st -> st, (a, b) -> a));
+
+        List<StoreTag> tagsToDelete = new ArrayList<>();
+        for (StoreTag st : currentStoreTags) {
+            if (st.getTag() != null && !requestedTagMap.containsKey(st.getTag().getTagId())) {
+                tagsToDelete.add(st);
+            }
+        }
+
+        if (!tagsToDelete.isEmpty()) {
+            storeTagRepository.deleteAll(tagsToDelete);
+            storeTagRepository.flush();
+        }
+
+        for (RegisterStoreTagItem item : requestedTagMap.values()) {
+            StoreTag existing = existingTagMap.get(item.getTagId());
+            if (existing != null) {
+                existing.setStatus(StoreTagStatus.PENDING);
+                existing.setProofImageUrl(item.getProofImageUrl());
+                existing.setRejectReason(null);
+                existing.setAllowResubmit(true);
+                existing.setApprovedAt(null);
+                existing.setRevokedAt(null);
+                storeTagRepository.save(existing);
+            } else {
+                Tag tag = tagRepository.findById(item.getTagId())
+                        .orElseThrow(() -> new AppException(ErrorCode.TAG_NOT_FOUND));
+                StoreTag st = StoreTag.builder()
+                        .storeId(store.getStoreId())
+                        .tag(tag)
+                        .status(StoreTagStatus.PENDING)
+                        .proofImageUrl(item.getProofImageUrl())
+                        .allowResubmit(true)
+                        .build();
+                storeTagRepository.save(st);
+            }
+        }
+        storeTagRepository.flush();
 
         return toStoreRegistrationStatusResponse(store);
     }
@@ -488,9 +526,15 @@ public class StoreServiceImpl implements StoreService {
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
         store.setStatus(request.getStatus());
-        if (request.getStatus() == StoreStatus.REJECTED) {
-            store.setRejectReason(request.getRejectReason());
-            store.setAllowResubmit(request.getAllowResubmit() != null ? request.getAllowResubmit() : true);
+        if (request.getStatus() == StoreStatus.REJECTED || request.getStatus() == StoreStatus.INACTIVE) {
+            if (request.getRejectReason() != null && !request.getRejectReason().isBlank()) {
+                store.setRejectReason(request.getRejectReason());
+            }
+            if (request.getAllowResubmit() != null) {
+                store.setAllowResubmit(request.getAllowResubmit());
+            } else if (request.getStatus() == StoreStatus.REJECTED) {
+                store.setAllowResubmit(true);
+            }
         } else if (request.getStatus() == StoreStatus.ACTIVE) {
             store.setRejectReason(null);
             store.setAllowResubmit(true);
@@ -506,6 +550,14 @@ public class StoreServiceImpl implements StoreService {
                         storeTagRepository.save(st);
                     }
                 }
+            }
+
+            // Enforce requirement: All tags of the store must be reviewed before activating the store
+            boolean hasPendingTags = storeTags.stream()
+                    .anyMatch(st -> StoreTagStatus.PENDING.equals(st.getStatus()));
+            if (hasPendingTags) {
+                throw new AppException(ErrorCode.BAD_REQUEST,
+                        "Không thể kích hoạt quán: Vui lòng duyệt hoặc từ chối tất cả các thẻ (vibe/tiện ích) của quán trước.");
             }
         }
         store = storeRepository.save(store);
@@ -949,8 +1001,13 @@ public class StoreServiceImpl implements StoreService {
                 .toList();
         response.setImages(images);
 
-        List<StoreTagResponse> tags = storeTagRepository.findAllByStoreIdAndStatus(store.getStoreId(), StoreTagStatus.APPROVED)
-                .stream()
+        List<StoreTag> storeTags;
+        if (StoreStatus.PENDING.equals(store.getStatus())) {
+            storeTags = storeTagRepository.findAllByStoreId(store.getStoreId());
+        } else {
+            storeTags = storeTagRepository.findAllByStoreIdAndStatus(store.getStoreId(), StoreTagStatus.APPROVED);
+        }
+        List<StoreTagResponse> tags = storeTags.stream()
                 .map(storeTagMapper::toResponse)
                 .toList();
         response.setTags(tags);

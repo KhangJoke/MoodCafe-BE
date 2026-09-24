@@ -19,6 +19,7 @@ public interface StoreStaffMapper {
     @Mapping(source = "store.storeId", target = "storeId")
     @Mapping(source = "store.name", target = "storeName")
     @Mapping(source = "store.address", target = "storeAddress")
+    @Mapping(source = "store.district", target = "district")
     @Mapping(source = "storeRole.name", target = "storeRole")
     @Mapping(source = "store.status", target = "storeStatus")
     @Mapping(source = "store.rejectReason", target = "rejectReason")

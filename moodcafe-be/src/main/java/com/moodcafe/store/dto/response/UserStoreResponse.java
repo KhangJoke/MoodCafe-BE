@@ -21,6 +21,8 @@ public class UserStoreResponse {
     private UUID storeId;
     private String storeName;
     private String storeAddress;
+    private String district;
+    private String primaryImageUrl;
     private String storeRole;
     private StoreStaffStatus status;
     private StoreStatus storeStatus;

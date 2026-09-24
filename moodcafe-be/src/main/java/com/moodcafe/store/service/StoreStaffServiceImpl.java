@@ -7,6 +7,7 @@ import com.moodcafe.auth.entity.Role;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 
 import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
@@ -43,6 +44,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
     private final UserService userService;
     private final RoleService roleService;
     private final StoreStaffMapper storeStaffMapper;
+    private final StoreImageRepository storeImageRepository;
     private final PasswordEncoder passwordEncoder;
     private final CurrentUserService currentUserService;
 
@@ -192,7 +194,16 @@ public class StoreStaffServiceImpl implements StoreStaffService {
 
         return storeStaffRepository.findAllByUserUserId(currentUser.getUserId())
                 .stream()
-                .map(storeStaffMapper::toUserStoreResponse)
+                .map(staff -> {
+                    UserStoreResponse res = storeStaffMapper.toUserStoreResponse(staff);
+                    if (staff.getStore() != null) {
+                        UUID storeId = staff.getStore().getStoreId();
+                        storeImageRepository.findByStoreStoreIdAndPrimaryTrue(storeId)
+                                .or(() -> storeImageRepository.findAllByStoreStoreId(storeId).stream().findFirst())
+                                .ifPresent(img -> res.setPrimaryImageUrl(img.getImageUrl()));
+                    }
+                    return res;
+                })
                 .toList();
     }
 

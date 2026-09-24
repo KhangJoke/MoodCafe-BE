@@ -19,6 +19,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
@@ -29,9 +31,12 @@ import java.util.UUID;
         name = "onboarding_questions",
         indexes = {
                 @Index(name = "idx_onboarding_questions_active", columnList = "is_active"),
-                @Index(name = "idx_onboarding_questions_order", columnList = "display_order")
+                @Index(name = "idx_onboarding_questions_order", columnList = "display_order"),
+                @Index(name = "idx_onboarding_questions_is_deleted", columnList = "is_deleted")
         }
 )
+@SQLDelete(sql = "UPDATE onboarding_questions SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE question_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -73,6 +78,13 @@ public class OnboardingQuestion {
     @Builder.Default
     @Column(name = "max_selections")
     private Integer maxSelections = 3;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

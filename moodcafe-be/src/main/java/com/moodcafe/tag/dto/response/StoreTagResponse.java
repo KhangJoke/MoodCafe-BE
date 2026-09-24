@@ -18,6 +18,8 @@ import java.util.UUID;
 public class StoreTagResponse {
 
     private UUID storeTagId;
+    private UUID storeId;
+    private String storeName;
     private UUID tagId;
     private String tagName;
     private String category;

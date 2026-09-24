@@ -77,6 +77,7 @@ public class UserPreferenceServiceImpl implements UserPreferenceService {
 
         // Clear previous preferences for user to allow clean update
         userPreferenceRepository.deleteAllByUserId(userId);
+        userPreferenceRepository.flush();
 
         List<UserPreference> preferencesToSave = new ArrayList<>();
 

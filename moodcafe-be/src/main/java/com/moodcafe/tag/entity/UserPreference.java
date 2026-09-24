@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -25,9 +27,12 @@ import java.util.UUID;
         name = "user_preferences",
         indexes = {
                 @Index(name = "idx_user_preferences_user_id", columnList = "user_id"),
-                @Index(name = "idx_user_preferences_question_id", columnList = "question_id")
+                @Index(name = "idx_user_preferences_question_id", columnList = "question_id"),
+                @Index(name = "idx_user_preferences_is_deleted", columnList = "is_deleted")
         }
 )
+@SQLDelete(sql = "UPDATE user_preferences SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE preference_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -57,6 +62,13 @@ public class UserPreference {
     @Builder.Default
     @Column(name = "is_skipped", nullable = false)
     private boolean skipped = false;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

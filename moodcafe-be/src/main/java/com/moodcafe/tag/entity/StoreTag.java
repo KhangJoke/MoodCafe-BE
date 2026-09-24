@@ -19,6 +19,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -29,9 +31,12 @@ import java.util.UUID;
         indexes = {
                 @Index(name = "idx_store_tags_store_id", columnList = "store_id"),
                 @Index(name = "idx_store_tags_tag_id", columnList = "tag_id"),
-                @Index(name = "idx_store_tags_status", columnList = "status")
+                @Index(name = "idx_store_tags_status", columnList = "status"),
+                @Index(name = "idx_store_tags_is_deleted", columnList = "is_deleted")
         }
 )
+@SQLDelete(sql = "UPDATE store_tags SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE store_tag_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -87,4 +92,11 @@ public class StoreTag {
     @Builder.Default
     @Column(name = "review_count")
     private Integer reviewCount = 0;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 }

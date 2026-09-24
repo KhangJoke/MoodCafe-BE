@@ -3,7 +3,9 @@ package com.moodcafe.tag.service;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
+import com.moodcafe.store.entity.Store;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
@@ -53,6 +55,9 @@ class StoreTagServiceImplTest {
 
     @Mock
     private CurrentUserService currentUserService;
+
+    @Mock
+    private StoreRepository storeRepository;
 
     @InjectMocks
     private StoreTagServiceImpl storeTagService;
@@ -316,5 +321,21 @@ class StoreTagServiceImplTest {
         assertThatThrownBy(() -> storeTagService.updateStoreHighlightTags(storeId, request))
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT));
+    }
+
+    @Test
+    @DisplayName("getPendingStoreTagRequests - returns pending store tags with store name")
+    void getPendingStoreTagRequests_returnsPendingTagsWithStoreName() {
+        Store mockStore = Store.builder().storeId(storeId).name("Mood Cafe Test").build();
+        when(storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.PENDING))
+                .thenReturn(List.of(storeTag));
+        when(storeRepository.findAllById(any())).thenReturn(List.of(mockStore));
+        when(storeTagMapper.toResponse(storeTag)).thenReturn(storeTagResponse);
+
+        List<StoreTagResponse> result = storeTagService.getPendingStoreTagRequests();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStoreName()).isEqualTo("Mood Cafe Test");
+        verify(currentUserService).requireSystemAdmin();
     }
 }

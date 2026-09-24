@@ -63,7 +63,6 @@ public class StoreRegisterRequest {
     private List<String> imageUrls = new ArrayList<>();
 
     @NotEmpty(message = "Vui lòng chọn ít nhất 1 thẻ vibe khi đăng ký quán")
-    @Valid
     @Builder.Default
-    private List<RegisterStoreTagItem> tags = new ArrayList<>();
+    private List<@Valid RegisterStoreTagItem> tags = new ArrayList<>();
 }

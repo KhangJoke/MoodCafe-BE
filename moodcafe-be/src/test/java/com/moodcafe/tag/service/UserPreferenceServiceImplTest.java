@@ -147,6 +147,7 @@ class UserPreferenceServiceImplTest {
         userPreferenceService.submitPreferences(request);
 
         verify(userPreferenceRepository).deleteAllByUserId(userId);
+        verify(userPreferenceRepository).flush();
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<UserPreference>> captor = ArgumentCaptor.forClass(List.class);

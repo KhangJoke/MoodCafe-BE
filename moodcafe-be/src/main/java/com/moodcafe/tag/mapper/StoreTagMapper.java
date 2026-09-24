@@ -8,6 +8,8 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface StoreTagMapper {
 
+    @Mapping(target = "storeId", source = "storeId")
+    @Mapping(target = "storeName", ignore = true)
     @Mapping(target = "tagId", source = "tag.tagId")
     @Mapping(target = "tagName", source = "tag.name")
     @Mapping(target = "category", source = "tag.category.name")

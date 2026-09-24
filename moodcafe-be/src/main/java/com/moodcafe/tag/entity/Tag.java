@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -24,10 +26,13 @@ import java.util.UUID;
 @Table(
         name = "tags",
         indexes = {
-                @Index(name = "idx_tags_name", columnList = "name", unique = true),
-                @Index(name = "idx_tags_active", columnList = "is_active")
+                @Index(name = "idx_tags_name", columnList = "name"),
+                @Index(name = "idx_tags_active", columnList = "is_active"),
+                @Index(name = "idx_tags_is_deleted", columnList = "is_deleted")
         }
 )
+@SQLDelete(sql = "UPDATE tags SET is_deleted = true, deleted_at = CURRENT_TIMESTAMP WHERE tag_id = ?")
+@SQLRestriction("is_deleted = false")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -40,7 +45,7 @@ public class Tag {
     @Column(name = "tag_id", nullable = false, updatable = false)
     private UUID tagId;
 
-    @Column(name = "name", nullable = false, unique = true, length = 100)
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
 
     @Column(name = "description", columnDefinition = "TEXT")
@@ -59,6 +64,13 @@ public class Tag {
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
+
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -12,7 +12,10 @@ import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
 import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
+import com.moodcafe.shared.error.ErrorCode;
+import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
+import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
@@ -33,6 +36,8 @@ import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.entity.UserPreference;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -286,5 +291,58 @@ class StoreServiceImplTest {
         assertThat(response.getUserReview().getReviewId()).isEqualTo(myReview.getReviewId());
         assertThat(response.getHasUserReviewed()).isTrue();
         assertThat(response.getMyReview()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("changeStoreStatus - throws exception when activating store with pending tags")
+    void changeStoreStatus_ActivatingStoreWithPendingTags_ThrowsException() {
+        UUID storeId = store1.getStoreId();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
+
+        TagCategory vibeCat = TagCategory.builder().code("VIBE").build();
+        Tag vibe = Tag.builder().tagId(UUID.randomUUID()).category(vibeCat).build();
+        StoreTag pendingTag = StoreTag.builder()
+                .storeId(storeId)
+                .tag(vibe)
+                .status(StoreTagStatus.PENDING)
+                .build();
+
+        when(storeTagRepository.findAllByStoreId(storeId)).thenReturn(List.of(pendingTag));
+
+        UpdateStoreStatusRequest req = UpdateStoreStatusRequest.builder()
+                .status(StoreStatus.ACTIVE)
+                .build();
+
+        assertThatThrownBy(() -> storeService.changeStoreStatus(storeId, req))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST));
+    }
+
+    @Test
+    @DisplayName("changeStoreStatus - activates store when all tags are already approved")
+    void changeStoreStatus_ActivatingStoreAllTagsApproved_Succeeds() {
+        UUID storeId = store1.getStoreId();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
+
+        TagCategory vibeCat = TagCategory.builder().code("VIBE").build();
+        Tag vibe = Tag.builder().tagId(UUID.randomUUID()).category(vibeCat).build();
+        StoreTag approvedTag = StoreTag.builder()
+                .storeId(storeId)
+                .tag(vibe)
+                .status(StoreTagStatus.APPROVED)
+                .build();
+
+        when(storeTagRepository.findAllByStoreId(storeId)).thenReturn(List.of(approvedTag));
+        when(storeRepository.save(store1)).thenReturn(store1);
+        when(storeMapper.toResponse(store1)).thenReturn(StoreResponse.builder().storeId(storeId).status(StoreStatus.ACTIVE).build());
+
+        UpdateStoreStatusRequest req = UpdateStoreStatusRequest.builder()
+                .status(StoreStatus.ACTIVE)
+                .build();
+
+        StoreResponse response = storeService.changeStoreStatus(storeId, req);
+
+        assertThat(response).isNotNull();
+        assertThat(store1.getStatus()).isEqualTo(StoreStatus.ACTIVE);
     }
 }
