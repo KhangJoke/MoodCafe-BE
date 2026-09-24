@@ -15,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -148,4 +150,51 @@ class CloudinaryServiceImplTest {
 
         verify(uploader, times(1)).destroy(eq("moodcafe/stores/store-123/img-abc"), anyMap());
     }
+
+    @Test
+    @DisplayName("uploadImages - returns empty list when files list is null or empty")
+    void uploadImages_NullOrEmptyList_ReturnsEmptyList() {
+        assertThat(cloudinaryService.uploadImages(null, "general")).isEmpty();
+        assertThat(cloudinaryService.uploadImages(Collections.emptyList(), "general")).isEmpty();
+    }
+
+
+    @Test
+    @DisplayName("uploadImages - throws exception if any file is invalid before upload")
+    void uploadImages_ContainsInvalidFile_ThrowsException() {
+        MockMultipartFile validFile = new MockMultipartFile("files", "img1.jpg", "image/jpeg", "content".getBytes());
+        MockMultipartFile invalidFile = new MockMultipartFile("files", "doc.pdf", "application/pdf", "content".getBytes());
+
+        assertThatThrownBy(() -> cloudinaryService.uploadImages(List.of(validFile, invalidFile), "general"))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FILE_TYPE_INVALID);
+
+        verifyNoInteractions(cloudinary);
+    }
+
+    @Test
+    @DisplayName("uploadImages - success uploads all images and preserves order")
+    void uploadImages_Success() throws IOException {
+        MockMultipartFile file1 = new MockMultipartFile("files", "img1.jpg", "image/jpeg", "image 1".getBytes());
+        MockMultipartFile file2 = new MockMultipartFile("files", "img2.png", "image/png", "image 2".getBytes());
+
+        when(cloudinary.uploader()).thenReturn(uploader);
+        when(uploader.upload(any(byte[].class), anyMap())).thenAnswer(invocation -> {
+            byte[] bytes = invocation.getArgument(0);
+            String name = new String(bytes);
+            return Map.of(
+                    "secure_url", "https://res.cloudinary.com/demo/image/upload/" + name + ".jpg",
+                    "public_id", "moodcafe/" + name,
+                    "format", "jpg",
+                    "bytes", (long) bytes.length
+            );
+        });
+
+        List<UploadImageResponse> responses = cloudinaryService.uploadImages(List.of(file1, file2), "stores");
+
+        assertThat(responses).hasSize(2);
+        assertThat(responses.get(0).getImageUrl()).contains("image 1.jpg");
+        assertThat(responses.get(1).getImageUrl()).contains("image 2.jpg");
+    }
 }
+

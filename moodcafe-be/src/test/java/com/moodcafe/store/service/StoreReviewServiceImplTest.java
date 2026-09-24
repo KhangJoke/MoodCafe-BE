@@ -10,7 +10,9 @@ import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
+import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.repository.TagRatingRepository;
+
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
 import com.moodcafe.store.dto.request.ReviewTagRatingRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
@@ -65,7 +67,10 @@ class StoreReviewServiceImplTest {
     @Mock
     private StoreTagRepository storeTagRepository;
     @Mock
+    private StoreStaffRepository storeStaffRepository;
+    @Mock
     private ObjectMapper objectMapper;
+
 
     @InjectMocks
     private StoreReviewServiceImpl storeReviewService;

@@ -350,9 +350,9 @@ public class StoreServiceImpl implements StoreService {
     @Transactional(readOnly = true)
     public StoreRegistrationStatusResponse getMyRegistration() {
         User currentUser = currentUserService.getCurrentUser();
-        StoreStaff staff = storeStaffRepository.findFirstByUserUserIdAndStoreRoleNameOrderByJoinedAtDesc(currentUser.getUserId(), "OWNER")
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Bạn chưa đăng ký quán nào"));
-        return toStoreRegistrationStatusResponse(staff.getStore());
+        return storeStaffRepository.findFirstByUserUserIdAndStoreRoleNameOrderByJoinedAtDesc(currentUser.getUserId(), "OWNER")
+                .map(staff -> toStoreRegistrationStatusResponse(staff.getStore()))
+                .orElse(null);
     }
 
     @Override

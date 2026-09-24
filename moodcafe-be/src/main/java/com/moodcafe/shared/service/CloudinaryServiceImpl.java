@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -33,6 +34,26 @@ public class CloudinaryServiceImpl implements FileStorageService {
 
     @Override
     public UploadImageResponse uploadImage(MultipartFile file, String folder) {
+        validateFile(file);
+        return uploadImageDirect(file, folder);
+    }
+
+    @Override
+    public List<UploadImageResponse> uploadImages(List<MultipartFile> files, String folder) {
+        if (files == null || files.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        for (MultipartFile file : files) {
+            validateFile(file);
+        }
+
+        return files.parallelStream()
+                .map(file -> uploadImageDirect(file, folder))
+                .toList();
+    }
+
+    private void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new AppException(ErrorCode.FILE_EMPTY);
         }
@@ -45,7 +66,9 @@ public class CloudinaryServiceImpl implements FileStorageService {
         if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
             throw new AppException(ErrorCode.FILE_TYPE_INVALID);
         }
+    }
 
+    private UploadImageResponse uploadImageDirect(MultipartFile file, String folder) {
         try {
             String targetFolder = (folder != null && !folder.isBlank()) ? "moodcafe/" + folder : "moodcafe/general";
 

@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -127,6 +128,20 @@ public class GlobalExceptionHandler {
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Cơ sở dữ liệu tạm thời gián đoạn kết nối, vui lòng thử lại sau!",
                 ErrorCode.DATABASE_CONNECTION_ERROR,
+                request.getRequestURI()
+        );
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Upload file size exceeded for request {}: {}", request.getRequestURI(), ex.getMessage());
+        return buildError(
+                HttpStatus.PAYLOAD_TOO_LARGE,
+                "Dung lượng tệp tải lên vượt quá giới hạn cho phép (tối đa 50MB)!",
+                ErrorCode.VALIDATION_ERROR,
                 request.getRequestURI()
         );
     }
