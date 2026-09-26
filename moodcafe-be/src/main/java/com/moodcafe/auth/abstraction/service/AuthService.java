@@ -12,7 +12,6 @@ import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.auth.response.ConfirmOtpResponse;
 import com.moodcafe.auth.dto.auth.response.EmailActionResponse;
 import com.moodcafe.auth.dto.user.request.ChangePasswordRequest;
-import com.moodcafe.auth.dto.user.response.UserResponse;
 
 public interface AuthService {
 

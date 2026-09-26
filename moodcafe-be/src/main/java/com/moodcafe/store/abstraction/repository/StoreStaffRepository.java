@@ -23,5 +23,7 @@ public interface StoreStaffRepository extends JpaRepository<StoreStaff, UUID> {
 
     boolean existsByStoreStoreIdAndUserUserId(UUID storeId, UUID userId);
 
+    long countByUserUserIdAndStoreRoleName(UUID userId, String roleName);
+
     void deleteByStoreStoreIdAndUserUserId(UUID storeId, UUID userId);
 }

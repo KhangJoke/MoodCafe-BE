@@ -4,6 +4,7 @@ import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
 import com.moodcafe.store.dto.request.MerchantReplyReviewRequest;
 import com.moodcafe.store.dto.request.ReportReviewRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
+import com.moodcafe.store.dto.response.MerchantReviewStatsResponse;
 import com.moodcafe.store.dto.response.ReviewReportResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
@@ -22,6 +23,12 @@ public interface StoreReviewService {
 
     Page<StoreReviewResponse> getStoreReviews(UUID storeId, Pageable pageable);
 
+    Page<StoreReviewResponse> getStoreReviews(UUID storeId, Integer rating, String replyStatus, String search, Pageable pageable);
+
+    Page<StoreReviewResponse> getMerchantReviews(UUID storeId, Integer rating, String replyStatus, String search, Pageable pageable);
+
+    MerchantReviewStatsResponse getMerchantReviewStats(UUID storeId);
+
     StoreReviewResponse getReviewById(UUID reviewId);
 
     StoreReviewSummaryResponse getStoreReviewSummary(UUID storeId);
@@ -29,6 +36,10 @@ public interface StoreReviewService {
     StoreReviewResponse getMyReviewForStore(UUID storeId);
 
     StoreReviewResponse replyToReview(UUID storeId, UUID reviewId, MerchantReplyReviewRequest request);
+
+    StoreReviewResponse updateReviewReply(UUID storeId, UUID reviewId, MerchantReplyReviewRequest request);
+
+    void deleteReviewReply(UUID storeId, UUID reviewId);
 
     ReviewReportResponse reportReview(UUID storeId, UUID reviewId, ReportReviewRequest request);
 

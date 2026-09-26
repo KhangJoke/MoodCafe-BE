@@ -16,6 +16,6 @@ import lombok.Setter;
 public class MerchantReplyReviewRequest {
 
     @NotBlank(message = "Nội dung phản hồi không được để trống")
-    @Size(max = 1000, message = "Phản hồi tối đa 1000 ký tự")
+    @Size(max = 500, message = "Phản hồi tối đa 500 ký tự")
     private String reply;
 }

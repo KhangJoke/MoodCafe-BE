@@ -15,6 +15,7 @@ import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
+import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
@@ -55,6 +56,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -149,7 +151,7 @@ class StoreServiceImplTest {
     }
 
     @Test
-    @DisplayName("searchStores - filters by keyword and district")
+    @DisplayName("searchStores - filters by keyword and ignores legacy district")
     void searchStores_FilterKeywordAndDistrict_Success() {
         when(storeRepository.findAllByStatus(StoreStatus.ACTIVE)).thenReturn(List.of(store1, store2));
         when(storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.APPROVED)).thenReturn(List.of());
@@ -157,7 +159,7 @@ class StoreServiceImplTest {
         when(storeReviewRepository.findOverallRatingAndCountGroupedByStore()).thenReturn(List.of());
         when(configurationService.getMatchScoreWeights()).thenReturn(MatchScoreWeights.builder().build());
 
-        // Search for "Shelter" in "District 1"
+        // Search for "Shelter" with legacy district parameter
         StoreSearchRequest request = StoreSearchRequest.builder()
                 .keyword("Shelter")
                 .district("District 1")
@@ -167,7 +169,7 @@ class StoreServiceImplTest {
 
         assertThat(response.getItems()).hasSize(1);
         assertThat(response.getItems().get(0).getName()).isEqualTo("The Shelter Coffee");
-        assertThat(response.getItems().get(0).getDistrict()).isEqualTo("Quận 1");
+        assertThat(response.getItems().get(0).getDistrict()).isNull();
     }
 
     @Test
@@ -344,5 +346,45 @@ class StoreServiceImplTest {
 
         assertThat(response).isNotNull();
         assertThat(store1.getStatus()).isEqualTo(StoreStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("updateStore - success when user is owner or manager")
+    void updateStore_Success_WithOwnerOrManager() {
+        UUID storeId = store1.getStoreId();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
+        when(storeRepository.save(store1)).thenReturn(store1);
+        when(storeMapper.toResponse(store1)).thenReturn(StoreResponse.builder().storeId(storeId).name("Updated Cafe").build());
+        when(storeImageRepository.findAllByStoreStoreId(storeId)).thenReturn(List.of());
+        when(storeTagRepository.findAllByStoreIdAndStatus(storeId, StoreTagStatus.APPROVED)).thenReturn(List.of());
+
+        UpdateStoreRequest req = UpdateStoreRequest.builder()
+                .name("Updated Cafe")
+                .description("Updated description")
+                .address("100 Le Loi, District 1, TP.HCM")
+                .district("Quận 1")
+                .imageUrls(List.of("https://example.com/new_img.jpg"))
+                .build();
+
+        StoreResponse response = storeService.updateStore(storeId, req);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getName()).isEqualTo("Updated Cafe");
+        verify(storeStaffService).requireStoreAccess(storeId, "OWNER", "MANAGER");
+        verify(storeImageRepository).deleteAll(any());
+        verify(storeImageRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("updateStore - throws STORE_NOT_FOUND when store does not exist")
+    void updateStore_NotFound_ThrowsException() {
+        UUID storeId = UUID.randomUUID();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.empty());
+
+        UpdateStoreRequest req = UpdateStoreRequest.builder().name("New Name").build();
+
+        assertThatThrownBy(() -> storeService.updateStore(storeId, req))
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.STORE_NOT_FOUND));
     }
 }

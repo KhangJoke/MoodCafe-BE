@@ -105,11 +105,13 @@ public class StoreServiceImpl implements StoreService {
     private final StoreReviewMapper storeReviewMapper;
     private final TagRatingRepository tagRatingRepository;
     private final VisitVerificationRepository visitVerificationRepository;
+    private final com.moodcafe.subscription.abstraction.service.SubscriptionService subscriptionService;
 
     @Override
     @Transactional
     public StoreResponse createStore(CreateStoreRequest request) {
         User currentUser = currentUserService.getCurrentUser();
+        subscriptionService.validateBranchLimit(currentUser.getUserId());
 
         Store store = storeMapper.toEntity(request);
         Long priceFrom = request.getPriceFrom();
@@ -148,6 +150,7 @@ public class StoreServiceImpl implements StoreService {
     @Transactional
     public StoreRegistrationStatusResponse registerStore(StoreRegisterRequest request) {
         User currentUser = currentUserService.getCurrentUser();
+        subscriptionService.validateBranchLimit(currentUser.getUserId());
 
         if (request.getTags() == null || request.getTags().isEmpty()) {
             throw new AppException(ErrorCode.STORE_TAG_REQUIRED);
@@ -181,7 +184,6 @@ public class StoreServiceImpl implements StoreService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .address(request.getAddress())
-                .district(request.getDistrict())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
                 .openingTime(request.getOpeningTime())
@@ -276,7 +278,6 @@ public class StoreServiceImpl implements StoreService {
         store.setName(request.getName());
         store.setDescription(request.getDescription());
         store.setAddress(request.getAddress());
-        store.setDistrict(request.getDistrict());
         store.setLatitude(request.getLatitude());
         store.setLongitude(request.getLongitude());
         store.setOpeningTime(request.getOpeningTime());
@@ -406,7 +407,6 @@ public class StoreServiceImpl implements StoreService {
                 .storeId(store.getStoreId())
                 .name(store.getName())
                 .address(store.getAddress())
-                .district(store.getDistrict())
                 .status(store.getStatus())
                 .coverImageUrl(coverImageUrl)
                 .latitude(store.getLatitude())
@@ -512,7 +512,29 @@ public class StoreServiceImpl implements StoreService {
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
         storeMapper.updateEntity(request, store);
+
         store = storeRepository.save(store);
+
+        // Update images if provided
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            List<StoreImage> oldImages = storeImageRepository.findAllByStoreStoreId(storeId);
+            storeImageRepository.deleteAll(oldImages);
+            storeImageRepository.flush();
+
+            boolean first = true;
+            for (String url : request.getImageUrls()) {
+                if (url != null && !url.isBlank()) {
+                    StoreImage img = StoreImage.builder()
+                            .store(store)
+                            .imageUrl(url.trim())
+                            .primary(first)
+                            .build();
+                    storeImageRepository.save(img);
+                    first = false;
+                }
+            }
+            storeImageRepository.flush();
+        }
 
         return toStoreResponse(store);
     }
@@ -573,20 +595,6 @@ public class StoreServiceImpl implements StoreService {
         String keyword = (request.getKeyword() != null && !request.getKeyword().isBlank())
                 ? request.getKeyword().trim().toLowerCase()
                 : null;
-        List<String> targetDistricts = new ArrayList<>();
-        if (request.getDistricts() != null && !request.getDistricts().isEmpty()) {
-            for (String d : request.getDistricts()) {
-                if (d != null && !d.isBlank() && !d.equalsIgnoreCase("all") && !d.equalsIgnoreCase("tất cả khu vực")) {
-                    targetDistricts.add(d.trim().toLowerCase());
-                }
-            }
-        }
-        if (request.getDistrict() != null && !request.getDistrict().isBlank() && !request.getDistrict().equalsIgnoreCase("all") && !request.getDistrict().equalsIgnoreCase("tất cả khu vực")) {
-            String singleD = request.getDistrict().trim().toLowerCase();
-            if (!targetDistricts.contains(singleD)) {
-                targetDistricts.add(singleD);
-            }
-        }
         Long priceFrom = request.getPriceFrom();
         Long priceTo = request.getPriceTo();
         boolean openNow = Boolean.TRUE.equals(request.getOpenNow());
@@ -660,20 +668,7 @@ public class StoreServiceImpl implements StoreService {
             UUID storeId = store.getStoreId();
             List<StoreTag> tags = storeTagsMap.getOrDefault(storeId, Collections.emptyList());
 
-            // 1. Filter district (if not specified or "all", match all districts)
-            if (!targetDistricts.isEmpty()) {
-                String storeDist = store.getDistrict() != null ? store.getDistrict().toLowerCase() : "";
-                String address = store.getAddress() != null ? store.getAddress().toLowerCase() : "";
-                String extracted = extractDistrictFromAddress(store.getAddress()).toLowerCase();
-                boolean matchesAny = targetDistricts.stream().anyMatch(
-                        d -> storeDist.contains(d) || address.contains(d) || extracted.contains(d)
-                );
-                if (!matchesAny) {
-                    continue;
-                }
-            }
-
-            // 2. Filter price
+            // 1. Filter price
             if (!matchesPrice(priceFrom, priceTo, store)) {
                 continue;
             }
@@ -788,7 +783,6 @@ public class StoreServiceImpl implements StoreService {
                     .name(store.getName())
                     .description(store.getDescription())
                     .address(store.getAddress())
-                    .district(store.getDistrict() != null && !store.getDistrict().isBlank() ? store.getDistrict() : extractDistrictFromAddress(store.getAddress()))
                     .latitude(store.getLatitude())
                     .longitude(store.getLongitude())
                     .priceFrom(store.getPriceFrom())
@@ -978,19 +972,6 @@ public class StoreServiceImpl implements StoreService {
                         .orElse("https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?q=80&w=800&auto=format&fit=crop"));
     }
 
-    private String extractDistrictFromAddress(String address) {
-        if (address == null || address.isBlank()) return "TP.HCM";
-        String lower = address.toLowerCase();
-        if (lower.contains("quận 1") || lower.contains("district 1")) return "Quận 1";
-        if (lower.contains("quận 2") || lower.contains("district 2") || lower.contains("thảo điền") || lower.contains("thao dien")) return "Thảo Điền, TP. Thủ Đức";
-        if (lower.contains("quận 3") || lower.contains("district 3")) return "Quận 3";
-        if (lower.contains("bình thạnh") || lower.contains("binh thanh")) return "Bình Thạnh";
-        if (lower.contains("phú nhuận") || lower.contains("phu nhuan")) return "Phú Nhuận";
-        if (lower.contains("thủ đức") || lower.contains("thu duc")) return "TP. Thủ Đức";
-        if (lower.contains("tân bình") || lower.contains("tan binh")) return "Tân Bình";
-        if (lower.contains("quận 7") || lower.contains("district 7")) return "Quận 7";
-        return address.split(",")[0].trim();
-    }
 
     private StoreResponse toStoreResponse(Store store) {
         StoreResponse response = storeMapper.toResponse(store);
@@ -1031,7 +1012,6 @@ public class StoreServiceImpl implements StoreService {
                 .name(store.getName())
                 .description(store.getDescription())
                 .address(store.getAddress())
-                .district(store.getDistrict())
                 .latitude(store.getLatitude())
                 .longitude(store.getLongitude())
                 .openingTime(store.getOpeningTime())
@@ -1369,15 +1349,6 @@ public class StoreServiceImpl implements StoreService {
     @Override
     @Transactional(readOnly = true)
     public List<String> getActiveDistricts() {
-        List<Store> activeStores = storeRepository.findAllByStatus(StoreStatus.ACTIVE);
-        Set<String> districts = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-        for (Store s : activeStores) {
-            if (s.getDistrict() != null && !s.getDistrict().isBlank()) {
-                districts.add(s.getDistrict().trim());
-            } else if (s.getAddress() != null && !s.getAddress().isBlank()) {
-                districts.add(extractDistrictFromAddress(s.getAddress()));
-            }
-        }
-        return new ArrayList<>(districts);
+        return Collections.emptyList();
     }
 }

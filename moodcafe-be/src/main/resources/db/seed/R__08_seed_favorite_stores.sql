@@ -12,4 +12,4 @@ WHERE (
     (u.email = 'customer4@moodcafe.com' AND s.name IN ('The Green Haven Garden', 'Mây Concept Rooftop Cafe', 'The Oasis Botanical Cafe')) OR
     (u.email = 'customer5@moodcafe.com' AND s.name IN ('Yên Cà Phê Mộc & Sách', 'Cỏ Mềm Garden & Tea'))
 )
-ON CONFLICT (user_id, store_id) DO NOTHING;
+ON CONFLICT (user_id, store_id) WHERE is_deleted = FALSE DO NOTHING;

@@ -9,7 +9,7 @@ VALUES
     ('PURPOSE', 'Mục đích sử dụng', 'OWNER_REQUEST', 'TAG_LIST', 2, TRUE),
     ('VIBE', 'Vibe & Phong cách', 'OWNER_REQUEST', 'TAG_LIST', 3, TRUE),
     ('AMENITY', 'Tiện ích quán', 'OWNER_REQUEST', 'TAG_LIST', 4, TRUE)
-ON CONFLICT (code) DO UPDATE 
+ON CONFLICT (code) WHERE is_deleted = FALSE DO UPDATE 
 SET name = EXCLUDED.name, 
     approval_mode = EXCLUDED.approval_mode,
     control_type = EXCLUDED.control_type,
@@ -28,7 +28,7 @@ CROSS JOIN (VALUES
     ('Sôi động', 'Âm nhạc năng động, tụ tập rôm rả, năng lượng cao', 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749502/moodcafe/tags/noise_lively.jpg', 5)
 ) AS t(name, description, image_url, scale_value)
 WHERE tc.code = 'NOISE'
-ON CONFLICT (name) DO UPDATE 
+ON CONFLICT (name) WHERE is_deleted = FALSE DO UPDATE 
 SET image_url = EXCLUDED.image_url, description = EXCLUDED.description, scale_value = EXCLUDED.scale_value, is_active = TRUE;
 
 -- 3. Insert 15 VIBE Tags
@@ -53,7 +53,7 @@ CROSS JOIN (VALUES
     ('Năng động & Trẻ trung', 'Màu sắc tươi vui, nhịp sống hiện đại, tràn đầy sức sống', 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749451/moodcafe/tags/vibe_energetic.jpg')
 ) AS t(name, description, image_url)
 WHERE tc.code = 'VIBE'
-ON CONFLICT (name) DO UPDATE 
+ON CONFLICT (name) WHERE is_deleted = FALSE DO UPDATE 
 SET image_url = EXCLUDED.image_url, description = EXCLUDED.description, is_active = TRUE;
 
 -- 4. Insert 15 PURPOSE Tags
@@ -78,7 +78,7 @@ CROSS JOIN (VALUES
     ('Ăn nhẹ & Uống trà', 'Menu đồ uống thanh vị kèm bánh ngọt thơm ngon', 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749476/moodcafe/tags/purpose_tea_pastry.jpg')
 ) AS t(name, description, image_url)
 WHERE tc.code = 'PURPOSE'
-ON CONFLICT (name) DO UPDATE 
+ON CONFLICT (name) WHERE is_deleted = FALSE DO UPDATE 
 SET image_url = EXCLUDED.image_url, description = EXCLUDED.description, is_active = TRUE;
 
 -- 5. Insert 15 AMENITY Tags (Ngắn gọn, chung chung)
@@ -103,5 +103,5 @@ CROSS JOIN (VALUES
     ('Nhà vệ sinh riêng', 'Khu vực vệ sinh sạch sẽ, riêng tư', 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749495/moodcafe/tags/amenity_private_restroom.jpg')
 ) AS t(name, description, image_url)
 WHERE tc.code = 'AMENITY'
-ON CONFLICT (name) DO UPDATE 
+ON CONFLICT (name) WHERE is_deleted = FALSE DO UPDATE 
 SET image_url = EXCLUDED.image_url, description = EXCLUDED.description, is_active = TRUE;

@@ -133,6 +133,7 @@ public class StoreController {
     }
 
     @PutMapping("/{storeId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreResponse>> updateStore(
             @PathVariable UUID storeId,
             @Valid @RequestBody UpdateStoreRequest request) {

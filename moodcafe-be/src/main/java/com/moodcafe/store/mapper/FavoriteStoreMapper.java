@@ -12,7 +12,7 @@ public interface FavoriteStoreMapper {
     @Mapping(source = "store.storeId", target = "storeId")
     @Mapping(source = "store.name", target = "storeName")
     @Mapping(source = "store.address", target = "storeAddress")
-    @Mapping(source = "store.district", target = "district")
+    @Mapping(target = "district", ignore = true)
     @Mapping(source = "store.priceFrom", target = "priceFrom")
     @Mapping(source = "store.priceTo", target = "priceTo")
     @Mapping(source = "store.openingTime", target = "openingTime")

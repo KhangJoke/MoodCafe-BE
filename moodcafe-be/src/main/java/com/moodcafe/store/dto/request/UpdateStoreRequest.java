@@ -10,6 +10,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -48,4 +49,6 @@ public class UpdateStoreRequest {
     @Email(message = "Invalid email format")
     @Size(max = 255, message = "Email cannot exceed 255 characters")
     private String email;
+
+    private List<String> imageUrls;
 }

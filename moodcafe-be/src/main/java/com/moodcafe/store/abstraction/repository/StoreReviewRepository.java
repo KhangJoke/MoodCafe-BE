@@ -4,6 +4,7 @@ import com.moodcafe.store.entity.StoreReview;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -13,7 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface StoreReviewRepository extends JpaRepository<StoreReview, UUID> {
+public interface StoreReviewRepository extends JpaRepository<StoreReview, UUID>, JpaSpecificationExecutor<StoreReview> {
 
     Page<StoreReview> findAllByStoreStoreIdOrderByCreatedAtDesc(UUID storeId, Pageable pageable);
 
@@ -31,6 +32,15 @@ public interface StoreReviewRepository extends JpaRepository<StoreReview, UUID> 
     Optional<StoreReview> findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(UUID storeId, UUID userId);
 
     long countByStoreStoreId(UUID storeId);
+
+    @Query("SELECT COUNT(r) FROM StoreReview r WHERE r.store.storeId = :storeId AND r.merchantReply IS NOT NULL AND TRIM(r.merchantReply) != ''")
+    long countRepliedByStoreId(@Param("storeId") UUID storeId);
+
+    @Query("SELECT COUNT(r) FROM StoreReview r WHERE r.store.storeId = :storeId AND (r.merchantReply IS NULL OR TRIM(r.merchantReply) = '')")
+    long countUnrepliedByStoreId(@Param("storeId") UUID storeId);
+
+    @Query("SELECT FLOOR(r.overallRating), COUNT(r) FROM StoreReview r WHERE r.store.storeId = :storeId GROUP BY FLOOR(r.overallRating)")
+    List<Object[]> countByRatingGroupedByStoreId(@Param("storeId") UUID storeId);
 
     @Query("SELECT AVG(r.overallRating), AVG(r.quietnessRating), AVG(r.lightingRating), AVG(r.seatingRating), AVG(r.outletRating), COUNT(r) " +
            "FROM StoreReview r WHERE r.store.storeId = :storeId")

@@ -86,6 +86,20 @@ public enum ErrorCode {
     VISIT_VERIFICATION_STORE_MISMATCH(HttpStatus.BAD_REQUEST, "Xác thực ghé thăm không thuộc về quán này"),
     VISIT_VERIFICATION_USER_MISMATCH(HttpStatus.FORBIDDEN, "Xác thực ghé thăm không thuộc về tài khoản của bạn"),
     SURVEY_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "Khảo sát cho lần ghé thăm này đã được hoàn thành"),
+    // Subscription & Payment
+    SUBSCRIPTION_PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy gói dịch vụ"),
+    USER_SUBSCRIPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy thông tin gói dịch vụ của người dùng"),
+    ACTIVE_SUBSCRIPTION_EXISTS(HttpStatus.CONFLICT, "Tài khoản hiện đang có gói dịch vụ đang hoạt động"),
+    SUBSCRIPTION_PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy giao dịch thanh toán gói dịch vụ"),
+    PAYMENT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, "Giao dịch thanh toán này đã được xử lý trước đó"),
+    INVALID_PAYMENT_METHOD(HttpStatus.BAD_REQUEST, "Phương thức thanh toán không hợp lệ"),
+    MAX_BRANCH_LIMIT_EXCEEDED(HttpStatus.FORBIDDEN, "Số lượng chi nhánh đã đạt giới hạn tối đa của gói dịch vụ. Vui lòng nâng cấp gói để thêm chi nhánh mới."),
+    // Sponsored Listing
+    SPONSORED_LISTING_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy chiến dịch quảng bá"),
+    SPONSORED_LISTING_NOT_ALLOWED(HttpStatus.FORBIDDEN, "Tài khoản của bạn hiện ở gói Basic. Vui lòng nâng cấp lên gói PRO hoặc PREMIUM để mở khóa tương tác đăng ký các vị trí quảng bá"),
+    SPONSORED_LISTING_CANNOT_CANCEL(HttpStatus.BAD_REQUEST, "Chỉ có thể hủy chiến dịch ở trạng thái chờ duyệt hoặc đang chạy"),
+    SPONSORED_FREE_QUOTA_EXCEEDED(HttpStatus.BAD_REQUEST, "Bạn đã sử dụng hết lượt tài trợ miễn phí 7 ngày trong tháng này"),
+    INVALID_SPONSORED_DATES(HttpStatus.BAD_REQUEST, "Ngày bắt đầu chiến dịch quảng bá không hợp lệ"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 5MB limit"),

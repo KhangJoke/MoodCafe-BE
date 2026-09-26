@@ -127,7 +127,17 @@ public class SecurityConfig {
                                 "/api/stores/*/reviews/**",
                                 "/api/stores/reviews/*",
                                 "/api/tags",
-                                "/api/tags/*"
+                                "/api/tags/*",
+                                "/api/subscriptions/plans",
+                                "/api/sponsored/placements/**"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/sponsored/campaigns/*/impression",
+                                "/api/sponsored/campaigns/*/click",
+                                "/api/subscriptions/payments/*/confirm",
+                                "/api/sponsored/campaigns/*/confirm"
                         ).permitAll()
 
                         .anyRequest()

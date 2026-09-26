@@ -19,9 +19,15 @@ import com.moodcafe.store.dto.request.MerchantReplyReviewRequest;
 import com.moodcafe.store.dto.request.ReportReviewRequest;
 import com.moodcafe.store.dto.request.ReviewTagRatingRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
+import com.moodcafe.store.dto.response.MerchantReviewStatsResponse;
 import com.moodcafe.store.dto.response.ReviewReportResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
+import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.jpa.domain.Specification;
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 import com.moodcafe.store.entity.ReviewImage;
 import com.moodcafe.store.entity.ReviewReport;
 import com.moodcafe.store.entity.Store;
@@ -279,12 +285,110 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     @Override
     @Transactional(readOnly = true)
     public Page<StoreReviewResponse> getStoreReviews(UUID storeId, Pageable pageable) {
+        return getStoreReviews(storeId, null, null, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StoreReviewResponse> getStoreReviews(UUID storeId, Integer rating, String replyStatus, String search, Pageable pageable) {
         if (!storeRepository.existsById(storeId)) {
             throw new AppException(ErrorCode.STORE_NOT_FOUND);
         }
 
-        return storeReviewRepository.findAllByStoreStoreIdOrderByCreatedAtDesc(storeId, pageable)
-                .map(storeReviewMapper::toResponse);
+        Specification<StoreReview> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("store").get("storeId"), storeId));
+
+            if (rating != null && rating >= 1 && rating <= 5) {
+                if (rating == 5) {
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("overallRating"), new BigDecimal("4.5")));
+                } else {
+                    BigDecimal minR = BigDecimal.valueOf(rating);
+                    BigDecimal maxR = BigDecimal.valueOf(rating + 1);
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("overallRating"), minR));
+                    predicates.add(cb.lessThan(root.get("overallRating"), maxR));
+                }
+            }
+
+            if (replyStatus != null && !replyStatus.isBlank() && !"ALL".equalsIgnoreCase(replyStatus)) {
+                if ("REPLIED".equalsIgnoreCase(replyStatus)) {
+                    predicates.add(cb.and(
+                            cb.isNotNull(root.get("merchantReply")),
+                            cb.notEqual(cb.trim(root.get("merchantReply")), "")
+                    ));
+                } else if ("NOT_REPLIED".equalsIgnoreCase(replyStatus)) {
+                    predicates.add(cb.or(
+                            cb.isNull(root.get("merchantReply")),
+                            cb.equal(cb.trim(root.get("merchantReply")), "")
+                    ));
+                }
+            }
+
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.trim().toLowerCase() + "%";
+                Predicate fullNameMatch = cb.like(cb.lower(root.get("user").get("fullName")), pattern);
+                Predicate contentMatch = cb.like(cb.lower(root.get("content")), pattern);
+                predicates.add(cb.or(fullNameMatch, contentMatch));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return storeReviewRepository.findAll(spec, pageable).map(storeReviewMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StoreReviewResponse> getMerchantReviews(UUID storeId, Integer rating, String replyStatus, String search, Pageable pageable) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        return getStoreReviews(storeId, rating, replyStatus, search, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MerchantReviewStatsResponse getMerchantReviewStats(UUID storeId) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        if (!storeRepository.existsById(storeId)) {
+            throw new AppException(ErrorCode.STORE_NOT_FOUND);
+        }
+
+        long totalReviews = storeReviewRepository.countByStoreStoreId(storeId);
+        long repliedCount = storeReviewRepository.countRepliedByStoreId(storeId);
+        long unrepliedCount = storeReviewRepository.countUnrepliedByStoreId(storeId);
+
+        List<Object[]> summary = storeReviewRepository.getReviewSummaryByStoreId(storeId);
+        double averageRating = 0.0;
+        if (summary != null && !summary.isEmpty() && summary.get(0)[0] != null) {
+            averageRating = roundToOneDecimal(((Number) summary.get(0)[0]).doubleValue());
+        }
+
+        Map<Integer, Long> starCounts = new HashMap<>();
+        for (int i = 1; i <= 5; i++) {
+            starCounts.put(i, 0L);
+        }
+
+        List<Object[]> ratingGroups = storeReviewRepository.countByRatingGroupedByStoreId(storeId);
+        if (ratingGroups != null) {
+            for (Object[] row : ratingGroups) {
+                if (row[0] != null && row[1] != null) {
+                    int star = ((Number) row[0]).intValue();
+                    long count = ((Number) row[1]).longValue();
+                    if (star >= 1 && star <= 5) {
+                        starCounts.put(star, count);
+                    }
+                }
+            }
+        }
+
+        return MerchantReviewStatsResponse.builder()
+                .storeId(storeId)
+                .totalReviews(totalReviews)
+                .averageRating(averageRating)
+                .repliedCount(repliedCount)
+                .unrepliedCount(unrepliedCount)
+                .starCounts(starCounts)
+                .build();
     }
 
     @Override
@@ -374,6 +478,29 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         review = storeReviewRepository.save(review);
 
         return storeReviewMapper.toResponse(review);
+    }
+
+    @Override
+    @Transactional
+    public StoreReviewResponse updateReviewReply(UUID storeId, UUID reviewId, MerchantReplyReviewRequest request) {
+        return replyToReview(storeId, reviewId, request);
+    }
+
+    @Override
+    @Transactional
+    public void deleteReviewReply(UUID storeId, UUID reviewId) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        StoreReview review = storeReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
+
+        if (!review.getStore().getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Đánh giá không thuộc về quán này");
+        }
+
+        review.setMerchantReply(null);
+        review.setReplyAt(null);
+        storeReviewRepository.save(review);
     }
 
     @Override

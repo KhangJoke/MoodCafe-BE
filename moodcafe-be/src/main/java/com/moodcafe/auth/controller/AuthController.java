@@ -13,7 +13,6 @@ import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
 import com.moodcafe.auth.dto.auth.response.AuthResponse;
 import com.moodcafe.auth.dto.auth.response.ConfirmOtpResponse;
 import com.moodcafe.auth.dto.auth.response.EmailActionResponse;
-import com.moodcafe.auth.dto.user.response.UserResponse;
 import com.moodcafe.auth.util.CookieUtils;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
@@ -35,198 +34,170 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService authService;
-    private final CookieUtils cookieUtils;
+        private final AuthService authService;
+        private final CookieUtils cookieUtils;
 
-    @PostMapping("/register")
-    public ResponseEntity<ApiResponse<EmailActionResponse>> register(
-            @Valid @RequestBody RegisterRequest request
-    ) {
-        EmailActionResponse response = authService.register(request);
+        @PostMapping("/register")
+        public ResponseEntity<ApiResponse<EmailActionResponse>> register(
+                        @Valid @RequestBody RegisterRequest request) {
+                EmailActionResponse response = authService.register(request);
 
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        response,
-                        response.getMessage()
-                )
-        );
-    }
-
-    @PostMapping("/confirm-otp")
-    public ResponseEntity<ApiResponse<ConfirmOtpResponse>> confirmOtp(
-            @Valid @RequestBody ConfirmOtpRequest request,
-            @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
-            HttpServletResponse response
-    ) {
-        ConfirmOtpResponse confirmResponse = authService.confirmOtp(request);
-        handleRefreshTokenCookie(response, confirmResponse, cookiesEnabled);
-
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        confirmResponse,
-                        confirmResponse.getMessage()
-                )
-        );
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(
-            @Valid @RequestBody LoginRequest request,
-            @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
-            HttpServletResponse response
-    ) {
-        AuthResponse authResponse = authService.login(request);
-        handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
-
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        authResponse,
-                        "Login successfully"
-                )
-        );
-    }
-
-    @PostMapping("/social-login")
-    public ResponseEntity<ApiResponse<AuthResponse>> socialLogin(
-            @Valid @RequestBody SocialLoginRequest request,
-            @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
-            HttpServletResponse response
-    ) {
-        AuthResponse authResponse = authService.socialLogin(request);
-        handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
-
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        authResponse,
-                        "Social login successfully"
-                )
-        );
-    }
-
-    @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<AuthResponse>> refresh(
-            @CookieValue(value = "refreshToken", required = false) String cookieRefreshToken,
-            @RequestBody(required = false) RefreshTokenRequest request,
-            @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
-            HttpServletResponse response
-    ) {
-        String tokenStr = (cookieRefreshToken != null && !cookieRefreshToken.isBlank())
-                ? cookieRefreshToken
-                : (request != null ? request.getRefreshToken() : null);
-
-        if (tokenStr == null || tokenStr.isBlank()) {
-            throw new AppException(ErrorCode.INVALID_INPUT, "Refresh token is required");
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                response,
+                                                response.getMessage()));
         }
 
-        RefreshTokenRequest refreshRequest = new RefreshTokenRequest();
-        refreshRequest.setRefreshToken(tokenStr);
+        @PostMapping("/confirm-otp")
+        public ResponseEntity<ApiResponse<ConfirmOtpResponse>> confirmOtp(
+                        @Valid @RequestBody ConfirmOtpRequest request,
+                        @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        HttpServletResponse response) {
+                ConfirmOtpResponse confirmResponse = authService.confirmOtp(request);
+                handleRefreshTokenCookie(response, confirmResponse, cookiesEnabled);
 
-        AuthResponse authResponse = authService.refresh(refreshRequest);
-        handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
-
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        authResponse,
-                        "Refresh token successfully"
-                )
-        );
-    }
-
-    @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(
-            @CookieValue(value = "refreshToken", required = false) String cookieRefreshToken,
-            @RequestBody(required = false) RefreshTokenRequest request,
-            HttpServletResponse response
-    ) {
-        String tokenStr = (cookieRefreshToken != null && !cookieRefreshToken.isBlank())
-                ? cookieRefreshToken
-                : (request != null ? request.getRefreshToken() : null);
-
-        if (tokenStr != null && !tokenStr.isBlank()) {
-            authService.logout(tokenStr);
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                confirmResponse,
+                                                confirmResponse.getMessage()));
         }
 
-        cookieUtils.clearRefreshTokenCookie(response);
+        @PostMapping("/login")
+        public ResponseEntity<ApiResponse<AuthResponse>> login(
+                        @Valid @RequestBody LoginRequest request,
+                        @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        HttpServletResponse response) {
+                AuthResponse authResponse = authService.login(request);
+                handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
 
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        null,
-                        "Logout successfully"
-                )
-        );
-    }
-
-    private void handleRefreshTokenCookie(HttpServletResponse response, AuthResponse authResponse, String cookiesEnabled) {
-        if ("true".equalsIgnoreCase(cookiesEnabled)) {
-            if (authResponse != null && authResponse.getRefreshToken() != null) {
-                cookieUtils.setRefreshTokenCookie(response, authResponse.getRefreshToken());
-                authResponse.setRefreshToken(null);
-            }
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                authResponse,
+                                                "Login successfully"));
         }
-    }
 
-    private void handleRefreshTokenCookie(HttpServletResponse response, ConfirmOtpResponse confirmResponse, String cookiesEnabled) {
-        if ("true".equalsIgnoreCase(cookiesEnabled)) {
-            if (confirmResponse != null && confirmResponse.getRefreshToken() != null) {
-                cookieUtils.setRefreshTokenCookie(response, confirmResponse.getRefreshToken());
-                confirmResponse.setRefreshToken(null);
-            }
+        @PostMapping("/social-login")
+        public ResponseEntity<ApiResponse<AuthResponse>> socialLogin(
+                        @Valid @RequestBody SocialLoginRequest request,
+                        @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        HttpServletResponse response) {
+                AuthResponse authResponse = authService.socialLogin(request);
+                handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
+
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                authResponse,
+                                                "Social login successfully"));
         }
-    }
 
-    @PostMapping("/send-otp")
-    public ResponseEntity<ApiResponse<Void>> sendOtp(
-            @Valid @RequestBody SendOtpRequest request
-    ) {
-        authService.sendOtp(request);
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        null,
-                        "OTP has been sent to " + request.getEmail()
-                )
-        );
-    }
+        @PostMapping("/refresh")
+        public ResponseEntity<ApiResponse<AuthResponse>> refresh(
+                        @CookieValue(value = "refreshToken", required = false) String cookieRefreshToken,
+                        @RequestBody(required = false) RefreshTokenRequest request,
+                        @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        HttpServletResponse response) {
+                String tokenStr = (cookieRefreshToken != null && !cookieRefreshToken.isBlank())
+                                ? cookieRefreshToken
+                                : (request != null ? request.getRefreshToken() : null);
 
-    @PostMapping("/reset-password")
-    public ResponseEntity<ApiResponse<Void>> resetPassword(
-            @Valid @RequestBody ResetPasswordRequest request
-    ) {
-        authService.resetPassword(request);
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        null,
-                        "Password has been reset successfully"
-                )
-        );
-    }
+                if (tokenStr == null || tokenStr.isBlank()) {
+                        throw new AppException(ErrorCode.INVALID_INPUT, "Refresh token is required");
+                }
 
-    @PutMapping("/change-password")
-    public ResponseEntity<ApiResponse<Void>> changePassword(
-            @Valid @RequestBody ChangePasswordRequest request
-    ) {
-        authService.changePassword(request);
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        null,
-                        "Đổi mật khẩu thành công"
-                )
-        );
-    }
+                RefreshTokenRequest refreshRequest = new RefreshTokenRequest();
+                refreshRequest.setRefreshToken(tokenStr);
 
-    @PostMapping("/setup-password")
-    public ResponseEntity<ApiResponse<AuthResponse>> setupPassword(
-            @Valid @RequestBody SetupPasswordRequest request,
-            @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
-            HttpServletResponse response
-    ) {
-        AuthResponse authResponse = authService.setupPassword(request);
-        handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
+                AuthResponse authResponse = authService.refresh(refreshRequest);
+                handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
 
-        return ResponseEntity.ok(
-                ApiResponse.success(
-                        authResponse,
-                        "Thiết lập mật khẩu thành công"
-                )
-        );
-    }
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                authResponse,
+                                                "Refresh token successfully"));
+        }
+
+        @PostMapping("/logout")
+        public ResponseEntity<ApiResponse<Void>> logout(
+                        @CookieValue(value = "refreshToken", required = false) String cookieRefreshToken,
+                        @RequestBody(required = false) RefreshTokenRequest request,
+                        HttpServletResponse response) {
+                String tokenStr = (cookieRefreshToken != null && !cookieRefreshToken.isBlank())
+                                ? cookieRefreshToken
+                                : (request != null ? request.getRefreshToken() : null);
+
+                if (tokenStr != null && !tokenStr.isBlank()) {
+                        authService.logout(tokenStr);
+                }
+
+                cookieUtils.clearRefreshTokenCookie(response);
+
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                null,
+                                                "Logout successfully"));
+        }
+
+        private void handleRefreshTokenCookie(HttpServletResponse response, AuthResponse authResponse,
+                        String cookiesEnabled) {
+                if ("true".equalsIgnoreCase(cookiesEnabled)) {
+                        if (authResponse != null && authResponse.getRefreshToken() != null) {
+                                cookieUtils.setRefreshTokenCookie(response, authResponse.getRefreshToken());
+                                authResponse.setRefreshToken(null);
+                        }
+                }
+        }
+
+        private void handleRefreshTokenCookie(HttpServletResponse response, ConfirmOtpResponse confirmResponse,
+                        String cookiesEnabled) {
+                if ("true".equalsIgnoreCase(cookiesEnabled)) {
+                        if (confirmResponse != null && confirmResponse.getRefreshToken() != null) {
+                                cookieUtils.setRefreshTokenCookie(response, confirmResponse.getRefreshToken());
+                                confirmResponse.setRefreshToken(null);
+                        }
+                }
+        }
+
+        @PostMapping("/send-otp")
+        public ResponseEntity<ApiResponse<Void>> sendOtp(
+                        @Valid @RequestBody SendOtpRequest request) {
+                authService.sendOtp(request);
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                null,
+                                                "OTP has been sent to " + request.getEmail()));
+        }
+
+        @PostMapping("/reset-password")
+        public ResponseEntity<ApiResponse<Void>> resetPassword(
+                        @Valid @RequestBody ResetPasswordRequest request) {
+                authService.resetPassword(request);
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                null,
+                                                "Password has been reset successfully"));
+        }
+
+        @PutMapping("/change-password")
+        public ResponseEntity<ApiResponse<Void>> changePassword(
+                        @Valid @RequestBody ChangePasswordRequest request) {
+                authService.changePassword(request);
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                null,
+                                                "Đổi mật khẩu thành công"));
+        }
+
+        @PostMapping("/setup-password")
+        public ResponseEntity<ApiResponse<AuthResponse>> setupPassword(
+                        @Valid @RequestBody SetupPasswordRequest request,
+                        @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        HttpServletResponse response) {
+                AuthResponse authResponse = authService.setupPassword(request);
+                handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
+
+                return ResponseEntity.ok(
+                                ApiResponse.success(
+                                                authResponse,
+                                                "Thiết lập mật khẩu thành công"));
+        }
 }

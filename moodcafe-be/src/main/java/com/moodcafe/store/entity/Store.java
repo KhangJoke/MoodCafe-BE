@@ -53,9 +53,6 @@ public class Store {
         @Column(name = "address", nullable = false, length = 500)
         private String address;
 
-        @Column(name = "district", length = 100)
-        private String district;
-
         @Column(name = "latitude", precision = 10, scale = 7)
         private BigDecimal latitude;
 

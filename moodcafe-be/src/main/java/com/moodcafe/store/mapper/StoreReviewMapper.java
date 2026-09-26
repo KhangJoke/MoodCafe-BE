@@ -23,7 +23,19 @@ public interface StoreReviewMapper {
     @Mapping(source = "images", target = "imageUrls", qualifiedByName = "mapImagesToUrls")
     @Mapping(source = "tagRatings", target = "tagRatings", qualifiedByName = "mapTagRatingsToResponse")
     @Mapping(target = "verified", expression = "java(review.getVisitVerificationId() != null)")
+    @Mapping(target = "reply", expression = "java(mapMerchantReply(review))")
     StoreReviewResponse toResponse(StoreReview review);
+
+    default com.moodcafe.store.dto.response.ReviewReplyResponse mapMerchantReply(StoreReview review) {
+        if (review.getMerchantReply() == null || review.getMerchantReply().isBlank()) {
+            return null;
+        }
+        return com.moodcafe.store.dto.response.ReviewReplyResponse.builder()
+                .reply(review.getMerchantReply())
+                .replyAt(review.getReplyAt())
+                .responderName("Phản hồi từ quán")
+                .build();
+    }
 
     @Named("mapImagesToUrls")
     default List<String> mapImagesToUrls(List<ReviewImage> images) {

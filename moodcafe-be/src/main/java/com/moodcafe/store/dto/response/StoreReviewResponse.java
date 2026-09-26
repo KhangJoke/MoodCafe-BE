@@ -36,6 +36,7 @@ public class StoreReviewResponse {
     private List<ReviewTagResponse> tagRatings;
     private String merchantReply;
     private Instant replyAt;
+    private ReviewReplyResponse reply;
     private Instant createdAt;
     private Instant updatedAt;
 }

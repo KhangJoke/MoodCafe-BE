@@ -58,13 +58,41 @@ public class StoreReviewController {
                 .body(ApiResponse.success(response, "Review submitted successfully"));
     }
 
+    @Operation(summary = "Xem danh sách đánh giá của quán (Hỗ trợ lọc theo số sao, trạng thái phản hồi, tìm kiếm)")
     @GetMapping("/{storeId}/reviews")
     public ResponseEntity<ApiResponse<Page<StoreReviewResponse>>> getStoreReviews(
             @PathVariable UUID storeId,
+            @RequestParam(required = false) Integer rating,
+            @RequestParam(required = false) String replyStatus,
+            @RequestParam(required = false) String search,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        Page<StoreReviewResponse> reviews = storeReviewService.getStoreReviews(storeId, pageable);
+        Page<StoreReviewResponse> reviews = storeReviewService.getStoreReviews(storeId, rating, replyStatus, search, pageable);
         return ResponseEntity.ok(ApiResponse.success(reviews));
+    }
+
+    @Operation(summary = "Chủ quán xem danh sách đánh giá của quán mình (Có bộ lọc sao, trạng thái trả lời, tìm kiếm)")
+    @GetMapping("/{storeId}/merchant/reviews")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Page<StoreReviewResponse>>> getMerchantReviews(
+            @PathVariable UUID storeId,
+            @RequestParam(required = false) Integer rating,
+            @RequestParam(required = false) String replyStatus,
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<StoreReviewResponse> reviews = storeReviewService.getMerchantReviews(storeId, rating, replyStatus, search, pageable);
+        return ResponseEntity.ok(ApiResponse.success(reviews));
+    }
+
+    @Operation(summary = "Thống kê đánh giá dành cho Chủ quán (Tổng số, Đã phản hồi, Chưa phản hồi, Phân bố sao 1-5)")
+    @GetMapping("/{storeId}/merchant/reviews/stats")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<com.moodcafe.store.dto.response.MerchantReviewStatsResponse>> getMerchantReviewStats(
+            @PathVariable UUID storeId
+    ) {
+        com.moodcafe.store.dto.response.MerchantReviewStatsResponse stats = storeReviewService.getMerchantReviewStats(storeId);
+        return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
     @GetMapping("/{storeId}/reviews/me")
@@ -136,6 +164,29 @@ public class StoreReviewController {
     ) {
         StoreReviewResponse response = storeReviewService.replyToReview(storeId, reviewId, request);
         return ResponseEntity.ok(ApiResponse.success(response, "Phản hồi đánh giá thành công"));
+    }
+
+    @Operation(summary = "Chủ quán chỉnh sửa phản hồi đánh giá")
+    @PutMapping("/{storeId}/reviews/{reviewId}/reply")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<StoreReviewResponse>> updateReviewReply(
+            @PathVariable UUID storeId,
+            @PathVariable UUID reviewId,
+            @Valid @RequestBody MerchantReplyReviewRequest request
+    ) {
+        StoreReviewResponse response = storeReviewService.updateReviewReply(storeId, reviewId, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật phản hồi đánh giá thành công"));
+    }
+
+    @Operation(summary = "Chủ quán xóa phản hồi đánh giá")
+    @DeleteMapping("/{storeId}/reviews/{reviewId}/reply")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> deleteReviewReply(
+            @PathVariable UUID storeId,
+            @PathVariable UUID reviewId
+    ) {
+        storeReviewService.deleteReviewReply(storeId, reviewId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa phản hồi đánh giá"));
     }
 
     @Operation(summary = "Báo cáo đánh giá gian lận / vi phạm")

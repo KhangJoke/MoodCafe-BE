@@ -10,6 +10,9 @@ DECLARE
     s6 UUID; s7 UUID; s8 UUID; s9 UUID; s10 UUID;
     s11 UUID; s12 UUID; s13 UUID; s14 UUID; s17 UUID;
     r_id UUID;
+    v_id UUID;
+    lat DECIMAL(10, 7);
+    lng DECIMAL(10, 7);
 BEGIN
     SELECT user_id INTO u1 FROM users WHERE email = 'customer1@moodcafe.com';
     SELECT user_id INTO u2 FROM users WHERE email = 'customer2@moodcafe.com';
@@ -33,16 +36,44 @@ BEGIN
     SELECT store_id INTO s14 FROM stores WHERE name = 'Deadline Zone 24/7 Workspace';
     SELECT store_id INTO s17 FROM stores WHERE name = 'Mood Cafe District 1';
 
-    -- Review 1: The Workshop by u1
-    IF s1 IS NOT NULL AND u1 IS NOT NULL AND NOT EXISTS (SELECT 1 FROM reviews WHERE store_id = s1 AND user_id = u1 AND is_deleted = false) THEN
-        INSERT INTO reviews (store_id, user_id, overall_rating, quietness_rating, lighting_rating, seating_rating, outlet_rating, content)
-        VALUES (s1, u1, 4.9, 5, 5, 5, 5, 'Quán cà phê chuẩn chỉnh nhất Sài Gòn để chạy deadline. Cà phê Pour-over quá đỉnh!')
-        RETURNING review_id INTO r_id;
+    -- Review 1: The Workshop by u1 (Verified Review with VibeSnap)
+    IF s1 IS NOT NULL AND u1 IS NOT NULL THEN
+        SELECT latitude, longitude INTO lat, lng FROM stores WHERE store_id = s1;
+        SELECT visit_verification_id INTO v_id FROM visit_verifications
+        WHERE store_id = s1 AND user_id = u1 AND image_url = 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749528/moodcafe/reviews/review_01.jpg';
 
-        INSERT INTO review_images (review_id, image_url) VALUES (r_id, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749528/moodcafe/reviews/review_01.jpg');
+        IF v_id IS NULL THEN
+            INSERT INTO visit_verifications (
+                user_id, store_id, image_url, latitude, longitude,
+                captured_at, distance_from_store_meters, status,
+                verified_at, expires_at, is_used, created_at
+            )
+            VALUES (
+                u1, s1, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749528/moodcafe/reviews/review_01.jpg',
+                COALESCE(lat, 10.7731), COALESCE(lng, 106.7048),
+                CURRENT_TIMESTAMP - INTERVAL '1 day',
+                12.5, 'VERIFIED',
+                CURRENT_TIMESTAMP - INTERVAL '1 day',
+                CURRENT_TIMESTAMP + INTERVAL '30 days',
+                TRUE,
+                CURRENT_TIMESTAMP - INTERVAL '1 day'
+            )
+            RETURNING visit_verification_id INTO v_id;
+        END IF;
 
-        INSERT INTO tag_ratings (review_id, tag_id, score)
-        SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Học bài / Chạy deadline', 'Yên tĩnh', 'Ổ cắm điện');
+        IF NOT EXISTS (SELECT 1 FROM reviews WHERE store_id = s1 AND user_id = u1 AND is_deleted = false) THEN
+            INSERT INTO reviews (store_id, user_id, visit_verification_id, overall_rating, quietness_rating, lighting_rating, seating_rating, outlet_rating, content)
+            VALUES (s1, u1, v_id, 4.9, 5, 5, 5, 5, 'Quán cà phê chuẩn chỉnh nhất Sài Gòn để chạy deadline. Cà phê Pour-over quá đỉnh!')
+            RETURNING review_id INTO r_id;
+
+            INSERT INTO review_images (review_id, image_url) VALUES (r_id, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749528/moodcafe/reviews/review_01.jpg');
+
+            INSERT INTO tag_ratings (review_id, tag_id, score)
+            SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Học bài / Chạy deadline', 'Yên tĩnh', 'Ổ cắm điện');
+        ELSE
+            UPDATE reviews SET visit_verification_id = v_id
+            WHERE store_id = s1 AND user_id = u1 AND is_deleted = false AND visit_verification_id IS NULL;
+        END IF;
     END IF;
 
     -- Review 2: The Workshop by u2
@@ -55,16 +86,44 @@ BEGIN
         SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Công xưởng (Industrial)', 'Yên tĩnh');
     END IF;
 
-    -- Review 3: Yên Cà Phê by u5
-    IF s2 IS NOT NULL AND u5 IS NOT NULL AND NOT EXISTS (SELECT 1 FROM reviews WHERE store_id = s2 AND user_id = u5 AND is_deleted = false) THEN
-        INSERT INTO reviews (store_id, user_id, overall_rating, quietness_rating, lighting_rating, seating_rating, outlet_rating, content)
-        VALUES (s2, u5, 4.9, 5, 5, 4, 4, 'Đúng nghĩa Yên! Bước vào quán là thấy nhẹ nhõm, sách hay ngập tràn.')
-        RETURNING review_id INTO r_id;
+    -- Review 3: Yên Cà Phê by u5 (Verified Review with VibeSnap)
+    IF s2 IS NOT NULL AND u5 IS NOT NULL THEN
+        SELECT latitude, longitude INTO lat, lng FROM stores WHERE store_id = s2;
+        SELECT visit_verification_id INTO v_id FROM visit_verifications
+        WHERE store_id = s2 AND user_id = u5 AND image_url = 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749530/moodcafe/reviews/review_02.jpg';
 
-        INSERT INTO review_images (review_id, image_url) VALUES (r_id, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749530/moodcafe/reviews/review_02.jpg');
+        IF v_id IS NULL THEN
+            INSERT INTO visit_verifications (
+                user_id, store_id, image_url, latitude, longitude,
+                captured_at, distance_from_store_meters, status,
+                verified_at, expires_at, is_used, created_at
+            )
+            VALUES (
+                u5, s2, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749530/moodcafe/reviews/review_02.jpg',
+                COALESCE(lat, 10.7915), COALESCE(lng, 106.6892),
+                CURRENT_TIMESTAMP - INTERVAL '2 days',
+                8.3, 'VERIFIED',
+                CURRENT_TIMESTAMP - INTERVAL '2 days',
+                CURRENT_TIMESTAMP + INTERVAL '30 days',
+                TRUE,
+                CURRENT_TIMESTAMP - INTERVAL '2 days'
+            )
+            RETURNING visit_verification_id INTO v_id;
+        END IF;
 
-        INSERT INTO tag_ratings (review_id, tag_id, score)
-        SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Thư giãn / Đọc sách', 'Yên tĩnh', 'Cổ điển (Vintage / Retro)');
+        IF NOT EXISTS (SELECT 1 FROM reviews WHERE store_id = s2 AND user_id = u5 AND is_deleted = false) THEN
+            INSERT INTO reviews (store_id, user_id, visit_verification_id, overall_rating, quietness_rating, lighting_rating, seating_rating, outlet_rating, content)
+            VALUES (s2, u5, v_id, 4.9, 5, 5, 4, 4, 'Đúng nghĩa Yên! Bước vào quán là thấy nhẹ nhõm, sách hay ngập tràn.')
+            RETURNING review_id INTO r_id;
+
+            INSERT INTO review_images (review_id, image_url) VALUES (r_id, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749530/moodcafe/reviews/review_02.jpg');
+
+            INSERT INTO tag_ratings (review_id, tag_id, score)
+            SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Thư giãn / Đọc sách', 'Yên tĩnh', 'Cổ điển (Vintage / Retro)');
+        ELSE
+            UPDATE reviews SET visit_verification_id = v_id
+            WHERE store_id = s2 AND user_id = u5 AND is_deleted = false AND visit_verification_id IS NULL;
+        END IF;
     END IF;
 
     -- Review 4: The Hideout by u3
@@ -77,16 +136,44 @@ BEGIN
         SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Hẹn hò lãng mạn', 'Hiện đại & Sang trọng (Modern Luxury)');
     END IF;
 
-    -- Review 5: Green Haven by u4
-    IF s4 IS NOT NULL AND u4 IS NOT NULL AND NOT EXISTS (SELECT 1 FROM reviews WHERE store_id = s4 AND user_id = u4 AND is_deleted = false) THEN
-        INSERT INTO reviews (store_id, user_id, overall_rating, quietness_rating, lighting_rating, seating_rating, outlet_rating, content)
-        VALUES (s4, u4, 4.8, 4, 5, 4, 4, 'Dẫn cún cưng đi cafe cuối tuần thì đây là điểm số 1. Sân vườn xanh mướt!')
-        RETURNING review_id INTO r_id;
+    -- Review 5: Green Haven by u4 (Verified Review with VibeSnap)
+    IF s4 IS NOT NULL AND u4 IS NOT NULL THEN
+        SELECT latitude, longitude INTO lat, lng FROM stores WHERE store_id = s4;
+        SELECT visit_verification_id INTO v_id FROM visit_verifications
+        WHERE store_id = s4 AND user_id = u4 AND image_url = 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749531/moodcafe/reviews/review_03.jpg';
 
-        INSERT INTO review_images (review_id, image_url) VALUES (r_id, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749531/moodcafe/reviews/review_03.jpg');
+        IF v_id IS NULL THEN
+            INSERT INTO visit_verifications (
+                user_id, store_id, image_url, latitude, longitude,
+                captured_at, distance_from_store_meters, status,
+                verified_at, expires_at, is_used, created_at
+            )
+            VALUES (
+                u4, s4, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749531/moodcafe/reviews/review_03.jpg',
+                COALESCE(lat, 10.7981), COALESCE(lng, 106.6912),
+                CURRENT_TIMESTAMP - INTERVAL '3 days',
+                15.2, 'VERIFIED',
+                CURRENT_TIMESTAMP - INTERVAL '3 days',
+                CURRENT_TIMESTAMP + INTERVAL '30 days',
+                TRUE,
+                CURRENT_TIMESTAMP - INTERVAL '3 days'
+            )
+            RETURNING visit_verification_id INTO v_id;
+        END IF;
 
-        INSERT INTO tag_ratings (review_id, tag_id, score)
-        SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Thân thiện thú cưng', 'Sân vườn nhiệt đới (Tropical Garden)');
+        IF NOT EXISTS (SELECT 1 FROM reviews WHERE store_id = s4 AND user_id = u4 AND is_deleted = false) THEN
+            INSERT INTO reviews (store_id, user_id, visit_verification_id, overall_rating, quietness_rating, lighting_rating, seating_rating, outlet_rating, content)
+            VALUES (s4, u4, v_id, 4.8, 4, 5, 4, 4, 'Dẫn cún cưng đi cafe cuối tuần thì đây là điểm số 1. Sân vườn xanh mướt!')
+            RETURNING review_id INTO r_id;
+
+            INSERT INTO review_images (review_id, image_url) VALUES (r_id, 'https://res.cloudinary.com/dy45rrkhf/image/upload/v1789749531/moodcafe/reviews/review_03.jpg');
+
+            INSERT INTO tag_ratings (review_id, tag_id, score)
+            SELECT r_id, t.tag_id, 5 FROM tags t WHERE t.name IN ('Thân thiện thú cưng', 'Sân vườn nhiệt đới (Tropical Garden)');
+        ELSE
+            UPDATE reviews SET visit_verification_id = v_id
+            WHERE store_id = s4 AND user_id = u4 AND is_deleted = false AND visit_verification_id IS NULL;
+        END IF;
     END IF;
 
     -- Review 6: Mây Rooftop by u4
