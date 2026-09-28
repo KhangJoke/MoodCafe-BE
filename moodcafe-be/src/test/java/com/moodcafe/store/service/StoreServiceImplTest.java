@@ -35,6 +35,11 @@ import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.entity.UserPreference;
+import com.moodcafe.subscription.abstraction.service.SubscriptionService;
+import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
+import com.moodcafe.store.abstraction.repository.VisitVerificationRepository;
+import com.moodcafe.tag.entity.enums.ControlType;
+import com.moodcafe.tag.entity.enums.ApprovalMode;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -96,6 +101,12 @@ class StoreServiceImplTest {
     private StoreReviewMapper storeReviewMapper;
     @Mock
     private TagRatingRepository tagRatingRepository;
+    @Mock
+    private TagCategoryRepository tagCategoryRepository;
+    @Mock
+    private VisitVerificationRepository visitVerificationRepository;
+    @Mock
+    private SubscriptionService subscriptionService;
 
     @InjectMocks
     private StoreServiceImpl storeService;
@@ -104,11 +115,27 @@ class StoreServiceImplTest {
     private Store store2;
     private Tag vibeTag;
     private Tag purposeTag;
+    private TagCategory vibeCat;
+    private TagCategory purposeCat;
 
     @BeforeEach
     void setUp() {
-        TagCategory vibeCat = TagCategory.builder().code("VIBE").name("Phong cách").build();
-        TagCategory purposeCat = TagCategory.builder().code("PURPOSE").name("Mục đích").build();
+        vibeCat = TagCategory.builder()
+                .tagCategoryId(UUID.randomUUID())
+                .code("VIBE")
+                .name("Phong cách")
+                .controlType(ControlType.TAG_LIST)
+                .approvalMode(ApprovalMode.OWNER_CUSTOM)
+                .weight(1.0)
+                .build();
+        purposeCat = TagCategory.builder()
+                .tagCategoryId(UUID.randomUUID())
+                .code("PURPOSE")
+                .name("Mục đích")
+                .controlType(ControlType.TAG_LIST)
+                .approvalMode(ApprovalMode.OWNER_REQUEST)
+                .weight(1.0)
+                .build();
 
         vibeTag = Tag.builder().tagId(UUID.randomUUID()).name("Tối giản").category(vibeCat).build();
         purposeTag = Tag.builder().tagId(UUID.randomUUID()).name("Chạy deadline").category(purposeCat).build();
@@ -197,6 +224,7 @@ class StoreServiceImplTest {
                 new Object[]{store1.getStoreId(), 4.8, 20L}
         ));
         when(configurationService.getMatchScoreWeights()).thenReturn(MatchScoreWeights.builder().build());
+        when(tagCategoryRepository.findAllByActiveTrueOrderByDisplayOrderAsc()).thenReturn(List.of(vibeCat));
 
         StoreSearchRequest request = StoreSearchRequest.builder().build();
         PageResponse<StoreSearchItemResponse> response = storeService.searchStores(request);

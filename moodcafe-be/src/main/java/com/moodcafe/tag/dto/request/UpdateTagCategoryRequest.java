@@ -28,5 +28,11 @@ public class UpdateTagCategoryRequest {
 
     private Integer displayOrder;
 
+    private Double weight;
+
+    private Boolean isExperiencePrimary;
+
+    private Boolean isExperienceSecondary;
+
     private Boolean active;
 }

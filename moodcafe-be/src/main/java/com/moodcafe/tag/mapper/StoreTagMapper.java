@@ -14,6 +14,7 @@ public interface StoreTagMapper {
     @Mapping(target = "tagName", source = "tag.name")
     @Mapping(target = "category", source = "tag.category.name")
     @Mapping(target = "categoryCode", source = "tag.category.code")
+    @Mapping(target = "imageUrl", source = "tag.imageUrl")
     @Mapping(target = "averageScore", source = "avgScore")
     @Mapping(target = "reviewCount", source = "reviewCount")
     StoreTagResponse toResponse(StoreTag storeTag);

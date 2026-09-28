@@ -26,6 +26,7 @@ public class StoreTagResponse {
     private String categoryCode;
     private StoreTagStatus status;
     private String proofImageUrl;
+    private String imageUrl;
     private String rejectReason;
     @Builder.Default
     private boolean allowResubmit = true;

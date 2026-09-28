@@ -1,6 +1,5 @@
 package com.moodcafe.tag.dto.request;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,8 +15,11 @@ import java.util.UUID;
 @Builder
 public class SubmitStoreTagRequest {
 
-    @NotNull(message = "Tag ID is required")
     private UUID tagId;
+
+    private String customTagName;
+
+    private String categoryCode;
 
     private String proofImageUrl;
 }

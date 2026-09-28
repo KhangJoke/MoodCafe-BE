@@ -1,5 +1,7 @@
 package com.moodcafe.tag.dto.response;
 
+import com.moodcafe.tag.entity.enums.ApprovalMode;
+import com.moodcafe.tag.entity.enums.ControlType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,6 +22,8 @@ public class TagResponse {
     private UUID tagCategoryId;
     private String categoryCode;
     private String categoryName;
+    private ApprovalMode approvalMode;
+    private ControlType controlType;
     private String name;
     private String description;
     private Integer scaleValue;

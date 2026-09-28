@@ -341,13 +341,29 @@ class TagServiceImplTest {
     }
 
     @Test
-    @DisplayName("getExperienceMatcherData - maps purpose and vibes correctly with imageUrl")
+    @DisplayName("getExperienceMatcherData - maps primary and secondary categories dynamically")
     void getExperienceMatcherData_ReturnsPopulatedResponses() {
+        TagCategory primaryCategory = TagCategory.builder()
+                .tagCategoryId(UUID.randomUUID())
+                .name("Mục đích")
+                .code("PURPOSE")
+                .isExperiencePrimary(true)
+                .active(true)
+                .build();
+        TagCategory secondaryCategory = TagCategory.builder()
+                .tagCategoryId(UUID.randomUUID())
+                .name("Không gian")
+                .code("VIBE")
+                .isExperienceSecondary(true)
+                .active(true)
+                .build();
+
         Tag purpose = Tag.builder()
                 .tagId(UUID.randomUUID())
                 .name("Học bài / Chạy deadline")
                 .description("Tập trung học tập")
                 .imageUrl("https://example.com/purpose.jpg")
+                .category(primaryCategory)
                 .active(true)
                 .build();
         Tag vibe = Tag.builder()
@@ -355,11 +371,14 @@ class TagServiceImplTest {
                 .name("Tối giản (Minimalism)")
                 .description("Nhẹ nhàng tinh tế")
                 .imageUrl("https://example.com/vibe.jpg")
+                .category(secondaryCategory)
                 .active(true)
                 .build();
 
-        when(tagRepository.findAllByCategoryCodeAndActiveTrue("PURPOSE")).thenReturn(List.of(purpose));
-        when(tagRepository.findAllByCategoryCodeAndActiveTrue("VIBE")).thenReturn(List.of(vibe));
+        when(tagCategoryRepository.findFirstByIsExperiencePrimaryTrueAndActiveTrue()).thenReturn(Optional.of(primaryCategory));
+        when(tagCategoryRepository.findFirstByIsExperienceSecondaryTrueAndActiveTrue()).thenReturn(Optional.of(secondaryCategory));
+        when(tagRepository.findAllByCategoryTagCategoryIdAndActiveTrue(primaryCategory.getTagCategoryId())).thenReturn(List.of(purpose));
+        when(tagRepository.findAllByCategoryTagCategoryIdAndActiveTrue(secondaryCategory.getTagCategoryId())).thenReturn(List.of(vibe));
         when(storeTagRepository.countDistinctStoresByTagIdAndStatus(any(), any())).thenReturn(5L);
         when(storeTagRepository.countStoresWithBothTags(any(), any(), any())).thenReturn(3L);
 

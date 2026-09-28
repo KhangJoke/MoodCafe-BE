@@ -13,6 +13,10 @@ public interface TagCategoryRepository extends JpaRepository<TagCategory, UUID> 
 
     Optional<TagCategory> findByCode(String code);
 
+    Optional<TagCategory> findFirstByIsExperiencePrimaryTrueAndActiveTrue();
+
+    Optional<TagCategory> findFirstByIsExperienceSecondaryTrueAndActiveTrue();
+
     List<TagCategory> findAllByActiveTrueOrderByDisplayOrderAsc();
 
     List<TagCategory> findAllByOrderByDisplayOrderAsc();

@@ -65,6 +65,18 @@ public class TagCategory {
     private Integer displayOrder = 1;
 
     @Builder.Default
+    @Column(name = "weight", nullable = false)
+    private Double weight = 0.2;
+
+    @Builder.Default
+    @Column(name = "is_experience_primary", nullable = false)
+    private Boolean isExperiencePrimary = false;
+
+    @Builder.Default
+    @Column(name = "is_experience_secondary", nullable = false)
+    private Boolean isExperienceSecondary = false;
+
+    @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 

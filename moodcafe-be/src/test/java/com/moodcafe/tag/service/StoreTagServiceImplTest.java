@@ -7,6 +7,7 @@ import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
+import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
@@ -46,6 +47,9 @@ class StoreTagServiceImplTest {
 
     @Mock
     private TagRepository tagRepository;
+
+    @Mock
+    private TagCategoryRepository tagCategoryRepository;
 
     @Mock
     private StoreTagMapper storeTagMapper;

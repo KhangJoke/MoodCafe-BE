@@ -16,6 +16,8 @@ public interface TagMapper {
     @Mapping(target = "tagCategoryId", source = "category.tagCategoryId")
     @Mapping(target = "categoryCode", source = "category.code")
     @Mapping(target = "categoryName", source = "category.name")
+    @Mapping(target = "approvalMode", source = "category.approvalMode")
+    @Mapping(target = "controlType", source = "category.controlType")
     TagResponse toResponse(Tag tag);
 
     @Mapping(target = "tagId", ignore = true)

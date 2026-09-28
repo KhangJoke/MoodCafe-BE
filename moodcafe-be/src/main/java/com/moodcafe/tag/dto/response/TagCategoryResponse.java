@@ -24,6 +24,9 @@ public class TagCategoryResponse {
     private ApprovalMode approvalMode;
     private ControlType controlType;
     private Integer displayOrder;
+    private Double weight;
+    private Boolean isExperiencePrimary;
+    private Boolean isExperienceSecondary;
     private Boolean active;
     private Instant createdAt;
 }

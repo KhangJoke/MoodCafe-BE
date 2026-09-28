@@ -58,6 +58,8 @@ import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.entity.UserPreference;
+import com.moodcafe.subscription.abstraction.service.SubscriptionService;
+import com.moodcafe.tag.entity.enums.ApprovalMode;
 import com.moodcafe.tag.entity.enums.ControlType;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
@@ -105,7 +107,7 @@ public class StoreServiceImpl implements StoreService {
     private final StoreReviewMapper storeReviewMapper;
     private final TagRatingRepository tagRatingRepository;
     private final VisitVerificationRepository visitVerificationRepository;
-    private final com.moodcafe.subscription.abstraction.service.SubscriptionService subscriptionService;
+    private final SubscriptionService subscriptionService;
 
     @Override
     @Transactional
@@ -561,12 +563,12 @@ public class StoreServiceImpl implements StoreService {
             store.setRejectReason(null);
             store.setAllowResubmit(true);
 
-            // Auto-approve slider/noise tags when store is approved
+            // Auto-approve OWNER_CUSTOM tags when store is approved
             List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
             for (StoreTag st : storeTags) {
                 if (st.getTag() != null && st.getTag().getCategory() != null) {
-                    String catCode = st.getTag().getCategory().getCode();
-                    if ("NOISE".equalsIgnoreCase(catCode) && StoreTagStatus.PENDING.equals(st.getStatus())) {
+                    TagCategory cat = st.getTag().getCategory();
+                    if (ApprovalMode.OWNER_CUSTOM.equals(cat.getApprovalMode()) && StoreTagStatus.PENDING.equals(st.getStatus())) {
                         st.setStatus(StoreTagStatus.APPROVED);
                         st.setApprovedAt(Instant.now());
                         storeTagRepository.save(st);
@@ -662,6 +664,7 @@ public class StoreServiceImpl implements StoreService {
         }
 
         MatchScoreWeights weights = configurationService.getMatchScoreWeights();
+        List<TagCategory> activeCategories = tagCategoryRepository.findAllByActiveTrueOrderByDisplayOrderAsc();
 
         List<StoreSearchItemResponse> filteredList = new ArrayList<>();
         for (Store store : activeStores) {
@@ -714,7 +717,7 @@ public class StoreServiceImpl implements StoreService {
             }
 
             // Calculate match score
-            Integer matchScore = calculateMatchScore(tags, userPrefs, rating, weights);
+            Integer matchScore = calculateMatchScore(tags, userPrefs, rating, weights, activeCategories);
 
             // 7. Filter matchPersonalGuOnly (matchScore >= 85)
             if (matchPersonalGuOnly && (matchScore == null || matchScore < 85)) {
@@ -856,98 +859,109 @@ public class StoreServiceImpl implements StoreService {
             List<StoreTag> storeTags,
             List<UserPreference> userPrefs,
             Double overallRating,
-            MatchScoreWeights weights
+            MatchScoreWeights weights,
+            List<TagCategory> activeCategories
     ) {
         if (userPrefs == null || userPrefs.isEmpty()) {
             return null;
         }
 
-        Set<UUID> userVibeTagIds = new HashSet<>();
-        Set<UUID> userPurposeTagIds = new HashSet<>();
-        Set<UUID> userAmenityTagIds = new HashSet<>();
-        Integer userPreferredNoise = null;
-
+        // Group active user preferences by TagCategory ID
+        Map<UUID, List<UserPreference>> prefsByCategory = new HashMap<>();
         for (UserPreference up : userPrefs) {
             if (up.isSkipped()) continue;
-            if (up.getNumericValue() != null) {
-                userPreferredNoise = up.getNumericValue();
-            } else if (up.getTag() != null && up.getTag().getScaleValue() != null) {
-                userPreferredNoise = up.getTag().getScaleValue();
-            }
+            UUID catId = null;
             if (up.getTag() != null && up.getTag().getCategory() != null) {
-                String catCode = up.getTag().getCategory().getCode();
-                if ("VIBE".equalsIgnoreCase(catCode)) {
-                    userVibeTagIds.add(up.getTag().getTagId());
-                } else if ("PURPOSE".equalsIgnoreCase(catCode)) {
-                    userPurposeTagIds.add(up.getTag().getTagId());
-                } else if ("AMENITY".equalsIgnoreCase(catCode)) {
-                    userAmenityTagIds.add(up.getTag().getTagId());
-                }
+                catId = up.getTag().getCategory().getTagCategoryId();
+            } else if (up.getQuestion() != null && up.getQuestion().getTagCategory() != null) {
+                catId = up.getQuestion().getTagCategory().getTagCategoryId();
+            }
+            if (catId != null) {
+                prefsByCategory.computeIfAbsent(catId, k -> new ArrayList<>()).add(up);
             }
         }
 
-        Set<UUID> storeVibeTagIds = new HashSet<>();
-        Set<UUID> storePurposeTagIds = new HashSet<>();
-        Set<UUID> storeAmenityTagIds = new HashSet<>();
-        Integer storeNoiseLevel = null;
-
+        // Group store tags by TagCategory ID
+        Map<UUID, List<StoreTag>> storeTagsByCategory = new HashMap<>();
         for (StoreTag st : storeTags) {
-            Tag t = st.getTag();
-            if (t == null || t.getCategory() == null) continue;
-            String catCode = t.getCategory().getCode();
-            if ("VIBE".equalsIgnoreCase(catCode)) {
-                storeVibeTagIds.add(t.getTagId());
-            } else if ("PURPOSE".equalsIgnoreCase(catCode)) {
-                storePurposeTagIds.add(t.getTagId());
-            } else if ("AMENITY".equalsIgnoreCase(catCode)) {
-                storeAmenityTagIds.add(t.getTagId());
-            } else if ("NOISE".equalsIgnoreCase(catCode)) {
-                if (t.getScaleValue() != null) {
-                    storeNoiseLevel = t.getScaleValue();
-                } else {
-                    String name = t.getName() != null ? t.getName().toLowerCase() : "";
-                    if (name.contains("yên tĩnh") && !name.contains("khá")) storeNoiseLevel = 1;
-                    else if (name.contains("khá yên tĩnh")) storeNoiseLevel = 2;
-                    else if (name.contains("bình thường") || name.contains("vừa phải")) storeNoiseLevel = 3;
-                    else if (name.contains("khá sôi động") || name.contains("sôi động")) storeNoiseLevel = 4;
-                    else if (name.contains("náo nhiệt")) storeNoiseLevel = 5;
-                }
+            if (st.getTag() != null && st.getTag().getCategory() != null) {
+                UUID catId = st.getTag().getCategory().getTagCategoryId();
+                storeTagsByCategory.computeIfAbsent(catId, k -> new ArrayList<>()).add(st);
             }
         }
 
-        double vibeScore = 1.0;
-        if (!userVibeTagIds.isEmpty()) {
-            long matchedVibes = storeVibeTagIds.stream().filter(userVibeTagIds::contains).count();
-            vibeScore = (double) matchedVibes / userVibeTagIds.size();
-        }
+        double totalWeightedScore = 0.0;
+        double totalCategoryWeight = 0.0;
 
-        double purposeScore = 1.0;
-        if (!userPurposeTagIds.isEmpty()) {
-            long matchedPurposes = storePurposeTagIds.stream().filter(userPurposeTagIds::contains).count();
-            purposeScore = (double) matchedPurposes / userPurposeTagIds.size();
-        }
+        List<TagCategory> categoriesToEvaluate = activeCategories != null ? activeCategories : Collections.emptyList();
+        for (TagCategory cat : categoriesToEvaluate) {
+            UUID catId = cat.getTagCategoryId();
+            double weight = cat.getWeight() != null ? cat.getWeight() : 1.0;
+            if (weight <= 0) continue;
 
-        double amenityScore = 1.0;
-        if (!userAmenityTagIds.isEmpty()) {
-            long matchedAmenities = storeAmenityTagIds.stream().filter(userAmenityTagIds::contains).count();
-            amenityScore = (double) matchedAmenities / userAmenityTagIds.size();
-        }
+            List<UserPreference> catPrefs = prefsByCategory.getOrDefault(catId, Collections.emptyList());
+            List<StoreTag> catStoreTags = storeTagsByCategory.getOrDefault(catId, Collections.emptyList());
 
-        double noiseScore = 1.0;
-        if (userPreferredNoise != null && storeNoiseLevel != null) {
-            int diff = Math.abs(userPreferredNoise - storeNoiseLevel);
-            noiseScore = Math.max(0.0, 1.0 - (diff * 0.25));
+            if (ControlType.SLIDER.equals(cat.getControlType())) {
+                Integer userVal = null;
+                for (UserPreference up : catPrefs) {
+                    if (up.getNumericValue() != null) {
+                        userVal = up.getNumericValue();
+                        break;
+                    } else if (up.getTag() != null && up.getTag().getScaleValue() != null) {
+                        userVal = up.getTag().getScaleValue();
+                        break;
+                    }
+                }
+
+                Integer storeVal = null;
+                for (StoreTag st : catStoreTags) {
+                    if (st.getTag() != null && st.getTag().getScaleValue() != null) {
+                        storeVal = st.getTag().getScaleValue();
+                        break;
+                    }
+                }
+
+                double score = 1.0;
+                if (userVal != null && storeVal != null) {
+                    int diff = Math.abs(userVal - storeVal);
+                    score = Math.max(0.0, 1.0 - (diff * 0.25));
+                }
+
+                totalWeightedScore += score * weight;
+                totalCategoryWeight += weight;
+            } else {
+                Set<UUID> userTagIds = catPrefs.stream()
+                        .filter(up -> up.getTag() != null)
+                        .map(up -> up.getTag().getTagId())
+                        .collect(Collectors.toSet());
+
+                Set<UUID> storeTagIds = catStoreTags.stream()
+                        .filter(st -> st.getTag() != null)
+                        .map(st -> st.getTag().getTagId())
+                        .collect(Collectors.toSet());
+
+                double score = 1.0;
+                if (!userTagIds.isEmpty()) {
+                    long matchedCount = storeTagIds.stream().filter(userTagIds::contains).count();
+                    score = (double) matchedCount / userTagIds.size();
+                }
+
+                totalWeightedScore += score * weight;
+                totalCategoryWeight += weight;
+            }
         }
 
         double ratingScore = (overallRating != null && overallRating > 0) ? Math.min(1.0, overallRating / 5.0) : 0.7;
+        double ratingRatio = (weights != null && weights.getRatingWeight() > 0) ? weights.getRatingWeight() : 0.10;
+        double ratingWeightEffective = (totalCategoryWeight > 0 ? totalCategoryWeight : 1.0) * ratingRatio;
 
-        double totalScore = (weights.getVibeWeight() * vibeScore)
-                + (weights.getPurposeWeight() * purposeScore)
-                + (weights.getNoiseWeight() * noiseScore)
-                + (weights.getAmenityWeight() * amenityScore)
-                + (weights.getRatingWeight() * ratingScore);
+        if (totalCategoryWeight + ratingWeightEffective <= 0) {
+            return (int) Math.round(ratingScore * 100.0);
+        }
 
-        int result = (int) Math.round(totalScore * 100.0);
+        double finalScoreRatio = (totalWeightedScore + (ratingScore * ratingWeightEffective)) / (totalCategoryWeight + ratingWeightEffective);
+        int result = (int) Math.round(finalScoreRatio * 100.0);
         return Math.min(100, Math.max(0, result));
     }
 

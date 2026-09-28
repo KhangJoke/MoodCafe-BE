@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -149,10 +150,42 @@ public class TagServiceImpl implements TagService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceMatcherResponse> getExperienceMatcherData() {
-        List<Tag> purposeTags = tagRepository.findAllByCategoryCodeAndActiveTrue("PURPOSE");
-        List<Tag> vibeTags = tagRepository.findAllByCategoryCodeAndActiveTrue("VIBE").stream()
+        TagCategory primaryCat = tagCategoryRepository.findFirstByIsExperiencePrimaryTrueAndActiveTrue()
+                .orElse(null);
+
+        TagCategory secondaryCat = tagCategoryRepository.findFirstByIsExperienceSecondaryTrueAndActiveTrue()
+                .orElse(null);
+
+        // Fallback hướng dữ liệu: Nếu chưa cấu hình cờ, tự động lấy 2 category active đầu tiên theo thứ tự hiển thị
+        if (primaryCat == null || secondaryCat == null) {
+            List<TagCategory> activeCategories = tagCategoryRepository.findAllByActiveTrueOrderByDisplayOrderAsc();
+            if (primaryCat == null && !activeCategories.isEmpty()) {
+                primaryCat = activeCategories.get(0);
+            }
+            if (secondaryCat == null && activeCategories.size() > 1) {
+                for (TagCategory cat : activeCategories) {
+                    if (primaryCat == null || !cat.getTagCategoryId().equals(primaryCat.getTagCategoryId())) {
+                        secondaryCat = cat;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (primaryCat == null || secondaryCat == null) {
+            return Collections.emptyList();
+        }
+
+        List<Tag> purposeTags = tagRepository.findAllByCategoryTagCategoryIdAndActiveTrue(primaryCat.getTagCategoryId());
+
+        List<Tag> vibeTags = tagRepository.findAllByCategoryTagCategoryIdAndActiveTrue(secondaryCat.getTagCategoryId())
+                .stream()
                 .filter(v -> v.getImageUrl() != null && !v.getImageUrl().isBlank())
                 .toList();
+
+        if (vibeTags.isEmpty()) {
+            vibeTags = tagRepository.findAllByCategoryTagCategoryIdAndActiveTrue(secondaryCat.getTagCategoryId());
+        }
 
         List<ExperienceMatcherResponse> result = new ArrayList<>();
 

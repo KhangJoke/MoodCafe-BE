@@ -5,6 +5,7 @@ import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
+import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.service.StoreTagService;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
@@ -16,6 +17,7 @@ import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
+import com.moodcafe.tag.entity.TagCategory;
 import com.moodcafe.tag.entity.enums.ApprovalMode;
 import com.moodcafe.tag.entity.enums.ControlType;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
@@ -39,6 +41,7 @@ public class StoreTagServiceImpl implements StoreTagService {
 
     private final StoreTagRepository storeTagRepository;
     private final TagRepository tagRepository;
+    private final TagCategoryRepository tagCategoryRepository;
     private final StoreTagMapper storeTagMapper;
     private final StoreStaffService storeStaffService;
     private final CurrentUserService currentUserService;
@@ -64,11 +67,57 @@ public class StoreTagServiceImpl implements StoreTagService {
     public StoreTagResponse requestStoreTag(UUID storeId, SubmitStoreTagRequest request) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
-        Tag tag = tagRepository.findById(request.getTagId())
-                .orElseThrow(() -> new AppException(ErrorCode.TAG_NOT_FOUND));
+        Tag tag;
+        if (request.getTagId() != null) {
+            tag = tagRepository.findById(request.getTagId())
+                    .orElseThrow(() -> new AppException(ErrorCode.TAG_NOT_FOUND));
+        } else if (request.getCustomTagName() != null && !request.getCustomTagName().trim().isEmpty()) {
+            String cleanTagName = request.getCustomTagName().trim();
+            if (request.getCategoryCode() == null || request.getCategoryCode().trim().isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Vui lòng chọn danh mục cho thẻ đề xuất.");
+            }
+            String catCode = request.getCategoryCode().trim().toUpperCase();
+            TagCategory category = tagCategoryRepository.findByCode(catCode)
+                    .orElseThrow(() -> new AppException(ErrorCode.TAG_CATEGORY_NOT_FOUND));
+
+            if (ApprovalMode.OWNER_CUSTOM.equals(category.getApprovalMode())) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục này không cho phép chủ quán đề xuất tên thẻ mới.");
+            }
+
+            if (request.getProofImageUrl() == null || request.getProofImageUrl().trim().isEmpty()) {
+                throw new AppException(ErrorCode.INVALID_INPUT, "Ảnh minh chứng là bắt buộc khi đề xuất thẻ mới.");
+            }
+
+            Optional<Tag> existingTagOpt = tagRepository.findByName(cleanTagName);
+            if (existingTagOpt.isPresent()) {
+                tag = existingTagOpt.get();
+            } else {
+                tag = Tag.builder()
+                        .name(cleanTagName)
+                        .category(category)
+                        .active(false)
+                        .build();
+                tag = tagRepository.save(tag);
+            }
+        } else {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Vui lòng chọn thẻ hoặc nhập tên thẻ đề xuất mới");
+        }
 
         boolean isSliderCategory = tag.getCategory() != null && ControlType.SLIDER.equals(tag.getCategory().getControlType());
         boolean isOwnerCustom = tag.getCategory() != null && ApprovalMode.OWNER_CUSTOM.equals(tag.getCategory().getApprovalMode());
+        boolean isOwnerRequest = tag.getCategory() != null && ApprovalMode.OWNER_REQUEST.equals(tag.getCategory().getApprovalMode());
+
+        Optional<StoreTag> existingOpt = storeTagRepository.findByStoreIdAndTagTagId(storeId, tag.getTagId());
+        if (existingOpt.isPresent()) {
+            StoreTag existing = existingOpt.get();
+            if (!isSliderCategory && (StoreTagStatus.APPROVED.equals(existing.getStatus()) || StoreTagStatus.PENDING.equals(existing.getStatus()))) {
+                throw new AppException(ErrorCode.STORE_TAG_ALREADY_REQUESTED);
+            }
+        }
+
+        if (isOwnerRequest && (request.getProofImageUrl() == null || request.getProofImageUrl().trim().isEmpty())) {
+            throw new AppException(ErrorCode.STORE_TAG_PROOF_REQUIRED, "Ảnh minh chứng là bắt buộc cho thẻ thuộc danh mục cần kiểm duyệt.");
+        }
 
         if (isSliderCategory && tag.getCategory() != null) {
             // For a slider category (e.g. NOISE), a store can only have 1 active tag.
@@ -83,17 +132,12 @@ public class StoreTagServiceImpl implements StoreTagService {
             }
         }
 
-        Optional<StoreTag> existingOpt = storeTagRepository.findByStoreIdAndTagTagId(storeId, request.getTagId());
-
         StoreTag storeTag;
         StoreTagStatus targetStatus = isOwnerCustom ? StoreTagStatus.APPROVED : StoreTagStatus.PENDING;
         Instant approvedAt = isOwnerCustom ? Instant.now() : null;
 
         if (existingOpt.isPresent()) {
             storeTag = existingOpt.get();
-            if (!isSliderCategory && (StoreTagStatus.APPROVED.equals(storeTag.getStatus()) || StoreTagStatus.PENDING.equals(storeTag.getStatus()))) {
-                throw new AppException(ErrorCode.STORE_TAG_ALREADY_REQUESTED);
-            }
             storeTag.setStatus(targetStatus);
             storeTag.setProofImageUrl(request.getProofImageUrl());
             storeTag.setRejectReason(null);
@@ -143,13 +187,14 @@ public class StoreTagServiceImpl implements StoreTagService {
         }
 
         Tag tag = storeTag.getTag();
-        boolean isSliderCategory = tag.getCategory() != null && ControlType.SLIDER.equals(tag.getCategory().getControlType());
-        if (!isSliderCategory && (request.getProofImageUrl() == null || request.getProofImageUrl().isBlank())) {
+        boolean isOwnerCustom = tag.getCategory() != null && ApprovalMode.OWNER_CUSTOM.equals(tag.getCategory().getApprovalMode());
+        if (!isOwnerCustom && (request.getProofImageUrl() == null || request.getProofImageUrl().isBlank())) {
             throw new AppException(ErrorCode.STORE_TAG_PROOF_REQUIRED);
         }
 
         storeTag.setProofImageUrl(request.getProofImageUrl());
-        storeTag.setStatus(StoreTagStatus.PENDING);
+        storeTag.setStatus(isOwnerCustom ? StoreTagStatus.APPROVED : StoreTagStatus.PENDING);
+        storeTag.setApprovedAt(isOwnerCustom ? Instant.now() : null);
         storeTag.setRejectReason(null);
         storeTag = storeTagRepository.save(storeTag);
 
@@ -195,6 +240,11 @@ public class StoreTagServiceImpl implements StoreTagService {
             storeTag.setApprovedAt(Instant.now());
             storeTag.setRejectReason(null);
             storeTag.setAllowResubmit(true);
+            if (storeTag.getTag() != null && !storeTag.getTag().isActive()) {
+                Tag tag = storeTag.getTag();
+                tag.setActive(true);
+                tagRepository.save(tag);
+            }
         } else if (StoreTagStatus.REJECTED.equals(targetStatus) || StoreTagStatus.REVOKED.equals(targetStatus)) {
             storeTag.setRejectReason(request.getRejectReason());
             storeTag.setAllowResubmit(request.getAllowResubmit() != null ? request.getAllowResubmit() : true);
