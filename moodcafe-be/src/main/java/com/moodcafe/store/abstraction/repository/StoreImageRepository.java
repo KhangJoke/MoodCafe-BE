@@ -13,7 +13,11 @@ public interface StoreImageRepository extends JpaRepository<StoreImage, UUID> {
 
     List<StoreImage> findAllByStoreStoreId(UUID storeId);
 
-    Optional<StoreImage> findByStoreStoreIdAndPrimaryTrue(UUID storeId);
+    Optional<StoreImage> findFirstByStoreStoreIdAndPrimaryTrueOrderByCreatedAtDesc(UUID storeId);
+
+    default Optional<StoreImage> findByStoreStoreIdAndPrimaryTrue(UUID storeId) {
+        return findFirstByStoreStoreIdAndPrimaryTrueOrderByCreatedAtDesc(storeId);
+    }
 
     Optional<StoreImage> findByStoreImageIdAndStoreStoreId(UUID storeImageId, UUID storeId);
 }
