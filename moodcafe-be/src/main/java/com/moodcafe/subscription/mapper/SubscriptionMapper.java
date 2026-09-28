@@ -39,7 +39,10 @@ public class SubscriptionMapper {
                 .aiRecommendation(plan.isAiRecommendation())
                 .monthlyFreeSponsoredCount(plan.getMonthlyFreeSponsoredCount())
                 .dedicatedSupport(plan.isDedicatedSupport())
+                .active(plan.isActive())
                 .features(features)
+                .createdAt(plan.getCreatedAt())
+                .updatedAt(plan.getUpdatedAt())
                 .build();
     }
 
@@ -60,9 +63,16 @@ public class SubscriptionMapper {
         int usedFreeQuota = sub.getMonthlyFreeSponsoredUsed() != null ? sub.getMonthlyFreeSponsoredUsed() : 0;
         int remainingFreeQuota = Math.max(0, monthlyFreeQuota - usedFreeQuota);
 
+        String userFullName = sub.getUser() != null ? sub.getUser().getFullName() : null;
+        String userEmail = sub.getUser() != null ? sub.getUser().getEmail() : null;
+        String userAvatarUrl = sub.getUser() != null ? sub.getUser().getAvatarUrl() : null;
+
         return UserSubscriptionResponse.builder()
                 .userSubscriptionId(sub.getUserSubscriptionId())
                 .userId(sub.getUser() != null ? sub.getUser().getUserId() : null)
+                .userFullName(userFullName)
+                .userEmail(userEmail)
+                .userAvatarUrl(userAvatarUrl)
                 .plan(planResponse)
                 .startDate(sub.getStartDate())
                 .endDate(sub.getEndDate())
@@ -73,6 +83,7 @@ public class SubscriptionMapper {
                 .monthlyFreeSponsoredUsed(usedFreeQuota)
                 .monthlyFreeSponsoredRemaining(remainingFreeQuota)
                 .autoRenew(sub.isAutoRenew())
+                .createdAt(sub.getCreatedAt())
                 .build();
     }
 

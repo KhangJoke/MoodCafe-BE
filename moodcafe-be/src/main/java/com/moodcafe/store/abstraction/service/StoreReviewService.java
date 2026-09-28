@@ -46,4 +46,12 @@ public interface StoreReviewService {
     void deleteMyReviewForStore(UUID storeId);
 
     void deleteReview(UUID reviewId);
+
+    Page<StoreReviewResponse> getAllReviewsAdmin(UUID storeId, Integer rating, String replyStatus, String search, Pageable pageable);
+
+    Page<ReviewReportResponse> getAllReviewReportsAdmin(com.moodcafe.store.entity.enums.ReviewReportStatus status, UUID storeId, Pageable pageable);
+
+    ReviewReportResponse resolveReviewReport(UUID reportId, com.moodcafe.store.dto.request.ResolveReviewReportRequest request);
+
+    void deleteReviewByAdmin(UUID reviewId);
 }

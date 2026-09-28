@@ -19,6 +19,9 @@ public class UserSubscriptionResponse {
 
     private UUID userSubscriptionId;
     private UUID userId;
+    private String userFullName;
+    private String userEmail;
+    private String userAvatarUrl;
     private SubscriptionPlanResponse plan;
     private Instant startDate;
     private Instant endDate;
@@ -29,4 +32,5 @@ public class UserSubscriptionResponse {
     private Integer monthlyFreeSponsoredUsed;
     private Integer monthlyFreeSponsoredRemaining;
     private boolean autoRenew;
+    private Instant createdAt;
 }

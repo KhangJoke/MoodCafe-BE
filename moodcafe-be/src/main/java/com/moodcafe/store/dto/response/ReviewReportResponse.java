@@ -27,6 +27,10 @@ public class ReviewReportResponse {
     private String details;
     private ReviewReportStatus status;
     private String adminNote;
+    private String reviewContent;
+    private java.math.BigDecimal reviewOverallRating;
+    private String reviewAuthorFullName;
+    private UUID reviewAuthorUserId;
     private Instant createdAt;
     private Instant resolvedAt;
 }
