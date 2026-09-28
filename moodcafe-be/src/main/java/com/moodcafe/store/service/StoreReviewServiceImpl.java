@@ -17,6 +17,7 @@ import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
 import com.moodcafe.store.dto.request.MerchantReplyReviewRequest;
 import com.moodcafe.store.dto.request.ReportReviewRequest;
+import com.moodcafe.store.dto.request.ResolveReviewReportRequest;
 import com.moodcafe.store.dto.request.ReviewTagRatingRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
 import com.moodcafe.store.dto.response.MerchantReviewStatsResponse;
@@ -643,5 +644,120 @@ public class StoreReviewServiceImpl implements StoreReviewService {
 
     private Double roundToOneDecimal(Double value) {
         return Math.round(value * 10.0) / 10.0;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StoreReviewResponse> getAllReviewsAdmin(UUID storeId, Integer rating, String replyStatus, String search, Pageable pageable) {
+        Specification<StoreReview> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (storeId != null) {
+                predicates.add(cb.equal(root.get("store").get("storeId"), storeId));
+            }
+
+            if (rating != null && rating >= 1 && rating <= 5) {
+                if (rating == 5) {
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("overallRating"), new BigDecimal("4.5")));
+                } else {
+                    BigDecimal minR = BigDecimal.valueOf(rating);
+                    BigDecimal maxR = BigDecimal.valueOf(rating + 1);
+                    predicates.add(cb.greaterThanOrEqualTo(root.get("overallRating"), minR));
+                    predicates.add(cb.lessThan(root.get("overallRating"), maxR));
+                }
+            }
+
+            if (replyStatus != null && !replyStatus.isBlank() && !"ALL".equalsIgnoreCase(replyStatus)) {
+                if ("REPLIED".equalsIgnoreCase(replyStatus)) {
+                    predicates.add(cb.and(
+                            cb.isNotNull(root.get("merchantReply")),
+                            cb.notEqual(cb.trim(root.get("merchantReply")), "")
+                    ));
+                } else if ("NOT_REPLIED".equalsIgnoreCase(replyStatus)) {
+                    predicates.add(cb.or(
+                            cb.isNull(root.get("merchantReply")),
+                            cb.equal(cb.trim(root.get("merchantReply")), "")
+                    ));
+                }
+            }
+
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.trim().toLowerCase() + "%";
+                Predicate fullNameMatch = cb.like(cb.lower(root.get("user").get("fullName")), pattern);
+                Predicate contentMatch = cb.like(cb.lower(root.get("content")), pattern);
+                Predicate storeNameMatch = cb.like(cb.lower(root.get("store").get("name")), pattern);
+                predicates.add(cb.or(fullNameMatch, contentMatch, storeNameMatch));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return storeReviewRepository.findAll(spec, pageable).map(storeReviewMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ReviewReportResponse> getAllReviewReportsAdmin(ReviewReportStatus status, UUID storeId, Pageable pageable) {
+        Specification<ReviewReport> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+
+            if (storeId != null) {
+                predicates.add(cb.equal(root.get("store").get("storeId"), storeId));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return reviewReportRepository.findAll(spec, pageable).map(storeReviewMapper::toReportResponse);
+    }
+
+    @Override
+    @Transactional
+    public ReviewReportResponse resolveReviewReport(UUID reportId, ResolveReviewReportRequest request) {
+        ReviewReport report = reviewReportRepository.findById(reportId)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_REPORT_NOT_FOUND));
+
+        if (ReviewReportStatus.RESOLVED.equals(report.getStatus()) || ReviewReportStatus.DISMISSED.equals(report.getStatus())) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Báo cáo này đã được xử lý trước đó");
+        }
+
+        String action = request.getAction() != null ? request.getAction().trim().toUpperCase() : "";
+        report.setAdminNote(request.getAdminNote());
+        report.setResolvedAt(Instant.now());
+
+        if ("APPROVE_AND_DELETE_REVIEW".equals(action) || "APPROVE".equals(action) || "RESOLVE".equals(action)) {
+            report.setStatus(ReviewReportStatus.RESOLVED);
+            StoreReview review = report.getReview();
+            if (review != null && !review.isDeleted()) {
+                UUID storeId = review.getStore().getStoreId();
+                storeReviewRepository.delete(review);
+                recalculateStoreTagScores(storeId);
+                log.info("Admin resolved report {} and deleted reported review {}", reportId, review.getReviewId());
+            }
+        } else if ("DISMISS".equals(action) || "REJECT".equals(action) || "DISMISS_REPORT".equals(action)) {
+            report.setStatus(ReviewReportStatus.DISMISSED);
+            log.info("Admin dismissed report {}", reportId);
+        } else {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Hành động xử lý không hợp lệ: " + request.getAction());
+        }
+
+        report = reviewReportRepository.save(report);
+        return storeReviewMapper.toReportResponse(report);
+    }
+
+    @Override
+    @Transactional
+    public void deleteReviewByAdmin(UUID reviewId) {
+        StoreReview review = storeReviewRepository.findById(reviewId)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
+
+        UUID storeId = review.getStore().getStoreId();
+        storeReviewRepository.delete(review);
+        recalculateStoreTagScores(storeId);
+        log.info("Admin soft deleted review {}", reviewId);
     }
 }

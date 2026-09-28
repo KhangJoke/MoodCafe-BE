@@ -27,4 +27,39 @@ public interface SubscriptionService {
     UserSubscriptionResponse confirmPayment(String transactionCode);
 
     void validateBranchLimit(UUID userId);
+
+    List<SubscriptionPlanResponse> getAllPlansAdmin();
+
+    SubscriptionPlanResponse getPlanByIdAdmin(UUID planId);
+
+    SubscriptionPlanResponse createPlan(com.moodcafe.subscription.dto.request.CreateSubscriptionPlanRequest request);
+
+    SubscriptionPlanResponse updatePlan(UUID planId, com.moodcafe.subscription.dto.request.UpdateSubscriptionPlanRequest request);
+
+    SubscriptionPlanResponse togglePlanStatus(UUID planId);
+
+    void deletePlan(UUID planId);
+
+    PageResponse<SubscriptionPaymentResponse> getAllPaymentsAdmin(Pageable pageable);
+
+    PageResponse<SubscriptionPaymentResponse> getAllPaymentsAdmin(
+            String search,
+            com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus status,
+            UUID planId,
+            Pageable pageable
+    );
+
+    PageResponse<SubscriptionPaymentResponse> getOwnerPaymentHistoryAdmin(UUID ownerUserId, Pageable pageable);
+
+    PageResponse<UserSubscriptionResponse> getAllUserSubscriptionsAdmin(Pageable pageable);
+
+    PageResponse<UserSubscriptionResponse> getAllUserSubscriptionsAdmin(
+            String search,
+            UUID planId,
+            com.moodcafe.subscription.entity.enums.SubscriptionStatus status,
+            Pageable pageable
+    );
+
+    com.moodcafe.subscription.dto.response.SubscriptionStatisticsResponse getSubscriptionStatistics();
 }
+

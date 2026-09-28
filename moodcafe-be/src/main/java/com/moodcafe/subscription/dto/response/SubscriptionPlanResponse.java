@@ -35,5 +35,8 @@ public class SubscriptionPlanResponse {
     private boolean aiRecommendation;
     private Integer monthlyFreeSponsoredCount;
     private boolean dedicatedSupport;
+    private boolean active;
     private List<String> features;
+    private java.time.Instant createdAt;
+    private java.time.Instant updatedAt;
 }

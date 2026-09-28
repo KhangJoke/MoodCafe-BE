@@ -41,6 +41,21 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: mood_cafe-ngrok
+    restart: unless-stopped
+    ports:
+      - "4040:4040"
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    command:
+      - "http"
+      - "host.docker.internal:${PORT:-8080}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   postgres_data:
   redis_data:

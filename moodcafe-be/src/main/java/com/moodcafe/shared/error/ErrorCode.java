@@ -74,6 +74,7 @@ public enum ErrorCode {
     FORBIDDEN_REVIEW_ACTION(HttpStatus.FORBIDDEN, "You do not have permission to modify this review"),
     MAX_REVIEW_IMAGES_EXCEEDED(HttpStatus.BAD_REQUEST, "Đánh giá chỉ được tải lên tối đa 3 ảnh"),
     REPORT_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "Báo cáo cho đánh giá này đã được gửi trước đó"),
+    REVIEW_REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy thông tin báo cáo đánh giá"),
     // Visit Verification & Snap
     LOCATION_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "Khoảng cách hiện tại vượt quá bán kính cho phép (50m) của quán"),
     STORE_LOCATION_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "Quán chưa cập nhật tọa độ vị trí GPS"),
@@ -88,6 +89,7 @@ public enum ErrorCode {
     SURVEY_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "Khảo sát cho lần ghé thăm này đã được hoàn thành"),
     // Subscription & Payment
     SUBSCRIPTION_PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy gói dịch vụ"),
+    SUBSCRIPTION_PLAN_NAME_EXISTS(HttpStatus.CONFLICT, "Tên gói dịch vụ đã tồn tại trong hệ thống"),
     USER_SUBSCRIPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy thông tin gói dịch vụ của người dùng"),
     ACTIVE_SUBSCRIPTION_EXISTS(HttpStatus.CONFLICT, "Tài khoản hiện đang có gói dịch vụ đang hoạt động"),
     SUBSCRIPTION_PAYMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy giao dịch thanh toán gói dịch vụ"),

@@ -65,4 +65,28 @@ public interface StoreReviewMapper {
                         .build())
                 .toList();
     }
+
+    default com.moodcafe.store.dto.response.ReviewReportResponse toReportResponse(com.moodcafe.store.entity.ReviewReport report) {
+        if (report == null) return null;
+        StoreReview rev = report.getReview();
+        return com.moodcafe.store.dto.response.ReviewReportResponse.builder()
+                .reportId(report.getReportId())
+                .reviewId(rev != null ? rev.getReviewId() : null)
+                .reporterUserId(report.getReporter() != null ? report.getReporter().getUserId() : null)
+                .reporterFullName(report.getReporter() != null ? report.getReporter().getFullName() : null)
+                .storeId(report.getStore() != null ? report.getStore().getStoreId() : (rev != null && rev.getStore() != null ? rev.getStore().getStoreId() : null))
+                .storeName(report.getStore() != null ? report.getStore().getName() : (rev != null && rev.getStore() != null ? rev.getStore().getName() : null))
+                .reason(report.getReason())
+                .details(report.getDetails())
+                .status(report.getStatus())
+                .adminNote(report.getAdminNote())
+                .reviewContent(rev != null ? rev.getContent() : null)
+                .reviewOverallRating(rev != null ? rev.getOverallRating() : null)
+                .reviewAuthorFullName(rev != null && rev.getUser() != null ? rev.getUser().getFullName() : null)
+                .reviewAuthorUserId(rev != null && rev.getUser() != null ? rev.getUser().getUserId() : null)
+                .createdAt(report.getCreatedAt())
+                .resolvedAt(report.getResolvedAt())
+                .build();
+    }
 }
+

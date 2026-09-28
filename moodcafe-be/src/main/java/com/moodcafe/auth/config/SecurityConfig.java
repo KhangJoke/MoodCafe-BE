@@ -40,7 +40,8 @@ public class SecurityConfig {
             "/v3/api-docs/**",
             "/ws/**",
             "/ws",
-            "/error"
+            "/error",
+            "/api/payment/payos/**"
     };
 
     private final JwtService jwtService;
