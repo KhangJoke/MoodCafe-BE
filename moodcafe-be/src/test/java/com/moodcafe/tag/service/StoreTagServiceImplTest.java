@@ -97,7 +97,7 @@ class StoreTagServiceImplTest {
                 .tagId(tagId)
                 .tagName("Vintage")
                 .status(StoreTagStatus.PENDING)
-                .proofImageUrl("https://res.cloudinary.com/proof.jpg")
+                .proofImageUrls(List.of("https://res.cloudinary.com/proof.jpg"))
                 .build();
     }
 
@@ -118,7 +118,7 @@ class StoreTagServiceImplTest {
     void requestStoreTag_newRequest_success() {
         SubmitStoreTagRequest request = SubmitStoreTagRequest.builder()
                 .tagId(tagId)
-                .proofImageUrl("https://res.cloudinary.com/proof.jpg")
+                .proofImageUrls(List.of("https://res.cloudinary.com/proof.jpg"))
                 .build();
 
         when(tagRepository.findById(tagId)).thenReturn(Optional.of(tag));

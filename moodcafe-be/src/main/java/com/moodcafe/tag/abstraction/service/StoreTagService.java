@@ -1,5 +1,6 @@
 package com.moodcafe.tag.abstraction.service;
 
+import com.moodcafe.tag.dto.request.RevokeStoreTagAdminRequest;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
 import com.moodcafe.tag.dto.request.UpdateStoreHighlightTagsRequest;
@@ -22,6 +23,8 @@ public interface StoreTagService {
     List<StoreTagResponse> getPendingStoreTagRequests();
 
     StoreTagResponse reviewStoreTagRequest(UUID storeTagId, ReviewStoreTagRequest request);
+
+    StoreTagResponse revokeStoreTagByAdmin(UUID storeTagId, RevokeStoreTagAdminRequest request);
 
     List<StoreTagResponse> updateStoreHighlightTags(UUID storeId, UpdateStoreHighlightTagsRequest request);
 }

@@ -8,6 +8,7 @@ import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.service.StoreTagService;
+import com.moodcafe.tag.dto.request.RevokeStoreTagAdminRequest;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
 import com.moodcafe.tag.dto.request.UpdateStoreHighlightTagsRequest;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -62,10 +64,26 @@ public class StoreTagServiceImpl implements StoreTagService {
                 .build();
     }
 
+    private String resolveProofImages(SubmitStoreTagRequest request) {
+        if (request == null || request.getProofImageUrls() == null) return null;
+        List<String> urls = request.getProofImageUrls().stream()
+                .filter(u -> u != null && !u.isBlank())
+                .map(String::trim)
+                .toList();
+
+        if (urls.size() > 3) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Chỉ được tải lên tối đa 3 ảnh minh chứng.");
+        }
+
+        return urls.isEmpty() ? null : String.join(",", urls);
+    }
+
     @Override
     @Transactional
     public StoreTagResponse requestStoreTag(UUID storeId, SubmitStoreTagRequest request) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        String resolvedProofImages = resolveProofImages(request);
 
         Tag tag;
         if (request.getTagId() != null) {
@@ -84,7 +102,7 @@ public class StoreTagServiceImpl implements StoreTagService {
                 throw new AppException(ErrorCode.INVALID_INPUT, "Danh mục này không cho phép chủ quán đề xuất tên thẻ mới.");
             }
 
-            if (request.getProofImageUrl() == null || request.getProofImageUrl().trim().isEmpty()) {
+            if (resolvedProofImages == null || resolvedProofImages.isBlank()) {
                 throw new AppException(ErrorCode.INVALID_INPUT, "Ảnh minh chứng là bắt buộc khi đề xuất thẻ mới.");
             }
 
@@ -115,7 +133,7 @@ public class StoreTagServiceImpl implements StoreTagService {
             }
         }
 
-        if (isOwnerRequest && (request.getProofImageUrl() == null || request.getProofImageUrl().trim().isEmpty())) {
+        if (isOwnerRequest && (resolvedProofImages == null || resolvedProofImages.isBlank())) {
             throw new AppException(ErrorCode.STORE_TAG_PROOF_REQUIRED, "Ảnh minh chứng là bắt buộc cho thẻ thuộc danh mục cần kiểm duyệt.");
         }
 
@@ -127,7 +145,7 @@ public class StoreTagServiceImpl implements StoreTagService {
                 if (!st.getTag().getTagId().equals(tag.getTagId())) {
                     st.setStatus(StoreTagStatus.REVOKED);
                     st.setRevokedAt(Instant.now());
-                    storeTagRepository.save(st);
+                    storeTagRepository.delete(st);
                 }
             }
         }
@@ -139,7 +157,7 @@ public class StoreTagServiceImpl implements StoreTagService {
         if (existingOpt.isPresent()) {
             storeTag = existingOpt.get();
             storeTag.setStatus(targetStatus);
-            storeTag.setProofImageUrl(request.getProofImageUrl());
+            storeTag.setProofImageUrl(resolvedProofImages);
             storeTag.setRejectReason(null);
             storeTag.setApprovedAt(approvedAt);
             storeTag.setRevokedAt(null);
@@ -148,7 +166,7 @@ public class StoreTagServiceImpl implements StoreTagService {
                     .storeId(storeId)
                     .tag(tag)
                     .status(targetStatus)
-                    .proofImageUrl(request.getProofImageUrl())
+                    .proofImageUrl(resolvedProofImages)
                     .approvedAt(approvedAt)
                     .build();
         }
@@ -162,6 +180,7 @@ public class StoreTagServiceImpl implements StoreTagService {
     public List<StoreTagResponse> getStoreTagsManagement(UUID storeId) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
         return storeTagRepository.findAllByStoreId(storeId).stream()
+                .filter(st -> !StoreTagStatus.REVOKED.equals(st.getStatus()))
                 .map(storeTagMapper::toResponse)
                 .toList();
     }
@@ -186,13 +205,15 @@ public class StoreTagServiceImpl implements StoreTagService {
             throw new AppException(ErrorCode.STORE_TAG_RESUBMIT_NOT_ALLOWED);
         }
 
+        String resolvedProofImages = resolveProofImages(request);
+
         Tag tag = storeTag.getTag();
         boolean isOwnerCustom = tag.getCategory() != null && ApprovalMode.OWNER_CUSTOM.equals(tag.getCategory().getApprovalMode());
-        if (!isOwnerCustom && (request.getProofImageUrl() == null || request.getProofImageUrl().isBlank())) {
+        if (!isOwnerCustom && (resolvedProofImages == null || resolvedProofImages.isBlank())) {
             throw new AppException(ErrorCode.STORE_TAG_PROOF_REQUIRED);
         }
 
-        storeTag.setProofImageUrl(request.getProofImageUrl());
+        storeTag.setProofImageUrl(resolvedProofImages);
         storeTag.setStatus(isOwnerCustom ? StoreTagStatus.APPROVED : StoreTagStatus.PENDING);
         storeTag.setApprovedAt(isOwnerCustom ? Instant.now() : null);
         storeTag.setRejectReason(null);
@@ -254,6 +275,26 @@ public class StoreTagServiceImpl implements StoreTagService {
         }
 
         storeTag = storeTagRepository.save(storeTag);
+        return storeTagMapper.toResponse(storeTag);
+    }
+
+    @Override
+    @Transactional
+    public StoreTagResponse revokeStoreTagByAdmin(UUID storeTagId, RevokeStoreTagAdminRequest request) {
+        currentUserService.requireSystemAdmin();
+
+        StoreTag storeTag = storeTagRepository.findById(storeTagId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_TAG_NOT_FOUND));
+
+        storeTag.setStatus(StoreTagStatus.REVOKED);
+        storeTag.setRevokedAt(Instant.now());
+        String reason = (request != null && request.getReason() != null && !request.getReason().isBlank())
+                ? request.getReason().trim()
+                : "Bị quản trị viên thu hồi";
+        storeTag.setRejectReason(reason);
+        storeTag.setAllowResubmit(false);
+        storeTagRepository.delete(storeTag);
+
         return storeTagMapper.toResponse(storeTag);
     }
 

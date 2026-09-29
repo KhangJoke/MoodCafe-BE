@@ -2,6 +2,7 @@ package com.moodcafe.tag.controller;
 
 import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.tag.abstraction.service.StoreTagService;
+import com.moodcafe.tag.dto.request.RevokeStoreTagAdminRequest;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
 import com.moodcafe.tag.dto.request.UpdateStoreHighlightTagsRequest;
@@ -88,5 +89,15 @@ public class StoreTagController {
     ) {
         StoreTagResponse response = storeTagService.reviewStoreTagRequest(storeTagId, request);
         return ResponseEntity.ok(ApiResponse.success(response, "Store tag review completed successfully"));
+    }
+
+    @PutMapping("/api/admin/store-tags/{storeTagId}/revoke")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<StoreTagResponse>> revokeStoreTag(
+            @PathVariable UUID storeTagId,
+            @Valid @RequestBody RevokeStoreTagAdminRequest request
+    ) {
+        StoreTagResponse response = storeTagService.revokeStoreTagByAdmin(storeTagId, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Thu hồi thẻ của cơ sở thành công"));
     }
 }
