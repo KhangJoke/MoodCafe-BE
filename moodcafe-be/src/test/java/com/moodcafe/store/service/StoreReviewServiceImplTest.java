@@ -46,6 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -160,6 +161,41 @@ class StoreReviewServiceImplTest {
         verify(storeTagRepository).save(storeTagQuiet);
         assertThat(storeTagQuiet.getAvgScore()).isEqualTo(5.0);
         assertThat(storeTagQuiet.getReviewCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("createReview - without images and without visitVerification - creates unverified review successfully")
+    void createReview_WithoutImages_Success() {
+        CreateStoreReviewRequest request = CreateStoreReviewRequest.builder()
+                .overallRating(BigDecimal.valueOf(4.0))
+                .content("Đánh giá không kèm ảnh")
+                .build();
+
+        when(currentUserService.getCurrentUser()).thenReturn(currentUser);
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store));
+
+        when(storeReviewRepository.save(any(StoreReview.class))).thenAnswer(invocation -> {
+            StoreReview r = invocation.getArgument(0);
+            r.setReviewId(UUID.randomUUID());
+            return r;
+        });
+
+        when(storeReviewMapper.toResponse(any(StoreReview.class))).thenReturn(StoreReviewResponse.builder()
+                .reviewId(UUID.randomUUID())
+                .storeId(storeId)
+                .overallRating(BigDecimal.valueOf(4.0))
+                .content("Đánh giá không kèm ảnh")
+                .imageUrls(Collections.emptyList())
+                .verified(false)
+                .build());
+
+        StoreReviewResponse response = storeReviewService.createReview(storeId, request, null, null);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getOverallRating()).isEqualTo(BigDecimal.valueOf(4.0));
+        assertThat(response.isVerified()).isFalse();
+        assertThat(response.getImageUrls()).isEmpty();
+        verify(fileStorageService, never()).uploadImage(any(), any());
     }
 
     @Test

@@ -22,10 +22,12 @@ public class SubscriptionPaymentResponse {
     private String transactionCode;
     private String planName;
     private String planDisplayName;
+    private String planCode;
     private BigDecimal amount;
     private String paymentMethod;
     private SubscriptionPaymentStatus status;
     private Instant paidAt;
+    private Instant completedAt;
     private String notes;
     private Instant createdAt;
 }

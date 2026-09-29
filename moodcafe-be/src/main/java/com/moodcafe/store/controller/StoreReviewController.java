@@ -44,8 +44,8 @@ public class StoreReviewController {
 
     private final StoreReviewService storeReviewService;
 
-    @Operation(summary = "Gửi đánh giá quán (Hỗ trợ Verified Review với visitVerificationId, tối đa 3 ảnh)",
-            description = "Nếu có visitVerificationId từ bước Snap/Survey, đánh giá sẽ được đánh dấu Verified. Có thể tái sử dụng ảnh Snap nếu không tải lên ảnh mới.")
+    @Operation(summary = "Gửi đánh giá quán (Multipart - có ảnh đính kèm hoặc không, tối đa 3 ảnh)",
+            description = "Ảnh là tuỳ chọn (0 - 3 ảnh). Nếu có visitVerificationId từ bước Snap/Survey, đánh giá sẽ được đánh dấu Verified. Có thể tái sử dụng ảnh Snap nếu không tải lên ảnh mới.")
     @PostMapping(value = "/{storeId}/reviews", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<StoreReviewResponse>> createReview(
             @PathVariable UUID storeId,
@@ -54,6 +54,18 @@ public class StoreReviewController {
             @Valid @ModelAttribute CreateStoreReviewRequest request
     ) {
         StoreReviewResponse response = storeReviewService.createReview(storeId, request, image, additionalImages);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(response, "Review submitted successfully"));
+    }
+
+    @Operation(summary = "Gửi đánh giá quán (JSON - tiện lợi khi không đính kèm file ảnh)",
+            description = "Dành cho trường hợp gửi đánh giá không kèm tệp ảnh (hoặc tái sử dụng ảnh từ VibeSnap qua visitVerificationId).")
+    @PostMapping(value = "/{storeId}/reviews", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ApiResponse<StoreReviewResponse>> createReviewJson(
+            @PathVariable UUID storeId,
+            @Valid @RequestBody CreateStoreReviewRequest request
+    ) {
+        StoreReviewResponse response = storeReviewService.createReview(storeId, request, null, null);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Review submitted successfully"));
     }

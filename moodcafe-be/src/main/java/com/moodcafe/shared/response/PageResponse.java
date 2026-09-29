@@ -1,5 +1,6 @@
 package com.moodcafe.shared.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,4 +22,9 @@ public class PageResponse<T> {
     private long totalElements;
     private int totalPages;
     private boolean last;
+
+    @JsonProperty("content")
+    public List<T> getContent() {
+        return items;
+    }
 }
