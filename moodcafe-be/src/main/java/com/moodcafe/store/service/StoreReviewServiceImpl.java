@@ -144,10 +144,6 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             throw new AppException(ErrorCode.MAX_REVIEW_IMAGES_EXCEEDED, "Đánh giá chỉ được tải lên tối đa 3 ảnh");
         }
 
-        if (totalImagesCount == 0) {
-            throw new AppException(ErrorCode.REVIEW_IMAGE_REQUIRED, "A live photo of the store taken at the moment is required to submit a review");
-        }
-
         // 5. Upload images to Cloudinary with orphan protection
         List<String> uploadedImageUrls = new ArrayList<>();
         List<ReviewImage> reviewImages = new ArrayList<>();

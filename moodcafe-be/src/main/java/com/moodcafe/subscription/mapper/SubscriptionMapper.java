@@ -92,16 +92,21 @@ public class SubscriptionMapper {
 
         String planName = payment.getSubscriptionPlan() != null ? payment.getSubscriptionPlan().getName() : null;
         String planDisplayName = payment.getSubscriptionPlan() != null ? payment.getSubscriptionPlan().getDisplayName() : null;
+        String planCode = payment.getSubscriptionPlan() != null && payment.getSubscriptionPlan().getPlanCode() != null
+                ? payment.getSubscriptionPlan().getPlanCode().name()
+                : null;
 
         return SubscriptionPaymentResponse.builder()
                 .paymentId(payment.getPaymentId())
                 .transactionCode(payment.getTransactionCode())
                 .planName(planName)
                 .planDisplayName(planDisplayName)
+                .planCode(planCode)
                 .amount(payment.getAmount())
                 .paymentMethod(payment.getPaymentMethod())
                 .status(payment.getStatus())
                 .paidAt(payment.getPaidAt())
+                .completedAt(payment.getPaidAt())
                 .notes(payment.getNotes())
                 .createdAt(payment.getCreatedAt())
                 .build();
