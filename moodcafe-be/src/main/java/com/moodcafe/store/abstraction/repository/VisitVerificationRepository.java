@@ -31,4 +31,6 @@ public interface VisitVerificationRepository extends JpaRepository<VisitVerifica
     boolean existsByStoreStoreIdAndUserUserIdAndCapturedAtAfter(UUID storeId, UUID userId, Instant after);
 
     List<VisitVerification> findTop10ByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
+
+    List<VisitVerification> findTop5ByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
 }

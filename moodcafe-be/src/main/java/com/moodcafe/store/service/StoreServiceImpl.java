@@ -420,14 +420,14 @@ public class StoreServiceImpl implements StoreService {
 
         List<Object[]> reviewSummary = storeReviewRepository.getReviewSummaryByStoreId(storeId);
         double avgRating = 0.0;
-        if (reviewSummary != null && !reviewSummary.isEmpty() && reviewSummary.get(0)[0] != null) {
+        if (reviewSummary != null && !reviewSummary.isEmpty() && reviewSummary.get(0) != null && reviewSummary.get(0).length > 0 && reviewSummary.get(0)[0] != null) {
             avgRating = Math.round(((Number) reviewSummary.get(0)[0]).doubleValue() * 10.0) / 10.0;
         }
 
         List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
-        long activeTagsCount = storeTags.stream()
-                .filter(st -> StoreTagStatus.APPROVED.equals(st.getStatus()))
-                .count();
+        long activeTagsCount = (storeTags != null)
+                ? storeTags.stream().filter(st -> StoreTagStatus.APPROVED.equals(st.getStatus())).count()
+                : 0L;
 
         MerchantMetrics metrics = MerchantMetrics.builder()
                 .totalSnaps(totalSnaps)
@@ -436,38 +436,40 @@ public class StoreServiceImpl implements StoreService {
                 .activeTagsCount(activeTagsCount)
                 .build();
 
-        List<VisitVerification> snaps = visitVerificationRepository.findTop10ByStoreStoreIdOrderByCreatedAtDesc(storeId);
-        List<MerchantRecentSnap> recentSnaps = snaps.stream()
+        List<VisitVerification> snaps = visitVerificationRepository.findTop5ByStoreStoreIdOrderByCreatedAtDesc(storeId);
+        List<MerchantRecentSnap> recentSnaps = (snaps != null) ? snaps.stream()
+                .limit(5)
                 .map(v -> MerchantRecentSnap.builder()
                         .visitVerificationId(v.getVisitVerificationId())
                         .imageUrl(v.getImageUrl())
-                        .userId(v.getUser().getUserId())
-                        .userFullName(v.getUser().getFullName())
-                        .userAvatarUrl(v.getUser().getAvatarUrl())
+                        .userId(v.getUser() != null ? v.getUser().getUserId() : null)
+                        .userFullName(v.getUser() != null ? v.getUser().getFullName() : null)
+                        .userAvatarUrl(v.getUser() != null ? v.getUser().getAvatarUrl() : null)
                         .capturedAt(v.getCapturedAt())
                         .distanceFromStoreMeters(v.getDistanceFromStoreMeters())
                         .build())
-                .toList();
+                .toList() : List.of();
 
-        List<StoreReview> reviews = storeReviewRepository.findTop10ByStoreStoreIdOrderByCreatedAtDesc(storeId);
-        List<MerchantRecentReview> recentReviews = reviews.stream()
+        List<StoreReview> reviews = storeReviewRepository.findTop5ByStoreStoreIdOrderByCreatedAtDesc(storeId);
+        List<MerchantRecentReview> recentReviews = (reviews != null) ? reviews.stream()
+                .limit(5)
                 .map(r -> MerchantRecentReview.builder()
                         .reviewId(r.getReviewId())
-                        .userId(r.getUser().getUserId())
-                        .userFullName(r.getUser().getFullName())
-                        .userAvatarUrl(r.getUser().getAvatarUrl())
+                        .userId(r.getUser() != null ? r.getUser().getUserId() : null)
+                        .userFullName(r.getUser() != null ? r.getUser().getFullName() : null)
+                        .userAvatarUrl(r.getUser() != null ? r.getUser().getAvatarUrl() : null)
                         .overallRating(r.getOverallRating())
                         .content(r.getContent())
-                        .imageUrls(r.getImages().stream().map(ReviewImage::getImageUrl).toList())
+                        .imageUrls(r.getImages() != null ? r.getImages().stream().map(ReviewImage::getImageUrl).toList() : List.of())
                         .merchantReply(r.getMerchantReply())
                         .replyAt(r.getReplyAt())
                         .createdAt(r.getCreatedAt())
                         .build())
-                .toList();
+                .toList() : List.of();
 
-        List<StoreTagResponse> tagResponses = storeTags.stream()
+        List<StoreTagResponse> tagResponses = (storeTags != null) ? storeTags.stream()
                 .map(storeTagMapper::toResponse)
-                .toList();
+                .toList() : List.of();
 
         return MerchantDashboardResponse.builder()
                 .store(summary)

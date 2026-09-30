@@ -63,6 +63,12 @@ public enum ErrorCode {
     STORE_TAG_REQUIRED(HttpStatus.BAD_REQUEST, "Vui lòng chọn ít nhất 1 thẻ vibe khi đăng ký quán"),
     STORE_TAG_PROOF_REQUIRED(HttpStatus.BAD_REQUEST, "Thẻ vibe yêu cầu đính kèm ảnh minh chứng thực tế"),
     STORE_TAG_RESUBMIT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Thẻ vibe đã bị từ chối và không được phép nộp lại"),
+    // Menu
+    MENU_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy danh mục thực đơn"),
+    MENU_CATEGORY_NAME_EXISTS(HttpStatus.CONFLICT, "Tên danh mục đã tồn tại trong quán"),
+    CATEGORY_HAS_ITEMS(HttpStatus.CONFLICT, "Không thể xóa danh mục đang có món ăn"),
+    MENU_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy món ăn trong thực đơn"),
+    MENU_ITEM_STORE_MISMATCH(HttpStatus.BAD_REQUEST, "Danh mục hoặc món ăn không thuộc về quán này"),
     // Review
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "Review not found"),
     USER_ALREADY_REVIEWED(HttpStatus.CONFLICT,

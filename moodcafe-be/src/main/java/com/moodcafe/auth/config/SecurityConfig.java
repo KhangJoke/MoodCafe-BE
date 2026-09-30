@@ -126,6 +126,7 @@ public class SecurityConfig {
                                 "/api/stores/*/attributes",
                                 "/api/stores/*/reviews",
                                 "/api/stores/*/reviews/**",
+                                "/api/stores/*/menu/**",
                                 "/api/stores/reviews/*",
                                 "/api/tags",
                                 "/api/tags/*",

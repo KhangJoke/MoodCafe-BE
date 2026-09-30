@@ -22,6 +22,8 @@ public interface StoreReviewRepository extends JpaRepository<StoreReview, UUID>,
 
     List<StoreReview> findTop10ByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
 
+    List<StoreReview> findTop5ByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
+
     List<StoreReview> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId);
 
     boolean existsByStoreStoreIdAndUserUserId(UUID storeId, UUID userId);
