@@ -14,6 +14,7 @@ public record NotificationResponse(
         Boolean read,
         NotificationType type,
         String referenceId,
+        String actionUrl,
         Instant createdAt
 ) {
 }

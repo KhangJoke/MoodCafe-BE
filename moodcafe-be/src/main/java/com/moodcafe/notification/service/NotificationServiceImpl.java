@@ -127,7 +127,8 @@ public class NotificationServiceImpl implements NotificationService {
             String title,
             String message,
             NotificationType type,
-            String referenceId
+            String referenceId,
+            String actionUrl
     ) {
         log.info("Creating notification for user: {}", userId);
         if (!userService.existsById(userId)) {
@@ -142,6 +143,7 @@ public class NotificationServiceImpl implements NotificationService {
                 .read(false)
                 .type(type)
                 .referenceId(referenceId)
+                .actionUrl(actionUrl)
                 .build();
 
         // 1. Save to PostgreSQL first (source of truth)
@@ -173,9 +175,10 @@ public class NotificationServiceImpl implements NotificationService {
             String title,
             String content,
             NotificationType type,
-            String referenceId
+            String referenceId,
+            String actionUrl
     ) {
-        createNotification(targetUserId, title, content, type, referenceId);
+        createNotification(targetUserId, title, content, type, referenceId, actionUrl);
     }
 
     @Override
@@ -185,9 +188,9 @@ public class NotificationServiceImpl implements NotificationService {
             String title,
             String content,
             NotificationType type,
-            String referenceId
+            String referenceId,
+            String actionUrl
     ) {
-
         if (targetUserIds == null || targetUserIds.isEmpty()) {
             return;
         }
@@ -199,7 +202,8 @@ public class NotificationServiceImpl implements NotificationService {
                         title,
                         content,
                         type,
-                        referenceId
+                        referenceId,
+                        actionUrl
                 );
             } catch (Exception e) {
                 log.error(
@@ -264,6 +268,14 @@ public class NotificationServiceImpl implements NotificationService {
         }
 
         return notificationMapper.toResponse(notification);
+    }
+
+    @Override
+    @Transactional
+    public void markAllAsRead(UUID userId) {
+        log.info("Marking all notifications as read for user {}", userId);
+        int updatedCount = notificationRepository.markAllAsReadByUserId(userId);
+        log.info("Marked {} unread notifications as read for user {}", updatedCount, userId);
     }
 
 

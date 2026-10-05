@@ -3,7 +3,9 @@ package com.moodcafe.tag.service;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
+import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
@@ -62,6 +64,12 @@ class StoreTagServiceImplTest {
 
     @Mock
     private StoreRepository storeRepository;
+
+    @Mock
+    private StoreStaffRepository storeStaffRepository;
+
+    @Mock
+    private NotificationDispatcherService notificationDispatcherService;
 
     @InjectMocks
     private StoreTagServiceImpl storeTagService;

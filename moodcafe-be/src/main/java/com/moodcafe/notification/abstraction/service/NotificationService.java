@@ -14,15 +14,17 @@ public interface NotificationService {
 
     SseEmitter createConnection(UUID userId);
 
-    NotificationResponse createNotification(UUID userId, String title, String message, NotificationType type, String referenceId);
+    NotificationResponse createNotification(UUID userId, String title, String message, NotificationType type, String referenceId, String actionUrl);
 
-    void createAndSendNotification(UUID targetUserId, String title, String content, NotificationType type, String referenceId);
+    void createAndSendNotification(UUID targetUserId, String title, String content, NotificationType type, String referenceId, String actionUrl);
 
-    void createAndSendNotification(List<UUID> targetUserIds, String title, String content, NotificationType type, String referenceId);
+    void createAndSendNotification(List<UUID> targetUserIds, String title, String content, NotificationType type, String referenceId, String actionUrl);
 
     List<NotificationResponse> getNotificationsForUser(UUID userId);
 
     List<NotificationResponse> getNotificationsForUser(UUID userId, Pageable pageable);
 
     NotificationResponse markAsRead(UUID notificationId, UUID userId);
+
+    void markAllAsRead(UUID userId);
 }

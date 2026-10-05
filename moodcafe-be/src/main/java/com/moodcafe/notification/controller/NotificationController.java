@@ -48,4 +48,10 @@ public class NotificationController {
         );
         return ApiResponse.success(updated, "Notification marked as read");
     }
+
+    @PatchMapping("/read-all")
+    public ApiResponse<Void> markAllAsRead(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        notificationService.markAllAsRead(userDetails.user().getUserId());
+        return ApiResponse.success(null, "All notifications marked as read");
+    }
 }

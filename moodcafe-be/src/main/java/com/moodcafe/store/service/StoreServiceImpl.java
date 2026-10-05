@@ -4,6 +4,8 @@ import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.configuration.abstraction.service.SystemConfigurationService;
 import com.moodcafe.configuration.dto.response.MatchScoreWeights;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
+import com.moodcafe.notification.entity.enums.NotificationType;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.shared.response.PageResponse;
@@ -108,6 +110,7 @@ public class StoreServiceImpl implements StoreService {
     private final TagRatingRepository tagRatingRepository;
     private final VisitVerificationRepository visitVerificationRepository;
     private final SubscriptionService subscriptionService;
+    private final NotificationDispatcherService notificationDispatcherService;
 
     @Override
     @Transactional
@@ -144,6 +147,14 @@ public class StoreServiceImpl implements StoreService {
                 .build();
 
         storeStaffRepository.save(staff);
+
+        notificationDispatcherService.dispatchToAdmins(
+                "Cơ sở mới đăng ký",
+                "Quán \"" + store.getName() + "\" vừa được tạo và đang chờ duyệt.",
+                NotificationType.STORE_REGISTRATION_SUBMITTED,
+                store.getStoreId().toString(),
+                "/admin/stores?status=PENDING"
+        );
 
         return toStoreResponse(store);
     }
@@ -240,6 +251,14 @@ public class StoreServiceImpl implements StoreService {
                 .joinedAt(Instant.now())
                 .build();
         storeStaffRepository.save(staff);
+
+        notificationDispatcherService.dispatchToAdmins(
+                "Cơ sở mới đăng ký",
+                "Quán \"" + store.getName() + "\" vừa nộp hồ sơ đăng ký và đang chờ duyệt.",
+                NotificationType.STORE_REGISTRATION_SUBMITTED,
+                store.getStoreId().toString(),
+                "/admin/stores?status=PENDING"
+        );
 
         return toStoreRegistrationStatusResponse(store);
     }
@@ -374,6 +393,14 @@ public class StoreServiceImpl implements StoreService {
             }
         }
         storeTagRepository.flush();
+
+        notificationDispatcherService.dispatchToAdmins(
+                "Cơ sở mới đăng ký",
+                "Quán \"" + store.getName() + "\" vừa cập nhật lại hồ sơ đăng ký và đang chờ duyệt lại.",
+                NotificationType.STORE_REGISTRATION_SUBMITTED,
+                store.getStoreId().toString(),
+                "/admin/stores?status=PENDING"
+        );
 
         return toStoreRegistrationStatusResponse(store);
     }
@@ -587,6 +614,33 @@ public class StoreServiceImpl implements StoreService {
             }
         }
         store = storeRepository.save(store);
+
+        List<StoreStaff> ownerStaffs = storeStaffRepository.findAllByStoreStoreIdAndStoreRoleName(storeId, "OWNER");
+        List<UUID> ownerUserIds = ownerStaffs.stream()
+                .map(staff -> staff.getUser().getUserId())
+                .toList();
+
+        if (!ownerUserIds.isEmpty()) {
+            String title = "Kết quả thẩm định quán";
+            String message;
+            if (request.getStatus() == StoreStatus.ACTIVE) {
+                message = "Chúc mừng! Quán \"" + store.getName() + "\" của bạn đã được phê duyệt và đưa vào hoạt động.";
+            } else if (request.getStatus() == StoreStatus.REJECTED) {
+                message = "Hồ sơ quán \"" + store.getName() + "\" đã bị từ chối."
+                        + (store.getRejectReason() != null ? " Lý do: " + store.getRejectReason() : "");
+            } else {
+                message = "Trạng thái quán \"" + store.getName() + "\" đã được cập nhật thành: " + request.getStatus();
+            }
+
+            notificationDispatcherService.dispatchToUsers(
+                    ownerUserIds,
+                    title,
+                    message,
+                    NotificationType.STORE_STATUS_UPDATED,
+                    store.getStoreId().toString(),
+                    "/merchant/stores"
+            );
+        }
 
         return toStoreResponse(store);
     }

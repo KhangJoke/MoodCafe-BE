@@ -65,6 +65,9 @@ public class Notification {
     @Column(name = "reference_id")
     private String referenceId;
 
+    @Column(name = "action_url", length = 500)
+    private String actionUrl;
+
     @Builder.Default
     @Column(name = "is_deleted", nullable = false)
     private boolean isDeleted = false;

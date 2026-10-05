@@ -8,10 +8,13 @@ import com.moodcafe.shared.abstraction.service.FileStorageService;
 import com.moodcafe.shared.dto.UploadImageResponse;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
+import com.moodcafe.notification.entity.enums.NotificationType;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
 import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.abstraction.service.StoreReviewService;
+import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.abstraction.repository.ReviewReportRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
@@ -80,6 +83,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     private final ReviewReportRepository reviewReportRepository;
     private final StoreStaffService storeStaffService;
     private final ObjectMapper objectMapper;
+    private final NotificationDispatcherService notificationDispatcherService;
 
     @Override
     @Transactional
@@ -224,6 +228,22 @@ public class StoreReviewServiceImpl implements StoreReviewService {
 
         log.info("User {} submitted review {} (verified: {}) with {} tag ratings for store {}",
                 currentUser.getUserId(), review.getReviewId(), visitVerification != null, review.getTagRatings().size(), storeId);
+
+        List<StoreStaff> ownerStaffs = storeStaffRepository.findAllByStoreStoreIdAndStoreRoleName(storeId, "OWNER");
+        List<UUID> ownerUserIds = ownerStaffs.stream()
+                .map(staff -> staff.getUser().getUserId())
+                .toList();
+
+        if (!ownerUserIds.isEmpty()) {
+            notificationDispatcherService.dispatchToUsers(
+                    ownerUserIds,
+                    "Đánh giá mới tại quán",
+                    "Khách hàng " + currentUser.getFullName() + " vừa đánh giá " + review.getOverallRating() + " sao cho quán \"" + store.getName() + "\".",
+                    NotificationType.REVIEW_CREATED,
+                    review.getReviewId().toString(),
+                    "/merchant/reviews"
+            );
+        }
 
         return storeReviewMapper.toResponse(review);
     }
@@ -474,6 +494,18 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         review.setReplyAt(Instant.now());
         review = storeReviewRepository.save(review);
 
+        if (review.getUser() != null) {
+            String storeTitle = review.getStore() != null ? review.getStore().getName() : "Chủ quán";
+            notificationDispatcherService.dispatch(
+                    review.getUser().getUserId(),
+                    "Chủ quán đã phản hồi bài đánh giá của bạn!",
+                    storeTitle + " vừa phản hồi bài đánh giá của bạn: \"" + request.getReply() + "\"",
+                    NotificationType.REVIEW_REPLIED,
+                    review.getReviewId().toString(),
+                    "/stores/" + storeId + "#reviews"
+            );
+        }
+
         return storeReviewMapper.toResponse(review);
     }
 
@@ -526,6 +558,14 @@ public class StoreReviewServiceImpl implements StoreReviewService {
                 .build();
 
         report = reviewReportRepository.save(report);
+
+        notificationDispatcherService.dispatchToAdmins(
+                "Báo cáo vi phạm đánh giá",
+                "Người dùng " + currentUser.getFullName() + " vừa gửi báo cáo vi phạm cho một bài đánh giá tại quán \"" + review.getStore().getName() + "\".",
+                NotificationType.REVIEW_REPORTED,
+                report.getReportId().toString(),
+                "/admin/reviews/reports?status=PENDING"
+        );
 
         return ReviewReportResponse.builder()
                 .reportId(report.getReportId())
@@ -621,6 +661,38 @@ public class StoreReviewServiceImpl implements StoreReviewService {
                 st.setReviewCount(0);
             }
             storeTagRepository.save(st);
+
+            // BR-03, BR-04: Check if tag rating dropped below 2.5 with at least 10 reviews
+            if (st.getAvgScore() != null && st.getAvgScore() > 0 && st.getAvgScore() < 2.5 && st.getReviewCount() != null && st.getReviewCount() >= 10) {
+                Store store = storeRepository.findById(storeId).orElse(null);
+                String storeName = store != null ? store.getName() : "Quán";
+                String tagName = st.getTag().getName();
+
+                // Alert Admins for inspection/revocation
+                notificationDispatcherService.dispatchToAdmins(
+                        "Cảnh báo thẻ chất lượng kém",
+                        "Thẻ \"" + tagName + "\" tại quán \"" + storeName + "\" đã rơi xuống " + st.getAvgScore() + "/5.0 sao (" + st.getReviewCount() + " đánh giá - BR-03, BR-04).",
+                        NotificationType.TAG_LOW_RATING_ALERT,
+                        st.getStoreTagId().toString(),
+                        "/admin/tags?alert=low_rating"
+                );
+
+                // Alert Merchant
+                List<StoreStaff> ownerStaffs = storeStaffRepository.findAllByStoreStoreIdAndStoreRoleName(storeId, "OWNER");
+                List<UUID> ownerUserIds = ownerStaffs.stream()
+                        .map(staff -> staff.getUser().getUserId())
+                        .toList();
+                if (!ownerUserIds.isEmpty()) {
+                    notificationDispatcherService.dispatchToUsers(
+                            ownerUserIds,
+                            "Cảnh báo chất lượng thẻ",
+                            "Thẻ \"" + tagName + "\" của quán bị đánh giá thấp (" + st.getAvgScore() + "/5.0 sao với " + st.getReviewCount() + " lượt đánh giá). Vui lòng kiểm tra và cải thiện.",
+                            NotificationType.TAG_QUALITY_WARNING,
+                            st.getStoreTagId().toString(),
+                            "/merchant?tab=tags"
+                    );
+                }
+            }
         }
     }
 
@@ -742,6 +814,24 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         }
 
         report = reviewReportRepository.save(report);
+
+        if (report.getReporter() != null) {
+            String resolutionMsg = ReviewReportStatus.RESOLVED.equals(report.getStatus())
+                    ? "Báo cáo vi phạm của bạn về bài đánh giá đã được tiếp nhận và xử lý gỡ bỏ."
+                    : "Báo cáo vi phạm của bạn đã được thẩm tra và bác bỏ (không vi phạm quy chuẩn).";
+            if (report.getAdminNote() != null && !report.getAdminNote().isBlank()) {
+                resolutionMsg += " Ghi chú: " + report.getAdminNote();
+            }
+            notificationDispatcherService.dispatch(
+                    report.getReporter().getUserId(),
+                    "Kết quả xử lý báo cáo",
+                    resolutionMsg,
+                    NotificationType.REVIEW_REPORT_RESOLVED,
+                    report.getReportId().toString(),
+                    "/customer/profile?tab=reports"
+            );
+        }
+
         return storeReviewMapper.toReportResponse(report);
     }
 

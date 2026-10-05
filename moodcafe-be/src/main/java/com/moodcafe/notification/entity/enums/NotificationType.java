@@ -26,6 +26,22 @@ public enum NotificationType {
     VIBE_SNAP_VERIFIED,
     VIBE_SNAP_REJECTED,
 
+    // Realtime Domain Events - Admin
+    STORE_REGISTRATION_SUBMITTED,
+    TAG_REQUEST_SUBMITTED,
+    REVIEW_REPORTED,
+    TAG_LOW_RATING_ALERT,
+
+    // Realtime Domain Events - Merchant
+    STORE_STATUS_UPDATED,
+    TAG_REQUEST_RESOLVED,
+    REVIEW_CREATED,
+    TAG_QUALITY_WARNING,
+
+    // Realtime Domain Events - Customer
+    REVIEW_REPLIED,
+    REVIEW_REPORT_RESOLVED,
+
     // System
     SYSTEM_ANNOUNCEMENT
 }

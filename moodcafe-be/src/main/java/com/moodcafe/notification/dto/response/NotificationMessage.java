@@ -11,6 +11,8 @@ public record NotificationMessage(
         String title,
         String message,
         String type,
+        String referenceId,
+        String actionUrl,
         Instant createdAt
 ) {
 }

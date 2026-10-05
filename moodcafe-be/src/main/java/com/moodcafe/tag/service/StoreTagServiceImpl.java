@@ -8,6 +8,10 @@ import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.abstraction.service.StoreTagService;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
+import com.moodcafe.notification.entity.enums.NotificationType;
+import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
+import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.tag.dto.request.RevokeStoreTagAdminRequest;
 import com.moodcafe.tag.dto.request.ReviewStoreTagRequest;
 import com.moodcafe.tag.dto.request.SubmitStoreTagRequest;
@@ -48,6 +52,8 @@ public class StoreTagServiceImpl implements StoreTagService {
     private final StoreStaffService storeStaffService;
     private final CurrentUserService currentUserService;
     private final StoreRepository storeRepository;
+    private final StoreStaffRepository storeStaffRepository;
+    private final NotificationDispatcherService notificationDispatcherService;
 
     @Override
     @Transactional(readOnly = true)
@@ -172,6 +178,19 @@ public class StoreTagServiceImpl implements StoreTagService {
         }
 
         storeTag = storeTagRepository.save(storeTag);
+
+        if (StoreTagStatus.PENDING.equals(targetStatus)) {
+            Store store = storeRepository.findById(storeId).orElse(null);
+            String storeName = store != null ? store.getName() : "Quán";
+            notificationDispatcherService.dispatchToAdmins(
+                    "Yêu cầu cấp thẻ Vibe mới",
+                    "Quán \"" + storeName + "\" vừa gửi yêu cầu cấp thẻ \"" + tag.getName() + "\" (SLA 48h).",
+                    NotificationType.TAG_REQUEST_SUBMITTED,
+                    storeTag.getStoreTagId().toString(),
+                    "/admin/tags?status=PENDING"
+            );
+        }
+
         return storeTagMapper.toResponse(storeTag);
     }
 
@@ -218,6 +237,18 @@ public class StoreTagServiceImpl implements StoreTagService {
         storeTag.setApprovedAt(isOwnerCustom ? Instant.now() : null);
         storeTag.setRejectReason(null);
         storeTag = storeTagRepository.save(storeTag);
+
+        if (StoreTagStatus.PENDING.equals(storeTag.getStatus())) {
+            Store store = storeRepository.findById(storeId).orElse(null);
+            String storeName = store != null ? store.getName() : "Quán";
+            notificationDispatcherService.dispatchToAdmins(
+                    "Yêu cầu cấp thẻ Vibe mới",
+                    "Quán \"" + storeName + "\" vừa nộp lại yêu cầu cấp thẻ \"" + tag.getName() + "\" (SLA 48h).",
+                    NotificationType.TAG_REQUEST_SUBMITTED,
+                    storeTag.getStoreTagId().toString(),
+                    "/admin/tags?status=PENDING"
+            );
+        }
 
         return storeTagMapper.toResponse(storeTag);
     }
@@ -275,6 +306,35 @@ public class StoreTagServiceImpl implements StoreTagService {
         }
 
         storeTag = storeTagRepository.save(storeTag);
+
+        List<StoreStaff> ownerStaffs = storeStaffRepository.findAllByStoreStoreIdAndStoreRoleName(storeTag.getStoreId(), "OWNER");
+        List<UUID> ownerUserIds = ownerStaffs.stream()
+                .map(staff -> staff.getUser().getUserId())
+                .toList();
+
+        if (!ownerUserIds.isEmpty()) {
+            String tagName = storeTag.getTag() != null ? storeTag.getTag().getName() : "thẻ";
+            String title = "Kết quả thẩm định thẻ Vibe";
+            String message;
+            if (StoreTagStatus.APPROVED.equals(targetStatus)) {
+                message = "Yêu cầu cấp thẻ \"" + tagName + "\" của bạn đã được phê duyệt thành công.";
+            } else if (StoreTagStatus.REJECTED.equals(targetStatus)) {
+                message = "Yêu cầu cấp thẻ \"" + tagName + "\" của bạn đã bị từ chối."
+                        + (storeTag.getRejectReason() != null ? " Lý do: " + storeTag.getRejectReason() : "");
+            } else {
+                message = "Trạng thái thẻ \"" + tagName + "\" đã được cập nhật thành: " + targetStatus;
+            }
+
+            notificationDispatcherService.dispatchToUsers(
+                    ownerUserIds,
+                    title,
+                    message,
+                    NotificationType.TAG_REQUEST_RESOLVED,
+                    storeTag.getStoreTagId().toString(),
+                    "/merchant?tab=tags"
+            );
+        }
+
         return storeTagMapper.toResponse(storeTag);
     }
 
@@ -294,6 +354,23 @@ public class StoreTagServiceImpl implements StoreTagService {
         storeTag.setRejectReason(reason);
         storeTag.setAllowResubmit(false);
         storeTagRepository.delete(storeTag);
+
+        List<StoreStaff> ownerStaffs = storeStaffRepository.findAllByStoreStoreIdAndStoreRoleName(storeTag.getStoreId(), "OWNER");
+        List<UUID> ownerUserIds = ownerStaffs.stream()
+                .map(staff -> staff.getUser().getUserId())
+                .toList();
+
+        if (!ownerUserIds.isEmpty()) {
+            String tagName = storeTag.getTag() != null ? storeTag.getTag().getName() : "thẻ";
+            notificationDispatcherService.dispatchToUsers(
+                    ownerUserIds,
+                    "Thẻ Vibe đã bị thu hồi",
+                    "Thẻ \"" + tagName + "\" của quán đã bị Admin thu hồi. Lý do: " + storeTag.getRejectReason(),
+                    NotificationType.TAG_REQUEST_RESOLVED,
+                    storeTag.getStoreTagId().toString(),
+                    "/merchant?tab=tags"
+            );
+        }
 
         return storeTagMapper.toResponse(storeTag);
     }
