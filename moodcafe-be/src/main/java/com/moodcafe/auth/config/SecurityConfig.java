@@ -8,6 +8,7 @@ import com.moodcafe.auth.abstraction.service.JwtService;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -25,6 +26,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -48,6 +50,9 @@ public class SecurityConfig {
     private final RedisTokenService redisTokenService;
     private final UserRepository userRepository;
     private final UserDetailsService userDetailsService;
+
+    @Value("${app.security.cors-allowed-origins:http://localhost:3000}")
+    private String corsAllowedOrigins;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -211,9 +216,15 @@ public class SecurityConfig {
         CorsConfiguration configuration =
                 new CorsConfiguration();
 
-        configuration.setAllowedOrigins(
-                List.of("http://localhost:3000")
-        );
+        List<String> origins = Arrays.stream(corsAllowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .distinct()
+                .toList();
+        if (origins.isEmpty()) {
+            throw new IllegalArgumentException("CORS_ALLOWED_ORIGINS must contain at least one origin");
+        }
+        configuration.setAllowedOrigins(origins);
 
         configuration.setAllowedMethods(
                 List.of(
@@ -231,6 +242,8 @@ public class SecurityConfig {
         );
 
         configuration.setAllowCredentials(true);
+        // Never allow '*' together with cookies. Origins must be explicit.
+        configuration.validateAllowCredentials();
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
