@@ -1,6 +1,7 @@
 package com.moodcafe.store.entity;
 
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.store.entity.enums.ReviewReportReason;
 import com.moodcafe.store.entity.enums.ReviewReportStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -62,8 +63,9 @@ public class ReviewReport {
     @JoinColumn(name = "store_id", nullable = false, foreignKey = @ForeignKey(name = "fk_review_reports_store"))
     private Store store;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "reason", nullable = false, length = 100)
-    private String reason;
+    private ReviewReportReason reason;
 
     @Column(name = "details", columnDefinition = "TEXT")
     private String details;

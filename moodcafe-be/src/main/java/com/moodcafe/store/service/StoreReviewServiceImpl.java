@@ -25,18 +25,23 @@ import com.moodcafe.store.dto.request.ReviewTagRatingRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
 import com.moodcafe.store.dto.response.MerchantReviewStatsResponse;
 import com.moodcafe.store.dto.response.ReviewReportResponse;
+import com.moodcafe.store.dto.response.ReviewReportStatisticsResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
+import com.moodcafe.store.dto.response.TopReportedStoreResponse;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import com.moodcafe.store.entity.ReviewImage;
 import com.moodcafe.store.entity.ReviewReport;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreReview;
 import com.moodcafe.store.entity.TagRating;
+import com.moodcafe.store.entity.enums.ReviewReportReason;
 import com.moodcafe.store.entity.enums.ReviewReportStatus;
 import com.moodcafe.store.mapper.StoreReviewMapper;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
@@ -49,6 +54,7 @@ import com.moodcafe.store.entity.VisitVerification;
 import com.moodcafe.store.entity.enums.VisitVerificationStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -544,20 +550,34 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             throw new AppException(ErrorCode.BAD_REQUEST, "Đánh giá không thuộc về quán này");
         }
 
+        if (review.getUser() != null && review.getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new AppException(ErrorCode.CANNOT_REPORT_OWN_REVIEW);
+        }
+
         if (reviewReportRepository.existsByReviewReviewIdAndReporterUserId(reviewId, currentUser.getUserId())) {
             throw new AppException(ErrorCode.REPORT_ALREADY_SUBMITTED);
         }
+
+        String details = request.getDetails() != null && !request.getDetails().isBlank()
+                ? request.getDetails().trim()
+                : null;
 
         ReviewReport report = ReviewReport.builder()
                 .review(review)
                 .reporter(currentUser)
                 .store(review.getStore())
                 .reason(request.getReason())
-                .details(request.getDetails())
+                .details(details)
                 .status(ReviewReportStatus.PENDING)
                 .build();
 
-        report = reviewReportRepository.save(report);
+        try {
+            // Flush immediately so the partial unique index (review_id, reporter_user_id)
+            // rejects concurrent duplicate submissions here instead of at commit time.
+            report = reviewReportRepository.saveAndFlush(report);
+        } catch (DataIntegrityViolationException ex) {
+            throw new AppException(ErrorCode.REPORT_ALREADY_SUBMITTED);
+        }
 
         notificationDispatcherService.dispatchToAdmins(
                 "Báo cáo vi phạm đánh giá",
@@ -765,7 +785,8 @@ public class StoreReviewServiceImpl implements StoreReviewService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ReviewReportResponse> getAllReviewReportsAdmin(ReviewReportStatus status, UUID storeId, Pageable pageable) {
+    public Page<ReviewReportResponse> getAllReviewReportsAdmin(ReviewReportStatus status, UUID storeId, UUID reviewId,
+                                                               ReviewReportReason reason, Pageable pageable) {
         Specification<ReviewReport> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -777,10 +798,26 @@ public class StoreReviewServiceImpl implements StoreReviewService {
                 predicates.add(cb.equal(root.get("store").get("storeId"), storeId));
             }
 
+            if (reviewId != null) {
+                predicates.add(cb.equal(root.get("review").get("reviewId"), reviewId));
+            }
+
+            if (reason != null) {
+                predicates.add(cb.equal(root.get("reason"), reason));
+            }
+
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
         return reviewReportRepository.findAll(spec, pageable).map(storeReviewMapper::toReportResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReviewReportResponse getReviewReportByIdAdmin(UUID reportId) {
+        ReviewReport report = reviewReportRepository.findById(reportId)
+                .orElseThrow(() -> new AppException(ErrorCode.REVIEW_REPORT_NOT_FOUND));
+        return storeReviewMapper.toReportResponse(report);
     }
 
     @Override
@@ -845,5 +882,90 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         storeReviewRepository.delete(review);
         recalculateStoreTagScores(storeId);
         log.info("Admin soft deleted review {}", reviewId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReviewReportStatisticsResponse getReviewReportStatistics() {
+        long total = reviewReportRepository.count();
+        long pending = 0;
+        long resolved = 0;
+        long dismissed = 0;
+
+        List<Object[]> statusCounts = reviewReportRepository.countGroupedByStatus();
+        for (Object[] row : statusCounts) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                ReviewReportStatus status = (ReviewReportStatus) row[0];
+                long count = ((Number) row[1]).longValue();
+                if (ReviewReportStatus.PENDING.equals(status)) {
+                    pending = count;
+                } else if (ReviewReportStatus.RESOLVED.equals(status)) {
+                    resolved = count;
+                } else if (ReviewReportStatus.DISMISSED.equals(status)) {
+                    dismissed = count;
+                }
+            }
+        }
+
+        Map<String, Long> byReason = new LinkedHashMap<>();
+        for (ReviewReportReason reason : ReviewReportReason.values()) {
+            byReason.put(reason.name(), 0L);
+        }
+
+        List<Object[]> reasonCounts = reviewReportRepository.countGroupedByReason();
+        for (Object[] row : reasonCounts) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                ReviewReportReason reason = (ReviewReportReason) row[0];
+                long count = ((Number) row[1]).longValue();
+                byReason.put(reason.name(), count);
+            }
+        }
+
+        return ReviewReportStatisticsResponse.builder()
+                .total(total)
+                .pending(pending)
+                .resolved(resolved)
+                .dismissed(dismissed)
+                .byReason(byReason)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TopReportedStoreResponse> getTopReportedStores(int limit) {
+        int effectiveLimit = limit > 0 ? Math.min(limit, 50) : 10;
+        Pageable pageable = PageRequest.of(0, effectiveLimit);
+        List<Object[]> rows = reviewReportRepository.findTopReportedStores(pageable);
+        if (rows.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Object[]> ratingSummaries = storeReviewRepository.findOverallRatingAndCountGroupedByStore();
+        Map<UUID, Double> ratingMap = new HashMap<>();
+        for (Object[] r : ratingSummaries) {
+            if (r != null && r.length >= 2 && r[0] != null && r[1] != null) {
+                UUID sId = (UUID) r[0];
+                double avg = ((Number) r[1]).doubleValue();
+                ratingMap.put(sId, Math.round(avg * 10.0) / 10.0);
+            }
+        }
+
+        List<TopReportedStoreResponse> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            if (row != null && row.length >= 3 && row[0] != null) {
+                UUID storeId = (UUID) row[0];
+                String storeName = (String) row[1];
+                long count = ((Number) row[2]).longValue();
+                Double avgRating = ratingMap.getOrDefault(storeId, 0.0);
+
+                result.add(TopReportedStoreResponse.builder()
+                        .storeId(storeId)
+                        .storeName(storeName)
+                        .reportCount(count)
+                        .avgRating(avgRating)
+                        .build());
+            }
+        }
+        return result;
     }
 }

@@ -14,6 +14,7 @@ import com.moodcafe.subscription.dto.request.CreateSubscriptionPlanRequest;
 import com.moodcafe.subscription.dto.request.SubscribePlanRequest;
 import com.moodcafe.subscription.dto.request.UpdateSubscriptionPlanRequest;
 import com.moodcafe.subscription.dto.response.PlanSubscriptionStatsResponse;
+import com.moodcafe.subscription.dto.response.RevenueTrendItemResponse;
 import com.moodcafe.subscription.dto.response.SubscriptionCheckoutResponse;
 import com.moodcafe.subscription.dto.response.SubscriptionPaymentResponse;
 import com.moodcafe.subscription.dto.response.SubscriptionPlanResponse;
@@ -37,8 +38,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -665,6 +672,92 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 .totalSuccessfulPayments(totalSuccessfulPayments)
                 .planStats(planStats)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RevenueTrendItemResponse> getRevenueTrends(LocalDate from, LocalDate to, String groupBy) {
+        ZoneId zoneId = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate effectiveTo = (to != null) ? to : LocalDate.now(zoneId);
+        boolean isMonthly = "MONTHLY".equalsIgnoreCase(groupBy);
+
+        LocalDate effectiveFrom;
+        if (from != null) {
+            effectiveFrom = from;
+        } else {
+            effectiveFrom = isMonthly
+                    ? effectiveTo.minusMonths(11).withDayOfMonth(1)
+                    : effectiveTo.minusDays(29);
+        }
+
+        if (effectiveFrom.isAfter(effectiveTo)) {
+            LocalDate tmp = effectiveFrom;
+            effectiveFrom = effectiveTo;
+            effectiveTo = tmp;
+        }
+
+        Instant startInstant = effectiveFrom.atStartOfDay(zoneId).toInstant();
+        Instant endInstant = effectiveTo.atTime(LocalTime.MAX).atZone(zoneId).toInstant();
+
+        List<SubscriptionPayment> payments = subscriptionPaymentRepository.findSuccessfulPaymentsBetween(startInstant, endInstant);
+
+        Map<String, RevenueTrendItemResponse> trendMap = new LinkedHashMap<>();
+
+        if (isMonthly) {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM");
+            YearMonth startMonth = YearMonth.from(effectiveFrom);
+            YearMonth endMonth = YearMonth.from(effectiveTo);
+            YearMonth curr = startMonth;
+            while (!curr.isAfter(endMonth)) {
+                String key = curr.format(formatter);
+                trendMap.put(key, RevenueTrendItemResponse.builder()
+                        .date(key)
+                        .revenue(BigDecimal.ZERO)
+                        .transactionCount(0)
+                        .build());
+                curr = curr.plusMonths(1);
+            }
+
+            for (SubscriptionPayment p : payments) {
+                Instant time = p.getPaidAt() != null ? p.getPaidAt() : p.getCreatedAt();
+                if (time != null) {
+                    YearMonth ym = YearMonth.from(time.atZone(zoneId));
+                    String key = ym.format(formatter);
+                    RevenueTrendItemResponse item = trendMap.get(key);
+                    if (item != null) {
+                        item.setRevenue(item.getRevenue().add(p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO));
+                        item.setTransactionCount(item.getTransactionCount() + 1);
+                    }
+                }
+            }
+        } else {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            LocalDate curr = effectiveFrom;
+            while (!curr.isAfter(effectiveTo)) {
+                String key = curr.format(formatter);
+                trendMap.put(key, RevenueTrendItemResponse.builder()
+                        .date(key)
+                        .revenue(BigDecimal.ZERO)
+                        .transactionCount(0)
+                        .build());
+                curr = curr.plusDays(1);
+            }
+
+            for (SubscriptionPayment p : payments) {
+                Instant time = p.getPaidAt() != null ? p.getPaidAt() : p.getCreatedAt();
+                if (time != null) {
+                    LocalDate ld = time.atZone(zoneId).toLocalDate();
+                    String key = ld.format(formatter);
+                    RevenueTrendItemResponse item = trendMap.get(key);
+                    if (item != null) {
+                        item.setRevenue(item.getRevenue().add(p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO));
+                        item.setTransactionCount(item.getTransactionCount() + 1);
+                    }
+                }
+            }
+        }
+
+        return new ArrayList<>(trendMap.values());
     }
 }
 

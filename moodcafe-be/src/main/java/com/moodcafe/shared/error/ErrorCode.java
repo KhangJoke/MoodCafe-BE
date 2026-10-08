@@ -81,6 +81,7 @@ public enum ErrorCode {
     MAX_REVIEW_IMAGES_EXCEEDED(HttpStatus.BAD_REQUEST, "Đánh giá chỉ được tải lên tối đa 3 ảnh"),
     REPORT_ALREADY_SUBMITTED(HttpStatus.CONFLICT, "Báo cáo cho đánh giá này đã được gửi trước đó"),
     REVIEW_REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy thông tin báo cáo đánh giá"),
+    CANNOT_REPORT_OWN_REVIEW(HttpStatus.BAD_REQUEST, "Bạn không thể báo cáo đánh giá của chính mình"),
     // Visit Verification & Snap
     LOCATION_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "Khoảng cách hiện tại vượt quá bán kính cho phép (50m) của quán"),
     STORE_LOCATION_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "Quán chưa cập nhật tọa độ vị trí GPS"),

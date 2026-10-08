@@ -26,6 +26,8 @@ public interface StoreTagRepository extends JpaRepository<StoreTag, UUID> {
 
     List<StoreTag> findAllByStatusOrderByCreatedAtDesc(StoreTagStatus status);
 
+    long countByStatus(StoreTagStatus status);
+
     @Query("SELECT COUNT(DISTINCT st.storeId) FROM StoreTag st WHERE st.tag.tagId = :tagId AND st.status = :status")
     long countDistinctStoresByTagIdAndStatus(
             @Param("tagId") UUID tagId,

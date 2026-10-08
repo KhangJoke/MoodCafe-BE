@@ -49,9 +49,17 @@ public interface StoreReviewService {
 
     Page<StoreReviewResponse> getAllReviewsAdmin(UUID storeId, Integer rating, String replyStatus, String search, Pageable pageable);
 
-    Page<ReviewReportResponse> getAllReviewReportsAdmin(com.moodcafe.store.entity.enums.ReviewReportStatus status, UUID storeId, Pageable pageable);
+    Page<ReviewReportResponse> getAllReviewReportsAdmin(com.moodcafe.store.entity.enums.ReviewReportStatus status, UUID storeId,
+                                                        UUID reviewId, com.moodcafe.store.entity.enums.ReviewReportReason reason,
+                                                        Pageable pageable);
+
+    ReviewReportResponse getReviewReportByIdAdmin(UUID reportId);
 
     ReviewReportResponse resolveReviewReport(UUID reportId, com.moodcafe.store.dto.request.ResolveReviewReportRequest request);
 
     void deleteReviewByAdmin(UUID reviewId);
+
+    com.moodcafe.store.dto.response.ReviewReportStatisticsResponse getReviewReportStatistics();
+
+    java.util.List<com.moodcafe.store.dto.response.TopReportedStoreResponse> getTopReportedStores(int limit);
 }

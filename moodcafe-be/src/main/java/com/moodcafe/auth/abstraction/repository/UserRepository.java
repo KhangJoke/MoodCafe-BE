@@ -20,4 +20,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @EntityGraph(attributePaths = {"role"})
     List<User> findAllByRoleNameAndActiveTrue(String roleName);
+
+    @org.springframework.data.jpa.repository.Query("SELECT u.role.name, COUNT(u) FROM User u GROUP BY u.role.name")
+    List<Object[]> countGroupedByRoleName();
 }

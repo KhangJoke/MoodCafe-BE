@@ -65,7 +65,11 @@ import com.moodcafe.tag.entity.enums.ApprovalMode;
 import com.moodcafe.tag.entity.enums.ControlType;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -532,6 +536,43 @@ public class StoreServiceImpl implements StoreService {
         return stores.stream()
                 .map(this::toStoreResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<StoreResponse> getAllStoresAdmin(StoreStatus status, String search, Pageable pageable) {
+        Specification<Store> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+
+            if (search != null && !search.isBlank()) {
+                String pattern = "%" + search.trim().toLowerCase() + "%";
+                Predicate nameMatch = cb.like(cb.lower(root.get("name")), pattern);
+                Predicate phoneMatch = cb.like(cb.lower(root.get("phone")), pattern);
+                Predicate emailMatch = cb.like(cb.lower(root.get("email")), pattern);
+                Predicate addressMatch = cb.like(cb.lower(root.get("address")), pattern);
+                predicates.add(cb.or(nameMatch, phoneMatch, emailMatch, addressMatch));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Page<Store> page = storeRepository.findAll(spec, pageable);
+        List<StoreResponse> items = page.getContent().stream()
+                .map(this::toStoreResponse)
+                .toList();
+
+        return PageResponse.<StoreResponse>builder()
+                .items(items)
+                .page(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .build();
     }
 
     @Override

@@ -12,6 +12,8 @@ import com.moodcafe.store.dto.response.MerchantDashboardResponse;
 import com.moodcafe.store.dto.response.StoreRegistrationStatusResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
+import com.moodcafe.store.entity.enums.StoreStatus;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.UUID;
@@ -43,4 +45,6 @@ public interface StoreService {
     List<FeaturedMoodStoreResponse> getFeaturedMoodStores();
 
     List<String> getActiveDistricts();
+
+    PageResponse<StoreResponse> getAllStoresAdmin(StoreStatus status, String search, Pageable pageable);
 }

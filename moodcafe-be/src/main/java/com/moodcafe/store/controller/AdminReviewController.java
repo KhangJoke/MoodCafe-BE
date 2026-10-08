@@ -4,7 +4,10 @@ import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.store.abstraction.service.StoreReviewService;
 import com.moodcafe.store.dto.request.ResolveReviewReportRequest;
 import com.moodcafe.store.dto.response.ReviewReportResponse;
+import com.moodcafe.store.dto.response.ReviewReportStatisticsResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
+import com.moodcafe.store.dto.response.TopReportedStoreResponse;
+import com.moodcafe.store.entity.enums.ReviewReportReason;
 import com.moodcafe.store.entity.enums.ReviewReportStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -63,15 +66,40 @@ public class AdminReviewController {
         return ResponseEntity.ok(ApiResponse.success(null, "Đã xóa đánh giá vi phạm thành công"));
     }
 
-    @Operation(summary = "Xem danh sách các báo cáo vi phạm đánh giá (Lọc theo trạng thái PENDING, RESOLVED, DISMISSED)")
+    @Operation(summary = "Xem danh sách các báo cáo vi phạm đánh giá (Lọc theo trạng thái, quán, review, lý do)")
     @GetMapping("/reports")
     public ResponseEntity<ApiResponse<Page<ReviewReportResponse>>> getAllReviewReports(
             @RequestParam(required = false) ReviewReportStatus status,
             @RequestParam(required = false) UUID storeId,
+            @RequestParam(required = false) UUID reviewId,
+            @RequestParam(required = false) ReviewReportReason reason,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        Page<ReviewReportResponse> reports = storeReviewService.getAllReviewReportsAdmin(status, storeId, pageable);
+        Page<ReviewReportResponse> reports = storeReviewService.getAllReviewReportsAdmin(status, storeId, reviewId, reason, pageable);
         return ResponseEntity.ok(ApiResponse.success(reports));
+    }
+
+    @Operation(summary = "Thống kê số lượng báo cáo vi phạm đánh giá theo trạng thái và lý do vi phạm")
+    @GetMapping({"/reports/statistics", "/reports/stats"})
+    public ResponseEntity<ApiResponse<ReviewReportStatisticsResponse>> getReviewReportStatistics() {
+        ReviewReportStatisticsResponse stats = storeReviewService.getReviewReportStatistics();
+        return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
+    @Operation(summary = "Top các quán có nhiều lượt đánh giá bị báo cáo vi phạm nhất")
+    @GetMapping("/reports/top-reported-stores")
+    public ResponseEntity<ApiResponse<java.util.List<TopReportedStoreResponse>>> getTopReportedStores(
+            @RequestParam(defaultValue = "10") int limit
+    ) {
+        java.util.List<TopReportedStoreResponse> topStores = storeReviewService.getTopReportedStores(limit);
+        return ResponseEntity.ok(ApiResponse.success(topStores));
+    }
+
+    @Operation(summary = "Xem chi tiết một báo cáo vi phạm đánh giá")
+    @GetMapping("/reports/{reportId}")
+    public ResponseEntity<ApiResponse<ReviewReportResponse>> getReviewReportById(@PathVariable UUID reportId) {
+        ReviewReportResponse report = storeReviewService.getReviewReportByIdAdmin(reportId);
+        return ResponseEntity.ok(ApiResponse.success(report));
     }
 
     @Operation(summary = "Xử lý báo cáo vi phạm đánh giá (Duyệt xóa review hoặc Bác bỏ báo cáo)")

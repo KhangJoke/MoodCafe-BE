@@ -38,4 +38,16 @@ public interface SubscriptionPaymentRepository extends JpaRepository<Subscriptio
 
     @Query("SELECT sp.user.userId, COUNT(sp) FROM SubscriptionPayment sp WHERE sp.status = 'SUCCESS' GROUP BY sp.user.userId")
     List<Object[]> countSuccessfulPaymentsGroupedByUser();
+
+    @Query("""
+        SELECT sp FROM SubscriptionPayment sp
+        WHERE sp.status = 'SUCCESS'
+          AND COALESCE(sp.paidAt, sp.createdAt) >= :startInstant
+          AND COALESCE(sp.paidAt, sp.createdAt) <= :endInstant
+        ORDER BY COALESCE(sp.paidAt, sp.createdAt) ASC
+    """)
+    List<SubscriptionPayment> findSuccessfulPaymentsBetween(
+            @Param("startInstant") Instant startInstant,
+            @Param("endInstant") Instant endInstant
+    );
 }

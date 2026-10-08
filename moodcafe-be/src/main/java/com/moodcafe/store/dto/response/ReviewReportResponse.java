@@ -1,5 +1,6 @@
 package com.moodcafe.store.dto.response;
 
+import com.moodcafe.store.entity.enums.ReviewReportReason;
 import com.moodcafe.store.entity.enums.ReviewReportStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,7 +24,7 @@ public class ReviewReportResponse {
     private String reporterFullName;
     private UUID storeId;
     private String storeName;
-    private String reason;
+    private ReviewReportReason reason;
     private String details;
     private ReviewReportStatus status;
     private String adminNote;

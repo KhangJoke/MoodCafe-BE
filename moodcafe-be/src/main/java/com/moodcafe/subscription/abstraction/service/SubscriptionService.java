@@ -61,5 +61,11 @@ public interface SubscriptionService {
     );
 
     com.moodcafe.subscription.dto.response.SubscriptionStatisticsResponse getSubscriptionStatistics();
+
+    java.util.List<com.moodcafe.subscription.dto.response.RevenueTrendItemResponse> getRevenueTrends(
+            java.time.LocalDate from,
+            java.time.LocalDate to,
+            String groupBy
+    );
 }
 

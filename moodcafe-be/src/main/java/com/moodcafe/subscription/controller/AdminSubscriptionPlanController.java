@@ -5,9 +5,12 @@ import com.moodcafe.shared.response.PageResponse;
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.dto.request.CreateSubscriptionPlanRequest;
 import com.moodcafe.subscription.dto.request.UpdateSubscriptionPlanRequest;
+import com.moodcafe.subscription.dto.response.RevenueTrendItemResponse;
 import com.moodcafe.subscription.dto.response.SubscriptionPaymentResponse;
 import com.moodcafe.subscription.dto.response.SubscriptionPlanResponse;
 import com.moodcafe.subscription.dto.response.UserSubscriptionResponse;
+import org.springframework.format.annotation.DateTimeFormat;
+import java.time.LocalDate;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -129,5 +132,16 @@ public class AdminSubscriptionPlanController {
     public ResponseEntity<ApiResponse<com.moodcafe.subscription.dto.response.SubscriptionStatisticsResponse>> getSubscriptionStatistics() {
         com.moodcafe.subscription.dto.response.SubscriptionStatisticsResponse stats = subscriptionService.getSubscriptionStatistics();
         return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
+    @Operation(summary = "Biểu đồ xu hướng doanh thu subscription theo mốc thời gian (Gom nhóm DAILY hoặc MONTHLY)")
+    @GetMapping("/reports/revenue-trends")
+    public ResponseEntity<ApiResponse<List<RevenueTrendItemResponse>>> getRevenueTrends(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "DAILY") String groupBy
+    ) {
+        List<RevenueTrendItemResponse> trends = subscriptionService.getRevenueTrends(from, to, groupBy);
+        return ResponseEntity.ok(ApiResponse.success(trends));
     }
 }
