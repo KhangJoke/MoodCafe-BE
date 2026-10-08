@@ -18,11 +18,15 @@ import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreService;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.abstraction.repository.TagRatingRepository;
+import com.moodcafe.store.abstraction.repository.StoreScheduleRepository;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
+import com.moodcafe.store.dto.request.StoreScheduleRequest;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
 import com.moodcafe.store.dto.response.FeaturedMoodStoreResponse;
+import com.moodcafe.store.dto.response.StoreProfileResponse;
+import com.moodcafe.store.dto.response.StoreScheduleResponse;
 import com.moodcafe.store.dto.response.StoreImageResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
@@ -37,9 +41,11 @@ import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.entity.enums.StoreStaffStatus;
 import com.moodcafe.store.entity.enums.StoreStatus;
+import com.moodcafe.store.entity.StoreSchedule;
 import com.moodcafe.store.mapper.StoreImageMapper;
 import com.moodcafe.store.mapper.StoreMapper;
 import com.moodcafe.store.mapper.StoreReviewMapper;
+import com.moodcafe.store.mapper.StoreScheduleMapper;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
@@ -73,10 +79,12 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -115,6 +123,8 @@ public class StoreServiceImpl implements StoreService {
     private final VisitVerificationRepository visitVerificationRepository;
     private final SubscriptionService subscriptionService;
     private final NotificationDispatcherService notificationDispatcherService;
+    private final StoreScheduleRepository storeScheduleRepository;
+    private final StoreScheduleMapper storeScheduleMapper;
 
     @Override
     @Transactional
@@ -608,7 +618,73 @@ public class StoreServiceImpl implements StoreService {
             storeImageRepository.flush();
         }
 
+        // Update schedules if provided
+        if (request.getSchedules() != null && !request.getSchedules().isEmpty()) {
+            saveOrUpdateSchedules(store, request.getSchedules());
+        }
+
         return toStoreResponse(store);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public StoreProfileResponse getStoreProfile(UUID storeId) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        List<StoreImageResponse> images = storeImageRepository.findAllByStoreStoreId(storeId)
+                .stream()
+                .map(storeImageMapper::toResponse)
+                .toList();
+
+        List<StoreTagResponse> tags = storeTagRepository.findAllByStoreId(storeId)
+                .stream()
+                .map(storeTagMapper::toResponse)
+                .toList();
+
+        List<StoreScheduleResponse> schedules = resolveStoreSchedules(store);
+
+        return StoreProfileResponse.builder()
+                .storeId(store.getStoreId())
+                .name(store.getName())
+                .description(store.getDescription())
+                .address(store.getAddress())
+                .latitude(store.getLatitude())
+                .longitude(store.getLongitude())
+                .openingTime(store.getOpeningTime())
+                .closingTime(store.getClosingTime())
+                .schedules(schedules)
+                .priceFrom(store.getPriceFrom())
+                .priceTo(store.getPriceTo())
+                .phone(store.getPhone())
+                .email(store.getEmail())
+                .status(store.getStatus())
+                .rejectReason(store.getRejectReason())
+                .allowResubmit(store.isAllowResubmit())
+                .images(images)
+                .tags(tags)
+                .createdAt(store.getCreatedAt())
+                .updatedAt(store.getUpdatedAt())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StoreScheduleResponse> getStoreSchedules(UUID storeId) {
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+        return resolveStoreSchedules(store);
+    }
+
+    @Override
+    @Transactional
+    public List<StoreScheduleResponse> updateStoreSchedules(UUID storeId, List<StoreScheduleRequest> schedules) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+        return saveOrUpdateSchedules(store, schedules);
     }
 
     @Override
@@ -1103,6 +1179,7 @@ public class StoreServiceImpl implements StoreService {
                 .map(storeTagMapper::toResponse)
                 .toList();
         response.setTags(tags);
+        response.setSchedules(resolveStoreSchedules(store));
 
         return response;
     }
@@ -1127,6 +1204,7 @@ public class StoreServiceImpl implements StoreService {
                 .longitude(store.getLongitude())
                 .openingTime(store.getOpeningTime())
                 .closingTime(store.getClosingTime())
+                .schedules(resolveStoreSchedules(store))
                 .priceFrom(store.getPriceFrom())
                 .priceTo(store.getPriceTo())
                 .phone(store.getPhone())
@@ -1139,6 +1217,91 @@ public class StoreServiceImpl implements StoreService {
                 .createdAt(store.getCreatedAt())
                 .updatedAt(store.getUpdatedAt())
                 .build();
+    }
+
+    private List<StoreScheduleResponse> resolveStoreSchedules(Store store) {
+        List<StoreSchedule> schedules = storeScheduleRepository.findAllByStoreStoreId(store.getStoreId());
+        if (!schedules.isEmpty()) {
+            return schedules.stream()
+                    .sorted(Comparator.comparingInt(s -> s.getDayOfWeek().getValue()))
+                    .map(storeScheduleMapper::toResponse)
+                    .toList();
+        }
+
+        LocalTime open = store.getOpeningTime();
+        LocalTime close = store.getClosingTime();
+        boolean hasHours = open != null && close != null;
+
+        return Arrays.stream(DayOfWeek.values())
+                .sorted(Comparator.comparingInt(DayOfWeek::getValue))
+                .map(dow -> StoreScheduleResponse.builder()
+                        .dayOfWeek(dow)
+                        .dayNameVi(storeScheduleMapper.getDayNameVi(dow))
+                        .openTime(open)
+                        .closeTime(close)
+                        .isOpen(hasHours)
+                        .build())
+                .toList();
+    }
+
+    private List<StoreScheduleResponse> saveOrUpdateSchedules(Store store, List<StoreScheduleRequest> scheduleRequests) {
+        if (scheduleRequests == null || scheduleRequests.isEmpty()) {
+            return resolveStoreSchedules(store);
+        }
+
+        for (StoreScheduleRequest item : scheduleRequests) {
+            if (item.getDayOfWeek() == null) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Thứ trong tuần (dayOfWeek) không được để trống");
+            }
+            if (Boolean.TRUE.equals(item.getIsOpen())) {
+                if (item.getOpenTime() == null || item.getCloseTime() == null) {
+                    throw new AppException(ErrorCode.BAD_REQUEST,
+                            "Ngày " + storeScheduleMapper.getDayNameVi(item.getDayOfWeek()) + " đang mở cửa thì phải nhập giờ mở cửa và giờ đóng cửa");
+                }
+            }
+        }
+
+        List<StoreSchedule> existingList = storeScheduleRepository.findAllByStoreStoreId(store.getStoreId());
+        Map<DayOfWeek, StoreSchedule> existingMap = existingList.stream()
+                .collect(Collectors.toMap(StoreSchedule::getDayOfWeek, s -> s, (a, b) -> a));
+
+        List<StoreSchedule> toSave = new ArrayList<>();
+        for (StoreScheduleRequest item : scheduleRequests) {
+            StoreSchedule schedule = existingMap.get(item.getDayOfWeek());
+            boolean isOpen = item.getIsOpen() != null ? item.getIsOpen() : true;
+            if (schedule != null) {
+                schedule.setOpen(isOpen);
+                schedule.setOpenTime(item.getOpenTime());
+                schedule.setCloseTime(item.getCloseTime());
+                toSave.add(schedule);
+            } else {
+                StoreSchedule newSchedule = StoreSchedule.builder()
+                        .store(store)
+                        .dayOfWeek(item.getDayOfWeek())
+                        .openTime(item.getOpenTime())
+                        .closeTime(item.getCloseTime())
+                        .isOpen(isOpen)
+                        .build();
+                toSave.add(newSchedule);
+            }
+        }
+
+        storeScheduleRepository.saveAll(toSave);
+        storeScheduleRepository.flush();
+
+        if (store.getOpeningTime() == null || store.getClosingTime() == null) {
+            toSave.stream()
+                    .filter(StoreSchedule::isOpen)
+                    .filter(s -> s.getOpenTime() != null && s.getCloseTime() != null)
+                    .findFirst()
+                    .ifPresent(firstOpen -> {
+                        store.setOpeningTime(firstOpen.getOpenTime());
+                        store.setClosingTime(firstOpen.getCloseTime());
+                        storeRepository.save(store);
+                    });
+        }
+
+        return resolveStoreSchedules(store);
     }
 
     private StoreResponse toStoreDetailResponse(Store store) {

@@ -32,6 +32,8 @@ public class StoreResponse {
     private BigDecimal longitude;
     private LocalTime openingTime;
     private LocalTime closingTime;
+    @Builder.Default
+    private List<StoreScheduleResponse> schedules = new java.util.ArrayList<>();
     private Long priceFrom;
     private Long priceTo;
     private String phone;

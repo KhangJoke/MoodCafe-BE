@@ -28,5 +28,6 @@ public interface StoreMapper {
 
     @Mapping(target = "images", ignore = true)
     @Mapping(target = "tags", ignore = true)
+    @Mapping(target = "schedules", ignore = true)
     StoreResponse toResponse(Store store);
 }

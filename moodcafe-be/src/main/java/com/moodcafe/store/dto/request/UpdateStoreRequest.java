@@ -51,4 +51,6 @@ public class UpdateStoreRequest {
     private String email;
 
     private List<String> imageUrls;
+
+    private List<@jakarta.validation.Valid StoreScheduleRequest> schedules;
 }

@@ -107,6 +107,10 @@ class StoreServiceImplTest {
     private VisitVerificationRepository visitVerificationRepository;
     @Mock
     private SubscriptionService subscriptionService;
+    @Mock
+    private com.moodcafe.store.abstraction.repository.StoreScheduleRepository storeScheduleRepository;
+    @Mock
+    private com.moodcafe.store.mapper.StoreScheduleMapper storeScheduleMapper;
 
     @InjectMocks
     private StoreServiceImpl storeService;

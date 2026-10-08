@@ -7,13 +7,16 @@ import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.StoreRegisterRequest;
 import com.moodcafe.store.dto.request.StoreResubmitRequest;
+import com.moodcafe.store.dto.request.StoreScheduleRequest;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
 import com.moodcafe.store.dto.response.FeaturedMoodStoreResponse;
 import com.moodcafe.store.dto.response.MerchantDashboardResponse;
+import com.moodcafe.store.dto.response.StoreProfileResponse;
 import com.moodcafe.store.dto.response.StoreRegistrationStatusResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
+import com.moodcafe.store.dto.response.StoreScheduleResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 import com.moodcafe.store.dto.response.UserStoreResponse;
 import jakarta.validation.Valid;
@@ -132,13 +135,35 @@ public class StoreController {
         return ResponseEntity.ok(ApiResponse.success(store));
     }
 
+    @GetMapping("/{storeId}/profile")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<StoreProfileResponse>> getStoreProfile(@PathVariable UUID storeId) {
+        StoreProfileResponse response = storeService.getStoreProfile(storeId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @GetMapping("/{storeId}/schedules")
+    public ResponseEntity<ApiResponse<List<StoreScheduleResponse>>> getStoreSchedules(@PathVariable UUID storeId) {
+        List<StoreScheduleResponse> response = storeService.getStoreSchedules(storeId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PutMapping("/{storeId}/schedules")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<List<StoreScheduleResponse>>> updateStoreSchedules(
+            @PathVariable UUID storeId,
+            @Valid @RequestBody List<StoreScheduleRequest> request) {
+        List<StoreScheduleResponse> response = storeService.updateStoreSchedules(storeId, request);
+        return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật lịch làm việc của quán thành công"));
+    }
+
     @PutMapping("/{storeId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreResponse>> updateStore(
             @PathVariable UUID storeId,
             @Valid @RequestBody UpdateStoreRequest request) {
         StoreResponse updatedStore = storeService.updateStore(storeId, request);
-        return ResponseEntity.ok(ApiResponse.success(updatedStore, "Store updated successfully"));
+        return ResponseEntity.ok(ApiResponse.success(updatedStore, "Cập nhật thông tin quán thành công"));
     }
 
     @PatchMapping("/{storeId}/status")

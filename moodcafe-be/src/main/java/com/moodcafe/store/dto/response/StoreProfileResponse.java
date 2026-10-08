@@ -20,19 +20,20 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StoreRegistrationStatusResponse {
+public class StoreProfileResponse {
 
     private UUID storeId;
     private String name;
     private String description;
     private String address;
-    private String district;
     private BigDecimal latitude;
     private BigDecimal longitude;
     private LocalTime openingTime;
     private LocalTime closingTime;
+
     @Builder.Default
     private List<StoreScheduleResponse> schedules = new ArrayList<>();
+
     private Long priceFrom;
     private Long priceTo;
     private String phone;
