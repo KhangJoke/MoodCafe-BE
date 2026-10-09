@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -62,12 +63,9 @@ public class StoreStaffServiceImpl implements StoreStaffService {
             throw new AppException(ErrorCode.EMAIL_ALREADY_REGISTERED, "Email đã tồn tại trong hệ thống");
         }
 
-        Role merchantStaffRole;
-        try {
-            merchantStaffRole = roleService.getRoleByName("MERCHANT_STAFF");
-        } catch (AppException e) {
-            merchantStaffRole = roleService.getRoleByName("CUSTOMER");
-        }
+        // MERCHANT_STAFF phải tồn tại trong DB — không fallback sang CUSTOMER.
+        // Nếu thiếu, đây là lỗi cấu hình hệ thống, không phải lỗi nghiệp vụ.
+        Role merchantStaffRole = roleService.getRoleByName("MERCHANT_STAFF");
 
         User newStaffUser = User.builder()
                 .fullName(request.getName().trim())
@@ -106,6 +104,11 @@ public class StoreStaffServiceImpl implements StoreStaffService {
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
         User targetUser = userService.getUserEntityById(request.getUserId());
+
+        // ADMIN không được phép là nhân viên của bất kỳ quán nào.
+        if (targetUser.getRole() != null && "ADMIN".equalsIgnoreCase(targetUser.getRole().getName())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Tài khoản ADMIN không thể được thêm làm nhân viên quán");
+        }
 
         if (storeStaffRepository.existsByStoreStoreIdAndUserUserId(storeId, targetUser.getUserId())) {
             throw new AppException(ErrorCode.STORE_STAFF_ALREADY_EXISTS);
@@ -190,6 +193,10 @@ public class StoreStaffServiceImpl implements StoreStaffService {
     @Override
     @Transactional(readOnly = true)
     public List<UserStoreResponse> getUserStores() {
+        if (currentUserService.isSystemAdmin()) {
+            return Collections.emptyList();
+        }
+
         User currentUser = currentUserService.getCurrentUser();
 
         return storeStaffRepository.findAllByUserUserId(currentUser.getUserId())
@@ -210,7 +217,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
     @Override
     public StoreStaff requireStoreAccess(UUID storeId, String... allowedRoles) {
         if (currentUserService.isSystemAdmin()) {
-            return null;
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Tài khoản quản trị viên không được phép truy cập Merchant Portal");
         }
 
         User currentUser = currentUserService.getCurrentUser();

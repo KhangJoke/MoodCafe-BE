@@ -12,7 +12,7 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'ADMIN'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -23,9 +23,9 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'ADMIN'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
--- 5 STORE OWNERS (system role MERCHANT_STAFF, store_role OWNER)
+-- 5 STORE OWNERS (system role CUSTOMER, store_role OWNER in store_staffs)
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
     'owner1@moodcafe.com',
@@ -33,9 +33,9 @@ SELECT
     'Lê Hoàng Phúc',
     'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200',
     r.role_id, TRUE, TRUE, FALSE, FALSE
-FROM roles r WHERE r.name = 'MERCHANT_STAFF'
+FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -44,9 +44,9 @@ SELECT
     'Phạm Minh Tuấn',
     'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200',
     r.role_id, TRUE, TRUE, FALSE, FALSE
-FROM roles r WHERE r.name = 'MERCHANT_STAFF'
+FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -55,9 +55,9 @@ SELECT
     'Võ Thị Mai Phương',
     'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200',
     r.role_id, TRUE, TRUE, FALSE, FALSE
-FROM roles r WHERE r.name = 'MERCHANT_STAFF'
+FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -66,9 +66,9 @@ SELECT
     'Đặng Hữu Phước',
     'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200',
     r.role_id, TRUE, TRUE, FALSE, FALSE
-FROM roles r WHERE r.name = 'MERCHANT_STAFF'
+FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -77,9 +77,9 @@ SELECT
     'Bùi Khánh Duy',
     'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200',
     r.role_id, TRUE, TRUE, FALSE, FALSE
-FROM roles r WHERE r.name = 'MERCHANT_STAFF'
+FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 -- 2 CASHIER STAFF (system role MERCHANT_STAFF, store_role CASHIER)
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
@@ -91,7 +91,7 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'MERCHANT_STAFF'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -102,7 +102,7 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'MERCHANT_STAFF'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 -- 5 CUSTOMER USERS
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
@@ -114,7 +114,7 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -125,7 +125,7 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -136,7 +136,7 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -147,7 +147,7 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;
 
 INSERT INTO users (email, password, full_name, avatar_url, role_id, is_active, is_email_verified, is_first_login, is_deleted)
 SELECT 
@@ -158,4 +158,4 @@ SELECT
     r.role_id, TRUE, TRUE, FALSE, FALSE
 FROM roles r WHERE r.name = 'CUSTOMER'
 ON CONFLICT (email) DO UPDATE 
-SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, is_active = TRUE;
+SET password = EXCLUDED.password, full_name = EXCLUDED.full_name, role_id = EXCLUDED.role_id, avatar_url = EXCLUDED.avatar_url, is_active = TRUE, is_deleted = FALSE;

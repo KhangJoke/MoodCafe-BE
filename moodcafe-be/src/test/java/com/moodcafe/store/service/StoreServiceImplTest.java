@@ -1,6 +1,7 @@
 package com.moodcafe.store.service;
 
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
+import com.moodcafe.auth.entity.Role;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.configuration.abstraction.service.SystemConfigurationService;
 import com.moodcafe.configuration.dto.response.MatchScoreWeights;
@@ -10,18 +11,22 @@ import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
 import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
+import com.moodcafe.store.abstraction.repository.StoreScheduleRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
+import com.moodcafe.store.mapper.StoreScheduleMapper;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
+import com.moodcafe.store.dto.response.StoreRegistrationStatusResponse;
 import com.moodcafe.store.dto.response.StoreResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreReview;
+import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.mapper.StoreImageMapper;
@@ -108,9 +113,9 @@ class StoreServiceImplTest {
     @Mock
     private SubscriptionService subscriptionService;
     @Mock
-    private com.moodcafe.store.abstraction.repository.StoreScheduleRepository storeScheduleRepository;
+    private StoreScheduleRepository storeScheduleRepository;
     @Mock
-    private com.moodcafe.store.mapper.StoreScheduleMapper storeScheduleMapper;
+    private StoreScheduleMapper storeScheduleMapper;
 
     @InjectMocks
     private StoreServiceImpl storeService;
@@ -418,5 +423,57 @@ class StoreServiceImplTest {
         assertThatThrownBy(() -> storeService.updateStore(storeId, req))
                 .isInstanceOf(AppException.class)
                 .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.STORE_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("getMyRegistration - throws FORBIDDEN when user is non-customer (e.g. ADMIN)")
+    void getMyRegistration_NonCustomerRole_ThrowsForbidden() {
+        Role adminRole = Role.builder().name("ADMIN").build();
+        User adminUser = User.builder().userId(UUID.randomUUID()).role(adminRole).build();
+        when(currentUserService.getCurrentUser()).thenReturn(adminUser);
+
+        assertThatThrownBy(() -> storeService.getMyRegistration())
+                .isInstanceOf(AppException.class)
+                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    @DisplayName("getMyRegistration - customer has no store returns null")
+    void getMyRegistration_CustomerWithoutStore_ReturnsNull() {
+        Role customerRole = Role.builder().name("CUSTOMER").build();
+        UUID userId = UUID.randomUUID();
+        User customerUser = User.builder().userId(userId).role(customerRole).build();
+        when(currentUserService.getCurrentUser()).thenReturn(customerUser);
+        when(storeStaffRepository.findFirstByUserUserIdAndStoreRoleNameOrderByJoinedAtDesc(userId, "OWNER"))
+                .thenReturn(Optional.empty());
+
+        StoreRegistrationStatusResponse response = storeService.getMyRegistration();
+
+        assertThat(response).isNull();
+    }
+
+    @Test
+    @DisplayName("getMyRegistration - customer has registered store returns status response")
+    void getMyRegistration_CustomerWithOwnerStore_ReturnsStatusResponse() {
+        Role customerRole = Role.builder().name("CUSTOMER").build();
+        UUID userId = UUID.randomUUID();
+        User customerUser = User.builder().userId(userId).role(customerRole).build();
+        StoreStaff ownerStaff = StoreStaff.builder()
+                .user(customerUser)
+                .store(store1)
+                .build();
+
+        when(currentUserService.getCurrentUser()).thenReturn(customerUser);
+        when(storeStaffRepository.findFirstByUserUserIdAndStoreRoleNameOrderByJoinedAtDesc(userId, "OWNER"))
+                .thenReturn(Optional.of(ownerStaff));
+        when(storeImageRepository.findAllByStoreStoreId(store1.getStoreId())).thenReturn(List.of());
+        when(storeTagRepository.findAllByStoreId(store1.getStoreId())).thenReturn(List.of());
+        when(storeScheduleRepository.findAllByStoreStoreId(store1.getStoreId())).thenReturn(List.of());
+
+        StoreRegistrationStatusResponse response = storeService.getMyRegistration();
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStoreId()).isEqualTo(store1.getStoreId());
+        assertThat(response.getName()).isEqualTo(store1.getName());
     }
 }

@@ -6,6 +6,7 @@ import com.moodcafe.store.dto.request.CreateStoreReviewRequest;
 import com.moodcafe.store.dto.request.MerchantReplyReviewRequest;
 import com.moodcafe.store.dto.request.ReportReviewRequest;
 import com.moodcafe.store.dto.request.UpdateStoreReviewRequest;
+import com.moodcafe.store.dto.response.MerchantReviewStatsResponse;
 import com.moodcafe.store.dto.response.ReviewReportResponse;
 import com.moodcafe.store.dto.response.StoreReviewResponse;
 import com.moodcafe.store.dto.response.StoreReviewSummaryResponse;
@@ -47,6 +48,7 @@ public class StoreReviewController {
     @Operation(summary = "Gửi đánh giá quán (Multipart - có ảnh đính kèm hoặc không, tối đa 3 ảnh)",
             description = "Ảnh là tuỳ chọn (0 - 3 ảnh). Nếu có visitVerificationId từ bước Snap/Survey, đánh giá sẽ được đánh dấu Verified. Có thể tái sử dụng ảnh Snap nếu không tải lên ảnh mới.")
     @PostMapping(value = "/{storeId}/reviews", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreReviewResponse>> createReview(
             @PathVariable UUID storeId,
             @RequestParam(value = "image", required = false) MultipartFile image,
@@ -61,6 +63,7 @@ public class StoreReviewController {
     @Operation(summary = "Gửi đánh giá quán (JSON - tiện lợi khi không đính kèm file ảnh)",
             description = "Dành cho trường hợp gửi đánh giá không kèm tệp ảnh (hoặc tái sử dụng ảnh từ VibeSnap qua visitVerificationId).")
     @PostMapping(value = "/{storeId}/reviews", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreReviewResponse>> createReviewJson(
             @PathVariable UUID storeId,
             @Valid @RequestBody CreateStoreReviewRequest request
@@ -100,14 +103,15 @@ public class StoreReviewController {
     @Operation(summary = "Thống kê đánh giá dành cho Chủ quán (Tổng số, Đã phản hồi, Chưa phản hồi, Phân bố sao 1-5)")
     @GetMapping("/{storeId}/merchant/reviews/stats")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<com.moodcafe.store.dto.response.MerchantReviewStatsResponse>> getMerchantReviewStats(
+    public ResponseEntity<ApiResponse<MerchantReviewStatsResponse>> getMerchantReviewStats(
             @PathVariable UUID storeId
     ) {
-        com.moodcafe.store.dto.response.MerchantReviewStatsResponse stats = storeReviewService.getMerchantReviewStats(storeId);
+        MerchantReviewStatsResponse stats = storeReviewService.getMerchantReviewStats(storeId);
         return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
     @GetMapping("/{storeId}/reviews/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreReviewResponse>> getMyReviewForStore(
             @PathVariable UUID storeId
     ) {
@@ -116,6 +120,7 @@ public class StoreReviewController {
     }
 
     @DeleteMapping("/{storeId}/reviews/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> deleteMyReviewForStore(
             @PathVariable UUID storeId
     ) {
@@ -140,6 +145,7 @@ public class StoreReviewController {
     }
 
     @PutMapping(value = "/reviews/{reviewId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreReviewResponse>> updateReview(
             @PathVariable UUID reviewId,
             @RequestParam(value = "newImages", required = false) List<MultipartFile> newImages,
@@ -150,6 +156,7 @@ public class StoreReviewController {
     }
 
     @PutMapping(value = "/reviews/{reviewId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreReviewResponse>> updateReviewJson(
             @PathVariable UUID reviewId,
             @Valid @RequestBody UpdateStoreReviewRequest request
@@ -159,6 +166,7 @@ public class StoreReviewController {
     }
 
     @DeleteMapping("/reviews/{reviewId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> deleteReview(
             @PathVariable UUID reviewId
     ) {

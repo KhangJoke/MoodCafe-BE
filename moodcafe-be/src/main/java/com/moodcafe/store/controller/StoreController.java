@@ -46,6 +46,7 @@ public class StoreController {
     private final StoreStaffService storeStaffService;
 
     @PostMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreResponse>> createStore(@Valid @RequestBody CreateStoreRequest request) {
         StoreResponse response = storeService.createStore(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -124,6 +125,7 @@ public class StoreController {
     }
 
     @GetMapping("/my-stores")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<UserStoreResponse>>> getMyStores() {
         List<UserStoreResponse> stores = storeStaffService.getUserStores();
         return ResponseEntity.ok(ApiResponse.success(stores));
@@ -167,6 +169,7 @@ public class StoreController {
     }
 
     @PatchMapping("/{storeId}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<StoreResponse>> changeStoreStatus(
             @PathVariable UUID storeId,
             @Valid @RequestBody UpdateStoreStatusRequest request) {

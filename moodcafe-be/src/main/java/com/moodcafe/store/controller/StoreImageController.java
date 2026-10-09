@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,6 +30,7 @@ public class StoreImageController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreImageResponse>> addImage(
             @PathVariable UUID storeId,
             @Valid @ModelAttribute CreateStoreImageRequest request) {
@@ -38,6 +40,7 @@ public class StoreImageController {
     }
 
     @DeleteMapping("/{imageId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> removeImage(
             @PathVariable UUID storeId,
             @PathVariable UUID imageId) {
@@ -46,6 +49,7 @@ public class StoreImageController {
     }
 
     @PatchMapping("/{imageId}/primary")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<StoreImageResponse>> setPrimaryImage(
             @PathVariable UUID storeId,
             @PathVariable UUID imageId) {

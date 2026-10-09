@@ -57,9 +57,9 @@ class CloudinaryServiceImplTest {
     }
 
     @Test
-    @DisplayName("uploadImage - throws FILE_TOO_LARGE when file exceeds 5MB")
+    @DisplayName("uploadImage - throws FILE_TOO_LARGE when file exceeds 25MB")
     void uploadImage_TooLarge_ThrowsException() {
-        byte[] largeBytes = new byte[6 * 1024 * 1024]; // 6MB
+        byte[] largeBytes = new byte[26 * 1024 * 1024]; // 26MB
         MockMultipartFile largeFile = new MockMultipartFile("file", "large.jpg", "image/jpeg", largeBytes);
 
         assertThatThrownBy(() -> cloudinaryService.uploadImage(largeFile, "general"))

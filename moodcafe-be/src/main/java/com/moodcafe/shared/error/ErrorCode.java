@@ -111,7 +111,7 @@ public enum ErrorCode {
     INVALID_SPONSORED_DATES(HttpStatus.BAD_REQUEST, "Ngày bắt đầu chiến dịch quảng bá không hợp lệ"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
-    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 5MB limit"),
+    FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 25MB limit"),
     FILE_TYPE_INVALID(HttpStatus.BAD_REQUEST, "Only JPG, PNG, and WEBP image formats are supported"),
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to upload file to Cloudinary"),
     FORBIDDEN_ACTION(HttpStatus.FORBIDDEN, "Access denied"),

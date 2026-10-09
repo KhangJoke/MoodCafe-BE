@@ -13,6 +13,7 @@ import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
 import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
+import com.moodcafe.store.dto.response.UserStoreResponse;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
@@ -108,8 +109,8 @@ class StoreStaffServiceImplTest {
                 .name("MERCHANT_STAFF")
                 .build();
 
-        when(currentUserService.getCurrentUser()).thenReturn(ownerUser);
-        when(currentUserService.isSystemAdmin()).thenReturn(false);
+        lenient().when(currentUserService.getCurrentUser()).thenReturn(ownerUser);
+        lenient().when(currentUserService.isSystemAdmin()).thenReturn(false);
     }
 
     @AfterEach
@@ -213,6 +214,27 @@ class StoreStaffServiceImplTest {
                 .isInstanceOf(AppException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.FORBIDDEN_STORE_ACCESS);
+    }
+
+    @Test
+    @DisplayName("requireStoreAccess should throw FORBIDDEN when user is system admin")
+    void requireStoreAccess_WhenUserIsAdmin_ThrowsForbidden() {
+        when(currentUserService.isSystemAdmin()).thenReturn(true);
+
+        assertThatThrownBy(() -> storeStaffService.requireStoreAccess(storeId, "OWNER"))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN_STORE_ACCESS);
+    }
+
+    @Test
+    @DisplayName("getUserStores should return empty list when user is system admin")
+    void getUserStores_WhenUserIsAdmin_ReturnsEmptyList() {
+        when(currentUserService.isSystemAdmin()).thenReturn(true);
+
+        List<UserStoreResponse> result = storeStaffService.getUserStores();
+
+        assertThat(result).isNotNull().isEmpty();
     }
 }
 

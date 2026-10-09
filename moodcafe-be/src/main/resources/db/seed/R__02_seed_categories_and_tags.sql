@@ -3,17 +3,20 @@
 -- =============================================================
 
 -- 1. Insert 4 Categories
-INSERT INTO tag_categories (code, name, approval_mode, control_type, display_order, is_active)
+INSERT INTO tag_categories (code, name, approval_mode, control_type, display_order, is_active, weight, is_experience_primary, is_experience_secondary)
 VALUES 
-    ('NOISE', 'Độ yên tĩnh & Âm thanh', 'OWNER_CUSTOM', 'SLIDER', 1, TRUE),
-    ('PURPOSE', 'Mục đích sử dụng', 'OWNER_REQUEST', 'TAG_LIST', 2, TRUE),
-    ('VIBE', 'Vibe & Phong cách', 'OWNER_REQUEST', 'TAG_LIST', 3, TRUE),
-    ('AMENITY', 'Tiện ích quán', 'OWNER_REQUEST', 'TAG_LIST', 4, TRUE)
+    ('NOISE', 'Độ yên tĩnh & Âm thanh', 'OWNER_CUSTOM', 'SLIDER', 1, TRUE, 0.20, FALSE, FALSE),
+    ('PURPOSE', 'Mục đích sử dụng', 'OWNER_REQUEST', 'TAG_LIST', 2, TRUE, 0.30, TRUE, FALSE),
+    ('VIBE', 'Vibe & Phong cách', 'OWNER_REQUEST', 'TAG_LIST', 3, TRUE, 0.35, FALSE, TRUE),
+    ('AMENITY', 'Tiện ích quán', 'OWNER_REQUEST', 'TAG_LIST', 4, TRUE, 0.15, FALSE, FALSE)
 ON CONFLICT (code) WHERE is_deleted = FALSE DO UPDATE 
 SET name = EXCLUDED.name, 
     approval_mode = EXCLUDED.approval_mode,
     control_type = EXCLUDED.control_type,
-    display_order = EXCLUDED.display_order, 
+    display_order = EXCLUDED.display_order,
+    weight = EXCLUDED.weight,
+    is_experience_primary = EXCLUDED.is_experience_primary,
+    is_experience_secondary = EXCLUDED.is_experience_secondary,
     is_active = TRUE;
 
 -- 2. Insert 5 NOISE Tags

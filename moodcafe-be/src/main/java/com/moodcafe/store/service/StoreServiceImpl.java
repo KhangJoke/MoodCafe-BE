@@ -129,7 +129,13 @@ public class StoreServiceImpl implements StoreService {
     @Override
     @Transactional
     public StoreResponse createStore(CreateStoreRequest request) {
+        if (currentUserService.isSystemAdmin()) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Tài khoản quản trị viên không được phép tạo quán");
+        }
         User currentUser = currentUserService.getCurrentUser();
+        if (currentUser.getRole() == null || !"CUSTOMER".equalsIgnoreCase(currentUser.getRole().getName())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Chỉ tài khoản khách hàng mới có quyền tạo quán");
+        }
         subscriptionService.validateBranchLimit(currentUser.getUserId());
 
         Store store = storeMapper.toEntity(request);
@@ -176,8 +182,23 @@ public class StoreServiceImpl implements StoreService {
     @Override
     @Transactional
     public StoreRegistrationStatusResponse registerStore(StoreRegisterRequest request) {
+        if (currentUserService.isSystemAdmin()) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Tài khoản quản trị viên không được phép đăng ký quán");
+        }
         User currentUser = currentUserService.getCurrentUser();
+        if (currentUser.getRole() == null || !"CUSTOMER".equalsIgnoreCase(currentUser.getRole().getName())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Chỉ tài khoản khách hàng mới có quyền đăng ký quán");
+        }
         subscriptionService.validateBranchLimit(currentUser.getUserId());
+
+        // Khách hàng chưa được duyệt chỉ được phép đăng ký tối đa 1 quán tại một thời điểm
+        boolean hasPendingStore = storeStaffRepository.findAllByUserUserId(currentUser.getUserId())
+                .stream()
+                .anyMatch(staff -> staff.getStore() != null && StoreStatus.PENDING.equals(staff.getStore().getStatus()));
+        if (hasPendingStore) {
+            throw new AppException(ErrorCode.BAD_REQUEST,
+                    "Bạn đã có 1 hồ sơ quán đang chờ xét duyệt. Vui lòng theo dõi tiến độ xét duyệt trước khi đăng ký thêm.");
+        }
 
         if (request.getTags() == null || request.getTags().isEmpty()) {
             throw new AppException(ErrorCode.STORE_TAG_REQUIRED);
@@ -432,6 +453,11 @@ public class StoreServiceImpl implements StoreService {
     @Transactional(readOnly = true)
     public StoreRegistrationStatusResponse getMyRegistration() {
         User currentUser = currentUserService.getCurrentUser();
+        // Chỉ tài khoản CUSTOMER mới có thể là OWNER của quán và có hồ sơ đăng ký quán.
+        // MERCHANT_STAFF và ADMIN không phải đối tượng đăng ký / sở hữu quán theo luồng khách hàng.
+        if (currentUser.getRole() == null || !"CUSTOMER".equalsIgnoreCase(currentUser.getRole().getName())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Endpoint này chỉ dành cho tài khoản khách hàng (CUSTOMER)");
+        }
         return storeStaffRepository.findFirstByUserUserIdAndStoreRoleNameOrderByJoinedAtDesc(currentUser.getUserId(), "OWNER")
                 .map(staff -> toStoreRegistrationStatusResponse(staff.getStore()))
                 .orElse(null);

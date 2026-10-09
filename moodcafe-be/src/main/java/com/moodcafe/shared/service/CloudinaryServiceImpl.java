@@ -22,7 +22,7 @@ import java.util.Map;
 @Slf4j
 public class CloudinaryServiceImpl implements FileStorageService {
 
-    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+    private static final long MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
     private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
             "image/jpeg",
             "image/jpg",

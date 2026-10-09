@@ -21,7 +21,9 @@ CREATE TABLE roles
 
 INSERT INTO roles (name)
 VALUES ('CUSTOMER'),
-       ('ADMIN');
+       ('ADMIN'),
+       ('MERCHANT_STAFF')
+ON CONFLICT (name) DO NOTHING;
 
 
 -- =========================================================
