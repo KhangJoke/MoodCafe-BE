@@ -11,6 +11,8 @@ push main -> GitHub Actions -> Maven verify -> Docker image -> Amazon ECR
 
 GitHub Actions không đăng nhập SSH vào máy chủ. Nó xác thực AWS qua OpenID Connect (OIDC), sau đó gửi một lệnh SSM đến đúng EC2. Máy EC2 pull image đã publish từ ECR và chạy script deploy sẵn có.
 
+Job publish chạy trên GitHub runner ARM64 và build image `linux/arm64` để khớp kiến trúc EC2.
+
 ## Những gì giữ nguyên trên EC2
 
 Runtime production ở `/opt/moodcafe` là nguồn cấu hình triển khai:

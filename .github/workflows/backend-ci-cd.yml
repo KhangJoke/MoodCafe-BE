@@ -50,7 +50,7 @@ jobs:
     name: Publish image and deploy to EC2
     needs: verify
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
 
@@ -72,7 +72,7 @@ jobs:
         run: |
           image_tag="release-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
           image_uri="$REGISTRY/${ECR_REPOSITORY}:$image_tag"
-          docker build --tag "$image_uri" .
+          docker build --platform linux/arm64 --tag "$image_uri" .
           docker push "$image_uri"
           echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
           echo "Published $image_uri"
