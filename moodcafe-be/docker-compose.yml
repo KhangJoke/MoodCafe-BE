@@ -3,7 +3,7 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: mood_cafe-postgres
-    restart: no
+    restart: unless-stopped
 
     environment:
       POSTGRES_DB: ${DB_NAME}
@@ -26,7 +26,7 @@ services:
   redis:
     image: redis:8-alpine
     container_name: mood_cafe-redis
-    restart: no
+    restart: unless-stopped
 
     ports:
       - "6379:6379"
@@ -51,7 +51,7 @@ services:
     ports:
       - "${SERVER_PORT:-8080}:8080"
     env_file:
-      - .env
+      - ${ENV_FILE:-.env}
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -65,11 +65,12 @@ services:
   ngrok:
     image: ngrok/ngrok:latest
     container_name: mood_cafe-ngrok
+    profiles: ["tunnel"]
     restart: unless-stopped
     ports:
       - "4040:4040"
     environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
     command:
       - "http"
       - "host.docker.internal:${PORT:-8080}"
