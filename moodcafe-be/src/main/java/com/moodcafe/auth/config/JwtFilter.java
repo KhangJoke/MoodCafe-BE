@@ -22,6 +22,7 @@ import jakarta.servlet.http.*;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import java.io.IOException;
+import java.util.Date;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
@@ -59,8 +60,8 @@ public class JwtFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
 
         try {
-            java.util.Date now = new java.util.Date();
-            java.util.Date exp = jwtService.extractExpiration(token);
+            Date now = new Date();
+            Date exp = jwtService.extractExpiration(token);
             long remainingSec = exp != null ? (exp.getTime() - now.getTime()) / 1000 : 0;
             log.debug("JWT Filter checking URI [{} {}]: now={}, exp={}, remaining={}s",
                     request.getMethod(), path, now, exp, remainingSec);
@@ -110,8 +111,8 @@ public class JwtFilter extends OncePerRequestFilter {
                 }
             }
         } catch (ExpiredJwtException e) {
-            java.util.Date now = new java.util.Date();
-            java.util.Date exp = e.getClaims() != null ? e.getClaims().getExpiration() : null;
+            Date now = new Date();
+            Date exp = e.getClaims() != null ? e.getClaims().getExpiration() : null;
             log.warn("JWT Filter token expired for URI [{}]: now={}, exp={}, error={}", request.getRequestURI(), now, exp, e.getMessage());
             sendUnauthorizedResponse(request, response, "Token has expired", "TOKEN_EXPIRED");
             return;
@@ -121,7 +122,7 @@ public class JwtFilter extends OncePerRequestFilter {
             return;
         } catch (Exception e) {
             log.error("JWT Filter validation failed for URI [{}]: {}", request.getRequestURI(), e.getMessage(), e);
-            sendUnauthorizedResponse(request, response, "Authentication failed: " + e.getMessage(), "UNAUTHORIZED");
+            sendUnauthorizedResponse(request, response, "Authentication failed", "UNAUTHORIZED");
             return;
         }
 

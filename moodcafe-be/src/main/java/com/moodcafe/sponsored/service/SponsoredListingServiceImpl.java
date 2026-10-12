@@ -29,12 +29,19 @@ import com.moodcafe.subscription.entity.UserSubscription;
 import com.moodcafe.subscription.entity.enums.SubscriptionPlanCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.moodcafe.payment.dto.response.PayOSResponse;
+import com.moodcafe.payment.service.PayOSService;
+
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,8 +60,8 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
     private final SubscriptionService subscriptionService;
     private final UserSubscriptionRepository userSubscriptionRepository;
     private final SponsoredListingMapper sponsoredListingMapper;
-    @org.springframework.context.annotation.Lazy
-    private final com.moodcafe.payment.service.PayOSService payOSService;
+    @Lazy
+    private final PayOSService payOSService;
 
     @Override
     @Transactional(readOnly = true)
@@ -212,7 +219,7 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
 
         if ("PAYOS".equalsIgnoreCase(paymentMethod) && payOSService != null && payOSService.isConfigured()) {
             try {
-                com.moodcafe.payment.dto.response.PayOSResponse payOSResponse =
+                PayOSResponse payOSResponse =
                         payOSService.createPaymentLink(campaign.getSponsoredListingId());
                 paymentUrl = payOSResponse.getCheckoutUrl();
                 qrCodeUrl = payOSResponse.getQrCode();
@@ -224,13 +231,13 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
             }
         } else if ("VNPAY".equalsIgnoreCase(paymentMethod)) {
             paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=" + transactionCode
-                    + "&vnp_Amount=" + amount.toBigInteger().multiply(java.math.BigInteger.valueOf(100))
-                    + "&vnp_OrderInfo=" + java.net.URLEncoder.encode("Thanh toan MoodCafe Sponsored " + transactionCode, java.nio.charset.StandardCharsets.UTF_8);
+                    + "&vnp_Amount=" + amount.toBigInteger().multiply(BigInteger.valueOf(100))
+                    + "&vnp_OrderInfo=" + URLEncoder.encode("Thanh toan MoodCafe Sponsored " + transactionCode, StandardCharsets.UTF_8);
             qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + paymentUrl;
         } else {
             paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=" + transactionCode
-                    + "&vnp_Amount=" + amount.toBigInteger().multiply(java.math.BigInteger.valueOf(100))
-                    + "&vnp_OrderInfo=" + java.net.URLEncoder.encode("Thanh toan MoodCafe Sponsored " + transactionCode, java.nio.charset.StandardCharsets.UTF_8);
+                    + "&vnp_Amount=" + amount.toBigInteger().multiply(BigInteger.valueOf(100))
+                    + "&vnp_OrderInfo=" + URLEncoder.encode("Thanh toan MoodCafe Sponsored " + transactionCode, StandardCharsets.UTF_8);
             qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + paymentUrl;
         }
 
