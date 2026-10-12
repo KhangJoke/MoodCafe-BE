@@ -441,6 +441,37 @@ public class StoreServiceImpl implements StoreService {
     }
 
     @Override
+    @Transactional
+    public void cancelStoreRegistration(UUID storeId) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER");
+
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        if (store.getStatus() != StoreStatus.REJECTED && store.getStatus() != StoreStatus.PENDING) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Chỉ có thể hủy hồ sơ quán khi đang chờ duyệt hoặc bị từ chối");
+        }
+
+        // Cập nhật trạng thái CANCELLED thay vì xóa khỏi hệ thống để Admin theo dõi hồ sơ lịch sử
+        store.setStatus(StoreStatus.CANCELLED);
+        store.setRejectReason("Chủ quán đã chủ động hủy yêu cầu đăng ký cơ sở này.");
+        storeRepository.save(store);
+
+        // Xóa liên kết nhân sự / chủ quán đối với quán đã hủy để giải phóng hạn mức chi nhánh (maxBranches)
+        List<StoreStaff> staffs = storeStaffRepository.findAllByStoreStoreId(storeId);
+        storeStaffRepository.deleteAll(staffs);
+
+        // Bắn thông báo Realtime WebSocket STOMP tới tất cả Admin hệ thống
+        notificationDispatcherService.dispatchToAdmins(
+                "Hồ sơ đăng ký đã bị hủy",
+                "Chủ quán đã hủy yêu cầu đăng ký cơ sở \"" + store.getName() + "\".",
+                NotificationType.STORE_REGISTRATION_CANCELLED,
+                store.getStoreId().toString(),
+                "/admin/stores?status=CANCELLED"
+        );
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public StoreRegistrationStatusResponse getStoreRegistrationStatus(UUID storeId) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
@@ -469,6 +500,10 @@ public class StoreServiceImpl implements StoreService {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        if (store.getStatus() != StoreStatus.ACTIVE && store.getStatus() != StoreStatus.INACTIVE) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang trong quá trình xét duyệt hoặc chưa được kích hoạt hoạt động");
+        }
 
         String coverImageUrl = resolveStorePrimaryImage(storeId);
 
@@ -722,7 +757,7 @@ public class StoreServiceImpl implements StoreService {
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
         store.setStatus(request.getStatus());
-        if (request.getStatus() == StoreStatus.REJECTED || request.getStatus() == StoreStatus.INACTIVE) {
+        if (request.getStatus() == StoreStatus.REJECTED || request.getStatus() == StoreStatus.INACTIVE || request.getStatus() == StoreStatus.SUSPENDED) {
             if (request.getRejectReason() != null && !request.getRejectReason().isBlank()) {
                 store.setRejectReason(request.getRejectReason());
             }
@@ -758,10 +793,29 @@ public class StoreServiceImpl implements StoreService {
         }
         store = storeRepository.save(store);
 
+        // Multicast to Admins so other active admin sessions update in realtime
+        notificationDispatcherService.dispatchToAdmins(
+                "Cập nhật trạng thái cơ sở",
+                "Cơ sở \"" + store.getName() + "\" đã được cập nhật trạng thái thành: " + store.getStatus(),
+                NotificationType.STORE_STATUS_UPDATED,
+                store.getStoreId().toString(),
+                "/admin/stores"
+        );
+
         List<StoreStaff> ownerStaffs = storeStaffRepository.findAllByStoreStoreIdAndStoreRoleName(storeId, "OWNER");
-        List<UUID> ownerUserIds = ownerStaffs.stream()
+        List<UUID> ownerUserIds = new ArrayList<>(ownerStaffs.stream()
                 .map(staff -> staff.getUser().getUserId())
-                .toList();
+                .toList());
+
+        // Fallback: If no staff with OWNER role found, try any staff member of the store
+        if (ownerUserIds.isEmpty()) {
+            List<StoreStaff> allStaffs = storeStaffRepository.findAllByStoreStoreId(storeId);
+            for (StoreStaff st : allStaffs) {
+                if (st.getUser() != null) {
+                    ownerUserIds.add(st.getUser().getUserId());
+                }
+            }
+        }
 
         if (!ownerUserIds.isEmpty()) {
             String title = "Kết quả thẩm định quán";
@@ -770,6 +824,9 @@ public class StoreServiceImpl implements StoreService {
                 message = "Chúc mừng! Quán \"" + store.getName() + "\" của bạn đã được phê duyệt và đưa vào hoạt động.";
             } else if (request.getStatus() == StoreStatus.REJECTED) {
                 message = "Hồ sơ quán \"" + store.getName() + "\" đã bị từ chối."
+                        + (store.getRejectReason() != null ? " Lý do: " + store.getRejectReason() : "");
+            } else if (request.getStatus() == StoreStatus.SUSPENDED) {
+                message = "Cơ sở \"" + store.getName() + "\" của bạn đã bị Ban Quản Trị tạm đình chỉ hoạt động."
                         + (store.getRejectReason() != null ? " Lý do: " + store.getRejectReason() : "");
             } else {
                 message = "Trạng thái quán \"" + store.getName() + "\" đã được cập nhật thành: " + request.getStatus();
@@ -784,6 +841,44 @@ public class StoreServiceImpl implements StoreService {
                     "/merchant/stores"
             );
         }
+
+        return toStoreResponse(store);
+    }
+
+    @Override
+    @Transactional
+    public StoreResponse toggleStoreOperationalStatus(UUID storeId, boolean active) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        if (store.getStatus() == StoreStatus.SUSPENDED) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS,
+                    "Cơ sở đang bị Ban Quản Trị đình chỉ hoạt động"
+                            + (store.getRejectReason() != null && !store.getRejectReason().isBlank()
+                            ? ": " + store.getRejectReason()
+                            : "")
+                            + ". Vui lòng liên hệ hỗ trợ để được giải quyết.");
+        }
+
+        if (store.getStatus() != StoreStatus.ACTIVE && store.getStatus() != StoreStatus.INACTIVE) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS,
+                    "Cơ sở chưa được kích hoạt hoặc đang trong quá trình xét duyệt.");
+        }
+
+        StoreStatus newStatus = active ? StoreStatus.ACTIVE : StoreStatus.INACTIVE;
+        store.setStatus(newStatus);
+        store = storeRepository.save(store);
+
+        // Multicast to Admins so active stores list on Admin side stays in sync
+        notificationDispatcherService.dispatchToAdmins(
+                "Thay đổi trạng thái vận hành quán",
+                "Quán \"" + store.getName() + "\" vừa chuyển trạng thái hoạt động: " + (active ? "Đang mở cửa (ACTIVE)" : "Tạm đóng cửa (INACTIVE)"),
+                NotificationType.STORE_STATUS_UPDATED,
+                store.getStoreId().toString(),
+                "/admin/stores"
+        );
 
         return toStoreResponse(store);
     }
@@ -1196,7 +1291,9 @@ public class StoreServiceImpl implements StoreService {
         response.setImages(images);
 
         List<StoreTag> storeTags;
-        if (StoreStatus.PENDING.equals(store.getStatus())) {
+        if (StoreStatus.PENDING.equals(store.getStatus())
+                || StoreStatus.REJECTED.equals(store.getStatus())
+                || StoreStatus.CANCELLED.equals(store.getStatus())) {
             storeTags = storeTagRepository.findAllByStoreId(store.getStoreId());
         } else {
             storeTags = storeTagRepository.findAllByStoreIdAndStatus(store.getStoreId(), StoreTagStatus.APPROVED);

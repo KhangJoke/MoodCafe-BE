@@ -29,6 +29,8 @@ public interface StoreService {
 
     StoreRegistrationStatusResponse resubmitStore(UUID storeId, StoreResubmitRequest request);
 
+    void cancelStoreRegistration(UUID storeId);
+
     StoreRegistrationStatusResponse getStoreRegistrationStatus(UUID storeId);
 
     StoreRegistrationStatusResponse getMyRegistration();
@@ -48,6 +50,8 @@ public interface StoreService {
     List<StoreScheduleResponse> updateStoreSchedules(UUID storeId, List<StoreScheduleRequest> schedules);
 
     StoreResponse changeStoreStatus(UUID storeId, UpdateStoreStatusRequest request);
+
+    StoreResponse toggleStoreOperationalStatus(UUID storeId, boolean active);
 
     PageResponse<StoreSearchItemResponse> searchStores(StoreSearchRequest request);
 

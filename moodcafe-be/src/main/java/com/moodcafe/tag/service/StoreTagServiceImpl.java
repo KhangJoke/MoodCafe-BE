@@ -20,6 +20,7 @@ import com.moodcafe.tag.dto.response.StoreAttributesResponse;
 import com.moodcafe.tag.dto.response.StoreTagResponse;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.entity.Store;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.tag.entity.StoreTag;
 import com.moodcafe.tag.entity.Tag;
 import com.moodcafe.tag.entity.TagCategory;
@@ -88,6 +89,15 @@ public class StoreTagServiceImpl implements StoreTagService {
     @Transactional
     public StoreTagResponse requestStoreTag(UUID storeId, SubmitStoreTagRequest request) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+        if (store.getStatus() == StoreStatus.SUSPENDED) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang bị Ban Quản Trị đình chỉ hoạt động");
+        }
+        if (store.getStatus() != StoreStatus.ACTIVE && store.getStatus() != StoreStatus.INACTIVE) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang trong quá trình xét duyệt hoặc chưa được kích hoạt");
+        }
 
         String resolvedProofImages = resolveProofImages(request);
 
@@ -180,8 +190,7 @@ public class StoreTagServiceImpl implements StoreTagService {
         storeTag = storeTagRepository.save(storeTag);
 
         if (StoreTagStatus.PENDING.equals(targetStatus)) {
-            Store store = storeRepository.findById(storeId).orElse(null);
-            String storeName = store != null ? store.getName() : "Quán";
+            String storeName = store.getName() != null ? store.getName() : "Quán";
             notificationDispatcherService.dispatchToAdmins(
                     "Yêu cầu cấp thẻ Vibe mới",
                     "Quán \"" + storeName + "\" vừa gửi yêu cầu cấp thẻ \"" + tag.getName() + "\" (SLA 48h).",
@@ -208,6 +217,15 @@ public class StoreTagServiceImpl implements StoreTagService {
     @Transactional
     public StoreTagResponse resubmitStoreTag(UUID storeId, UUID storeTagId, SubmitStoreTagRequest request) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+        if (store.getStatus() == StoreStatus.SUSPENDED) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang bị Ban Quản Trị đình chỉ hoạt động");
+        }
+        if (store.getStatus() != StoreStatus.ACTIVE && store.getStatus() != StoreStatus.INACTIVE) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang trong quá trình xét duyệt hoặc chưa được kích hoạt");
+        }
 
         StoreTag storeTag = storeTagRepository.findById(storeTagId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_TAG_NOT_FOUND));
@@ -239,8 +257,7 @@ public class StoreTagServiceImpl implements StoreTagService {
         storeTag = storeTagRepository.save(storeTag);
 
         if (StoreTagStatus.PENDING.equals(storeTag.getStatus())) {
-            Store store = storeRepository.findById(storeId).orElse(null);
-            String storeName = store != null ? store.getName() : "Quán";
+            String storeName = store.getName() != null ? store.getName() : "Quán";
             notificationDispatcherService.dispatchToAdmins(
                     "Yêu cầu cấp thẻ Vibe mới",
                     "Quán \"" + storeName + "\" vừa nộp lại yêu cầu cấp thẻ \"" + tag.getName() + "\" (SLA 48h).",

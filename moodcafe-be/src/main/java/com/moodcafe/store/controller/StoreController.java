@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -71,6 +72,13 @@ public class StoreController {
     ) {
         StoreRegistrationStatusResponse response = storeService.resubmitStore(storeId, request);
         return ResponseEntity.ok(ApiResponse.success(response, "Nộp lại hồ sơ quán thành công"));
+    }
+
+    @DeleteMapping("/{storeId}/registration")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<Void>> cancelStoreRegistration(@PathVariable UUID storeId) {
+        storeService.cancelStoreRegistration(storeId);
+        return ResponseEntity.ok(ApiResponse.success(null, "Đã hủy yêu cầu đăng ký cơ sở"));
     }
 
     @GetMapping("/my-registration")
@@ -166,6 +174,16 @@ public class StoreController {
             @Valid @RequestBody UpdateStoreRequest request) {
         StoreResponse updatedStore = storeService.updateStore(storeId, request);
         return ResponseEntity.ok(ApiResponse.success(updatedStore, "Cập nhật thông tin quán thành công"));
+    }
+
+    @PatchMapping("/{storeId}/operational-status")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<StoreResponse>> toggleStoreOperationalStatus(
+            @PathVariable UUID storeId,
+            @RequestParam boolean active) {
+        StoreResponse updatedStore = storeService.toggleStoreOperationalStatus(storeId, active);
+        String message = active ? "Đã mở hoạt động cho quán thành công" : "Đã tạm ngưng hoạt động của quán";
+        return ResponseEntity.ok(ApiResponse.success(updatedStore, message));
     }
 
     @PatchMapping("/{storeId}/status")

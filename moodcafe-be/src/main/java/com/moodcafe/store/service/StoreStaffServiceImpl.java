@@ -23,6 +23,7 @@ import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.entity.enums.StoreStaffStatus;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.store.mapper.StoreStaffMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -57,6 +58,13 @@ public class StoreStaffServiceImpl implements StoreStaffService {
 
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        if (store.getStatus() == StoreStatus.SUSPENDED) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang bị Ban Quản Trị đình chỉ hoạt động");
+        }
+        if (store.getStatus() != StoreStatus.ACTIVE && store.getStatus() != StoreStatus.INACTIVE) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang trong quá trình xét duyệt hoặc chưa được kích hoạt");
+        }
 
         String email = request.getEmail().trim().toLowerCase();
         if (userService.existsByEmail(email)) {

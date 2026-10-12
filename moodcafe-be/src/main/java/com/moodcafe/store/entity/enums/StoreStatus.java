@@ -4,5 +4,7 @@ public enum StoreStatus {
     PENDING,
     ACTIVE,
     INACTIVE,
-    REJECTED
+    SUSPENDED,
+    REJECTED,
+    CANCELLED
 }

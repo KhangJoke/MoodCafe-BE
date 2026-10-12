@@ -28,6 +28,7 @@ public enum NotificationType {
 
     // Realtime Domain Events - Admin
     STORE_REGISTRATION_SUBMITTED,
+    STORE_REGISTRATION_CANCELLED,
     TAG_REQUEST_SUBMITTED,
     REVIEW_REPORTED,
     TAG_LOW_RATING_ALERT,
