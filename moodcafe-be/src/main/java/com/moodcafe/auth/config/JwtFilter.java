@@ -42,8 +42,8 @@ public class JwtFilter extends OncePerRequestFilter {
         String token = null;
         final String header = request.getHeader("Authorization");
 
-        if (header != null && header.startsWith("Bearer ")) {
-            token = header.substring(7);
+        if (header != null && header.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            token = header.substring(7).trim();
         } else {
             // 2. Dự phòng: Kiểm tra trong Query Parameter (dành riêng cho kết nối SSE Stream)
             token = request.getParameter("token");
@@ -59,15 +59,21 @@ public class JwtFilter extends OncePerRequestFilter {
         String path = request.getServletPath();
 
         try {
+            java.util.Date now = new java.util.Date();
+            java.util.Date exp = jwtService.extractExpiration(token);
+            long remainingSec = exp != null ? (exp.getTime() - now.getTime()) / 1000 : 0;
+            log.debug("JWT Filter checking URI [{} {}]: now={}, exp={}, remaining={}s",
+                    request.getMethod(), path, now, exp, remainingSec);
 
             String jti = jwtService.extractJwtId(token);
             if (redisTokenService.isBlacklisted(jti)) {
+                log.warn("JWT Filter rejected revoked token for URI [{}]: jti={}", path, jti);
                 sendUnauthorizedResponse(request, response, "Token has been revoked", "TOKEN_REVOKED");
                 return;
             }
             String email = jwtService.extractUsername(token);
             User user = userRepository.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new RuntimeException("User not found with email: " + email));
 
             UserDetails userDetails = new CustomUserDetails(user);
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -98,21 +104,24 @@ public class JwtFilter extends OncePerRequestFilter {
                         }
                     }
                 } else {
+                    log.warn("JWT Filter token invalid for user {} on URI [{}]: now={}, exp={}", email, path, now, exp);
                     sendUnauthorizedResponse(request, response, "Token is invalid or expired", "TOKEN_INVALID");
                     return;
                 }
             }
         } catch (ExpiredJwtException e) {
-            log.warn("JWT token expired for URI {}: {}", request.getRequestURI(), e.getMessage());
+            java.util.Date now = new java.util.Date();
+            java.util.Date exp = e.getClaims() != null ? e.getClaims().getExpiration() : null;
+            log.warn("JWT Filter token expired for URI [{}]: now={}, exp={}, error={}", request.getRequestURI(), now, exp, e.getMessage());
             sendUnauthorizedResponse(request, response, "Token has expired", "TOKEN_EXPIRED");
             return;
         } catch (JwtException e) {
-            log.warn("Invalid JWT token for URI {}: {}", request.getRequestURI(), e.getMessage());
+            log.warn("JWT Filter invalid JWT for URI [{}]: {}", request.getRequestURI(), e.getMessage());
             sendUnauthorizedResponse(request, response, "Invalid authentication token", "TOKEN_INVALID");
             return;
         } catch (Exception e) {
-            log.error("JWT Filter validation failed for URI {}: {}", request.getRequestURI(), e.getMessage(), e);
-            sendUnauthorizedResponse(request, response, "Authentication failed", "UNAUTHORIZED");
+            log.error("JWT Filter validation failed for URI [{}]: {}", request.getRequestURI(), e.getMessage(), e);
+            sendUnauthorizedResponse(request, response, "Authentication failed: " + e.getMessage(), "UNAUTHORIZED");
             return;
         }
 

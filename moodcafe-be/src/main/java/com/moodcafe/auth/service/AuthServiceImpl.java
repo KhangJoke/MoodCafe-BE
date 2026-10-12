@@ -30,6 +30,7 @@ import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -56,6 +57,9 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
+    @Value("${jwt.access-token-expiration-minutes:15}")
+    private long accessTokenExpirationMinutes = 15;
 
     private static final String PENDING_REGISTER_PREFIX = "auth:register:";
     private static final String SETUP_PASSWORD_PREFIX = "setup_pwd:";
@@ -560,7 +564,7 @@ public class AuthServiceImpl implements AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .tokenType("Bearer")
-                .expiresIn(15 * 60)
+                .expiresIn(accessTokenExpirationMinutes * 60)
                 .build();
     }
 

@@ -8,6 +8,9 @@ import com.moodcafe.menu.dto.response.MenuCategoryResponse;
 import com.moodcafe.menu.dto.response.MenuItemResponse;
 import com.moodcafe.menu.service.MenuService;
 import com.moodcafe.shared.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -33,12 +36,14 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/stores/{storeId}/menu")
 @RequiredArgsConstructor
+@Tag(name = "Store Menu", description = "Quản lý thực đơn quán cà phê (Danh mục và Món ăn)")
 public class StoreMenuController {
 
     private final MenuService menuService;
 
     // --- Categories ---
 
+    @Operation(summary = "Lấy danh sách toàn bộ danh mục thực đơn của quán")
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<List<MenuCategoryResponse>>> getCategories(
             @PathVariable UUID storeId) {
@@ -46,6 +51,7 @@ public class StoreMenuController {
         return ResponseEntity.ok(ApiResponse.success(categories));
     }
 
+    @Operation(summary = "Tạo danh mục thực đơn mới cho quán (Yêu cầu quyền OWNER / MANAGER)")
     @PostMapping("/categories")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<MenuCategoryResponse>> createCategory(
@@ -56,6 +62,7 @@ public class StoreMenuController {
                 .body(ApiResponse.success(category, "Tạo danh mục thành công"));
     }
 
+    @Operation(summary = "Cập nhật danh mục thực đơn (Yêu cầu quyền OWNER / MANAGER)")
     @PatchMapping("/categories/{categoryId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<MenuCategoryResponse>> updateCategory(
@@ -66,6 +73,7 @@ public class StoreMenuController {
         return ResponseEntity.ok(ApiResponse.success(category, "Cập nhật danh mục thành công"));
     }
 
+    @Operation(summary = "Xóa danh mục thực đơn (Chỉ cho phép khi danh mục trống không có món)")
     @DeleteMapping("/categories/{categoryId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(
@@ -77,17 +85,22 @@ public class StoreMenuController {
 
     // --- Items ---
 
+    @Operation(
+            summary = "Lấy danh sách món ăn trong thực đơn có phân trang",
+            description = "Hỗ trợ phân trang qua page (mặc định 0), size (mặc định 20), sort (mặc định createdAt,desc). Hỗ trợ tìm kiếm theo tên món (q), lọc theo danh mục (categoryId), lọc trạng thái còn hàng (isAvailable)."
+    )
     @GetMapping("/items")
     public ResponseEntity<ApiResponse<Page<MenuItemResponse>>> getItems(
             @PathVariable UUID storeId,
-            @RequestParam(required = false) UUID categoryId,
-            @RequestParam(required = false) String q,
-            @RequestParam(required = false) Boolean isAvailable,
+            @Parameter(description = "Lọc theo ID danh mục") @RequestParam(required = false) UUID categoryId,
+            @Parameter(description = "Từ khóa tìm kiếm theo tên món ăn") @RequestParam(required = false) String q,
+            @Parameter(description = "Lọc theo trạng thái còn bán (true/false)") @RequestParam(required = false) Boolean isAvailable,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         Page<MenuItemResponse> items = menuService.getItems(storeId, categoryId, q, isAvailable, pageable);
         return ResponseEntity.ok(ApiResponse.success(items));
     }
 
+    @Operation(summary = "Tạo món ăn mới trong thực đơn (Yêu cầu quyền OWNER / MANAGER)")
     @PostMapping("/items")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<MenuItemResponse>> createItem(
@@ -98,6 +111,7 @@ public class StoreMenuController {
                 .body(ApiResponse.success(item, "Tạo món ăn thành công"));
     }
 
+    @Operation(summary = "Cập nhật thông tin món ăn (Yêu cầu quyền OWNER / MANAGER)")
     @PatchMapping("/items/{itemId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<MenuItemResponse>> updateItem(
@@ -108,6 +122,7 @@ public class StoreMenuController {
         return ResponseEntity.ok(ApiResponse.success(item, "Cập nhật món ăn thành công"));
     }
 
+    @Operation(summary = "Xóa mềm món ăn khỏi thực đơn (Yêu cầu quyền OWNER / MANAGER)")
     @DeleteMapping("/items/{itemId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> deleteItem(

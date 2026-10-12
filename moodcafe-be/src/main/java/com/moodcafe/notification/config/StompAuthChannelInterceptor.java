@@ -50,19 +50,54 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         return message;
     }
 
-    private void handleConnect(StompHeaderAccessor accessor) {
+    private String extractToken(StompHeaderAccessor accessor) {
         String authHeader = accessor.getFirstNativeHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            log.warn("STOMP CONNECT rejected: Missing or invalid Authorization header");
+        if (authHeader == null) {
+            authHeader = accessor.getFirstNativeHeader("authorization");
+        }
+        if (authHeader == null && accessor.toNativeHeaderMap() != null) {
+            for (var entry : accessor.toNativeHeaderMap().entrySet()) {
+                if ("authorization".equalsIgnoreCase(entry.getKey()) && !entry.getValue().isEmpty()) {
+                    authHeader = entry.getValue().get(0);
+                    break;
+                }
+            }
+        }
+        if (authHeader == null) {
+            authHeader = accessor.getFirstNativeHeader("passcode");
+        }
+        if (authHeader == null) {
+            authHeader = accessor.getFirstNativeHeader("token");
+        }
+
+        if (authHeader != null && !authHeader.isBlank()) {
+            authHeader = authHeader.trim();
+            if (authHeader.regionMatches(true, 0, "Bearer ", 0, 7)) {
+                return authHeader.substring(7).trim();
+            }
+            return authHeader;
+        }
+
+        return null;
+    }
+
+    private void handleConnect(StompHeaderAccessor accessor) {
+        String token = extractToken(accessor);
+        if (token == null || token.isBlank()) {
+            log.warn("STOMP CONNECT rejected: Missing or invalid Authorization/passcode header. Native headers present: {}",
+                    accessor.toNativeHeaderMap() != null ? accessor.toNativeHeaderMap().keySet() : "null");
             throw new IllegalArgumentException("Missing or invalid Authorization header in STOMP CONNECT");
         }
 
-        String token = authHeader.substring(7);
-
         try {
+            java.util.Date now = new java.util.Date();
+            java.util.Date exp = jwtService.extractExpiration(token);
+            long remainingSec = exp != null ? (exp.getTime() - now.getTime()) / 1000 : 0;
+            log.info("STOMP CONNECT validating token: now={}, exp={}, remaining={}s", now, exp, remainingSec);
+
             String jti = jwtService.extractJwtId(token);
             if (redisTokenService.isBlacklisted(jti)) {
-                log.warn("STOMP CONNECT rejected: Token is blacklisted");
+                log.warn("STOMP CONNECT rejected: Token is blacklisted (jti={})", jti);
                 throw new IllegalArgumentException("Token is blacklisted");
             }
 
@@ -76,7 +111,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
             UserDetails userDetails = new CustomUserDetails(user);
             if (!jwtService.isTokenValid(token, userDetails)) {
-                log.warn("STOMP CONNECT rejected: Token validation failed for user {}", username);
+                log.warn("STOMP CONNECT rejected: Token validation failed for user {} (now={}, exp={})", username, now, exp);
                 throw new IllegalArgumentException("Invalid or expired token");
             }
 
@@ -96,12 +131,12 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         Principal principal = accessor.getUser();
 
         if (principal == null) {
-            log.warn("STOMP SUBSCRIBE rejected: Connection is not authenticated");
+            log.warn("STOMP SUBSCRIBE rejected: Connection is not authenticated for destination: {}", destination);
             throw new IllegalArgumentException("Authentication required to subscribe");
         }
 
         if (destination != null && destination.startsWith("/topic/notifications/")) {
-            String requestedUserId = destination.substring("/topic/notifications/".length());
+            String requestedUserId = destination.substring("/topic/notifications/".length()).replaceAll("/+$", "").trim();
             String authenticatedUserId = null;
 
             if (principal instanceof Authentication auth && auth.getPrincipal() instanceof CustomUserDetails userDetails) {

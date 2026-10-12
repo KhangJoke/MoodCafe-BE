@@ -45,6 +45,12 @@ class PayOSServiceTest {
     @Mock
     private CurrentUserService currentUserService;
 
+    @Mock
+    private com.moodcafe.sponsored.abstraction.repository.SponsoredListingRepository sponsoredListingRepository;
+
+    @Mock
+    private com.moodcafe.sponsored.abstraction.service.SponsoredListingService sponsoredListingService;
+
     private PayOSService payOSService;
 
     @BeforeEach
@@ -57,6 +63,8 @@ class PayOSServiceTest {
                 userRepository,
                 currentUserService
         );
+        payOSService.setSponsoredListingRepository(sponsoredListingRepository);
+        payOSService.setSponsoredListingService(sponsoredListingService);
     }
 
     @Test
@@ -109,5 +117,35 @@ class PayOSServiceTest {
     void testHandlePayOSWebhook_NullRequest() {
         assertDoesNotThrow(() -> payOSService.handlePayOSWebhook(null));
         assertDoesNotThrow(() -> payOSService.handlePayOSWebhook(new PayOSWebhookRequest()));
+    }
+
+    @Test
+    @DisplayName("handlePayOSWebhook should confirm sponsored campaign when orderCode matches pending campaign")
+    void testHandlePayOSWebhook_SponsoredCampaign_Success() {
+        long orderCode = 1719999999L;
+        String txCode = String.valueOf(orderCode);
+
+        PayOSWebhookRequest.PayOSWebhookData data = new PayOSWebhookRequest.PayOSWebhookData();
+        data.setOrderCode(orderCode);
+        data.setAmount(200000.0);
+        data.setDescription("MOOD SPONSOR");
+
+        PayOSWebhookRequest request = new PayOSWebhookRequest();
+        request.setCode("00");
+        request.setData(data);
+
+        com.moodcafe.sponsored.entity.SponsoredListing campaign = com.moodcafe.sponsored.entity.SponsoredListing.builder()
+                .sponsoredListingId(UUID.randomUUID())
+                .transactionCode(txCode)
+                .amount(BigDecimal.valueOf(200000))
+                .status(com.moodcafe.sponsored.entity.enums.SponsoredListingStatus.PENDING)
+                .build();
+
+        when(subscriptionPaymentRepository.findByTransactionCode(txCode)).thenReturn(Optional.empty());
+        when(sponsoredListingRepository.findByTransactionCode(txCode)).thenReturn(Optional.of(campaign));
+
+        payOSService.handlePayOSWebhook(request);
+
+        verify(sponsoredListingService, times(1)).confirmCampaignPayment(txCode);
     }
 }

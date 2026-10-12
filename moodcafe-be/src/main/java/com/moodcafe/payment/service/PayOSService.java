@@ -6,6 +6,10 @@ import com.moodcafe.auth.entity.User;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
+import com.moodcafe.sponsored.abstraction.repository.SponsoredListingRepository;
+import com.moodcafe.sponsored.abstraction.service.SponsoredListingService;
+import com.moodcafe.sponsored.entity.SponsoredListing;
+import com.moodcafe.sponsored.entity.enums.SponsoredListingStatus;
 import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepository;
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
@@ -41,6 +45,13 @@ public class PayOSService {
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
 
+    @Autowired(required = false)
+    private SponsoredListingRepository sponsoredListingRepository;
+
+    @Autowired(required = false)
+    @Lazy
+    private SponsoredListingService sponsoredListingService;
+
     public PayOSService(
             @Autowired(required = false) PayOS payOS,
             PayOSConfig payOSConfig,
@@ -57,8 +68,27 @@ public class PayOSService {
         this.currentUserService = currentUserService;
     }
 
+    public void setSponsoredListingRepository(SponsoredListingRepository sponsoredListingRepository) {
+        this.sponsoredListingRepository = sponsoredListingRepository;
+    }
+
+    public void setSponsoredListingService(SponsoredListingService sponsoredListingService) {
+        this.sponsoredListingService = sponsoredListingService;
+    }
+
     public boolean isConfigured() {
         return payOS != null && payOSConfig.isConfigured();
+    }
+
+    /**
+     * Tạo Link thanh toán PayOS / VietQR cho UUID (Hỗ trợ cả Subscription và Sponsored Campaign)
+     */
+    @Transactional
+    public PayOSResponse createPaymentLink(UUID orderId) {
+        if (orderId == null) {
+            throw new IllegalArgumentException("orderId không được null");
+        }
+        return createPaymentLink(orderId.toString());
     }
 
     /**
@@ -70,7 +100,7 @@ public class PayOSService {
     }
 
     /**
-     * 1. Tạo Link thanh toán PayOS / VietQR (Hỗ trợ cả String orderId / UUID PaymentId)
+     * 1. Tạo Link thanh toán PayOS / VietQR (Hỗ trợ cả String orderId / UUID PaymentId / CampaignId)
      */
     @Transactional
     public PayOSResponse createPaymentLink(String orderId) {
@@ -78,21 +108,22 @@ public class PayOSService {
             throw new IllegalStateException("Cổng thanh toán PayOS chưa được cấu hình Client ID, API Key hoặc Checksum Key.");
         }
 
-        // Tìm kiếm SubscriptionPayment tương ứng (nếu có)
+        // 1. Tìm kiếm SubscriptionPayment tương ứng (nếu có)
         SubscriptionPayment payment = findPaymentByIdOrTxCode(orderId);
+        if (payment != null) {
+            return createPaymentLinkForSubscriptionPayment(payment);
+        }
 
+        // 2. Tìm kiếm SponsoredListing tương ứng (nếu có)
+        SponsoredListing campaign = findCampaignByIdOrTxCode(orderId);
+        if (campaign != null) {
+            return createPaymentLinkForSponsoredListing(campaign);
+        }
+
+        // 3. Fallback cho orderId thông thường
         long amount = 50000;
         String itemName = "Don hang MoodCafe #" + orderId;
         String description = sanitizeDescription("MOOD " + orderId);
-
-        if (payment != null) {
-            amount = payment.getAmount().longValue();
-            if (payment.getSubscriptionPlan() != null) {
-                itemName = "Goi " + payment.getSubscriptionPlan().getDisplayName();
-                description = sanitizeDescription("MOOD " + payment.getSubscriptionPlan().getPlanCode().name());
-            }
-        }
-
         long orderCode = generateOrderCode();
 
         try {
@@ -119,16 +150,7 @@ public class PayOSService {
                     + "&addInfo=" + URLEncoder.encode(description, StandardCharsets.UTF_8)
                     + "&accountName=" + URLEncoder.encode(checkoutData.getAccountName(), StandardCharsets.UTF_8);
 
-            // Lưu hoặc cập nhật bản ghi SubscriptionPayment trong database
-            if (payment != null) {
-                payment.setTransactionCode(String.valueOf(orderCode));
-                payment.setPaymentUrl(checkoutData.getCheckoutUrl());
-                payment.setPaymentMethod("PAYOS");
-                payment.setStatus(SubscriptionPaymentStatus.PENDING);
-                subscriptionPaymentRepository.save(payment);
-            } else {
-                savePendingPaymentAnchor(orderCode, amount, checkoutData.getCheckoutUrl(), orderId);
-            }
+            savePendingPaymentAnchor(orderCode, amount, checkoutData.getCheckoutUrl(), orderId);
 
             return PayOSResponse.builder()
                     .checkoutUrl(checkoutData.getCheckoutUrl())
@@ -210,6 +232,73 @@ public class PayOSService {
     }
 
     /**
+     * Tạo Link thanh toán PayOS / VietQR trực tiếp cho thực thể SponsoredListing đã tạo
+     */
+    @Transactional
+    public PayOSResponse createPaymentLinkForSponsoredListing(SponsoredListing campaign) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Cổng thanh toán PayOS chưa được cấu hình.");
+        }
+
+        long amount = campaign.getAmount().longValue();
+        long orderCode = generateOrderCode();
+        String placementName = campaign.getPlacement() != null
+                ? campaign.getPlacement().name()
+                : "SPONSOR";
+        String description = sanitizeDescription("MOOD " + placementName);
+
+        String itemName = campaign.getPlacement() != null
+                ? "Tai tro " + campaign.getPlacement().getDisplayName()
+                : "Tai tro MoodCafe";
+
+        PaymentLinkItem item = PaymentLinkItem.builder()
+                .name(itemName.length() > 50 ? itemName.substring(0, 50) : itemName)
+                .quantity(1)
+                .price(amount)
+                .build();
+
+        CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
+                .orderCode(orderCode)
+                .amount(amount)
+                .description(description)
+                .items(Collections.singletonList(item))
+                .returnUrl(payOSConfig.getReturnUrl())
+                .cancelUrl(payOSConfig.getCancelUrl())
+                .build();
+
+        try {
+            CreatePaymentLinkResponse checkoutData = payOS.paymentRequests().create(paymentData);
+
+            String officialQrImageUrl = "https://img.vietqr.io/image/" + checkoutData.getBin() + "-"
+                    + checkoutData.getAccountNumber() + "-compact2.png?amount=" + amount
+                    + "&addInfo=" + URLEncoder.encode(description, StandardCharsets.UTF_8)
+                    + "&accountName=" + URLEncoder.encode(checkoutData.getAccountName(), StandardCharsets.UTF_8);
+
+            campaign.setTransactionCode(String.valueOf(orderCode));
+            campaign.setPaymentMethod("PAYOS");
+            campaign.setPaymentStatus("PENDING");
+            if (sponsoredListingRepository != null) {
+                sponsoredListingRepository.save(campaign);
+            }
+
+            return PayOSResponse.builder()
+                    .checkoutUrl(checkoutData.getCheckoutUrl())
+                    .qrCode(officialQrImageUrl)
+                    .accountNumber(checkoutData.getAccountNumber())
+                    .accountName(checkoutData.getAccountName())
+                    .bin(checkoutData.getBin())
+                    .orderCode(orderCode)
+                    .amount((double) amount)
+                    .description(description)
+                    .status("PENDING")
+                    .build();
+        } catch (Exception e) {
+            log.error("PayOS createPaymentLinkForSponsoredListing error: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi tạo link thanh toán PayOS: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 2. Tiếp nhận Webhook từ PayOS khi khách đã thanh toán thành công
      */
     @Transactional
@@ -261,6 +350,24 @@ public class PayOSService {
             } else {
                 log.info("Subscription payment {} already SUCCESS for orderCode {}", payment.getPaymentId(), orderCode);
             }
+        } else if (sponsoredListingRepository != null && sponsoredListingService != null) {
+            Optional<SponsoredListing> campaignOpt = sponsoredListingRepository.findByTransactionCode(txCode);
+            if (campaignOpt.isEmpty() && data.getDescription() != null) {
+                campaignOpt = sponsoredListingRepository.findByTransactionCode(data.getDescription().trim());
+            }
+            if (campaignOpt.isPresent()) {
+                SponsoredListing campaign = campaignOpt.get();
+                if (!SponsoredListingStatus.ACTIVE.equals(campaign.getStatus())) {
+                    sponsoredListingService.confirmCampaignPayment(campaign.getTransactionCode());
+                    log.info("Sponsored campaign {} successfully confirmed via webhook for orderCode {}",
+                            campaign.getSponsoredListingId(), orderCode);
+                } else {
+                    log.info("Sponsored campaign {} already ACTIVE for orderCode {}",
+                            campaign.getSponsoredListingId(), orderCode);
+                }
+            } else {
+                log.warn("No SubscriptionPayment or SponsoredListing found matching orderCode: {}", orderCode);
+            }
         } else {
             log.warn("No SubscriptionPayment found matching orderCode: {}", orderCode);
         }
@@ -290,6 +397,16 @@ public class PayOSService {
                         subscriptionService.confirmPayment(payment.getTransactionCode());
                         log.info("Subscription payment {} confirmed via checkPaymentStatus for orderCode {}",
                                 payment.getPaymentId(), orderCode);
+                    }
+                } else if (sponsoredListingRepository != null && sponsoredListingService != null) {
+                    Optional<SponsoredListing> campaignOpt = sponsoredListingRepository.findByTransactionCode(txCode);
+                    if (campaignOpt.isPresent()) {
+                        SponsoredListing campaign = campaignOpt.get();
+                        if (!SponsoredListingStatus.ACTIVE.equals(campaign.getStatus())) {
+                            sponsoredListingService.confirmCampaignPayment(campaign.getTransactionCode());
+                            log.info("Sponsored campaign {} confirmed via checkPaymentStatus for orderCode {}",
+                                    campaign.getSponsoredListingId(), orderCode);
+                        }
                     }
                 }
                 return true;
@@ -322,11 +439,31 @@ public class PayOSService {
     }
 
     /**
-     * Tạo orderCode kiểu Long là số nguyên dương duy nhất
+     * Tìm kiếm SponsoredListing theo UUID hoặc TransactionCode
+     */
+    private SponsoredListing findCampaignByIdOrTxCode(String identifier) {
+        if (identifier == null || identifier.isBlank() || sponsoredListingRepository == null) {
+            return null;
+        }
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            Optional<SponsoredListing> byId = sponsoredListingRepository.findById(uuid);
+            if (byId.isPresent()) {
+                return byId.get();
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Not a UUID
+        }
+        return sponsoredListingRepository.findByTransactionCode(identifier).orElse(null);
+    }
+
+    /**
+     * Tạo orderCode kiểu Long là số nguyên duy nhất
      */
     private synchronized long generateOrderCode() {
         long code = System.currentTimeMillis() / 1000;
-        while (subscriptionPaymentRepository.findByTransactionCode(String.valueOf(code)).isPresent()) {
+        while (subscriptionPaymentRepository.findByTransactionCode(String.valueOf(code)).isPresent()
+                || (sponsoredListingRepository != null && sponsoredListingRepository.findByTransactionCode(String.valueOf(code)).isPresent())) {
             code++;
         }
         return code;

@@ -53,6 +53,8 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
     private final SubscriptionService subscriptionService;
     private final UserSubscriptionRepository userSubscriptionRepository;
     private final SponsoredListingMapper sponsoredListingMapper;
+    @org.springframework.context.annotation.Lazy
+    private final com.moodcafe.payment.service.PayOSService payOSService;
 
     @Override
     @Transactional(readOnly = true)
@@ -204,7 +206,33 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
 
         campaign = sponsoredListingRepository.save(campaign);
 
-        String paymentUrl = buildMockPaymentUrl(transactionCode, amount, paymentMethod);
+        String paymentUrl = null;
+        String qrCodeUrl = null;
+        String message = "Tạo đơn tài trợ thành công, vui lòng tiến hành thanh toán";
+
+        if ("PAYOS".equalsIgnoreCase(paymentMethod) && payOSService != null && payOSService.isConfigured()) {
+            try {
+                com.moodcafe.payment.dto.response.PayOSResponse payOSResponse =
+                        payOSService.createPaymentLink(campaign.getSponsoredListingId());
+                paymentUrl = payOSResponse.getCheckoutUrl();
+                qrCodeUrl = payOSResponse.getQrCode();
+                transactionCode = String.valueOf(payOSResponse.getOrderCode());
+                message = "Tạo link thanh toán PayOS VietQR thành công, vui lòng quét mã QR hoặc mở link để thanh toán";
+            } catch (Exception e) {
+                log.error("Failed to generate PayOS link for sponsored campaign: {}", e.getMessage(), e);
+                throw new RuntimeException("Lỗi tạo link thanh toán PayOS: " + e.getMessage(), e);
+            }
+        } else if ("VNPAY".equalsIgnoreCase(paymentMethod)) {
+            paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=" + transactionCode
+                    + "&vnp_Amount=" + amount.toBigInteger().multiply(java.math.BigInteger.valueOf(100))
+                    + "&vnp_OrderInfo=" + java.net.URLEncoder.encode("Thanh toan MoodCafe Sponsored " + transactionCode, java.nio.charset.StandardCharsets.UTF_8);
+            qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + paymentUrl;
+        } else {
+            paymentUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html?vnp_TxnRef=" + transactionCode
+                    + "&vnp_Amount=" + amount.toBigInteger().multiply(java.math.BigInteger.valueOf(100))
+                    + "&vnp_OrderInfo=" + java.net.URLEncoder.encode("Thanh toan MoodCafe Sponsored " + transactionCode, java.nio.charset.StandardCharsets.UTF_8);
+            qrCodeUrl = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + paymentUrl;
+        }
 
         return SponsoredCheckoutResponse.builder()
                 .campaignId(campaign.getSponsoredListingId())
@@ -217,9 +245,9 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
                 .freeQuotaUsed(false)
                 .paymentMethod(paymentMethod)
                 .paymentUrl(paymentUrl)
-                .qrCodeUrl("https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=" + paymentUrl)
+                .qrCodeUrl(qrCodeUrl)
                 .status(SponsoredListingStatus.PENDING)
-                .message("Tạo đơn tài trợ thành công, vui lòng tiến hành thanh toán")
+                .message(message)
                 .build();
     }
 
@@ -227,7 +255,18 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
     @Transactional
     public SponsoredListingResponse confirmCampaignPayment(String transactionCode) {
         SponsoredListing campaign = sponsoredListingRepository.findByTransactionCode(transactionCode)
-                .orElseThrow(() -> new AppException(ErrorCode.SPONSORED_LISTING_NOT_FOUND));
+                .orElseGet(() -> {
+                    try {
+                        UUID uuid = UUID.fromString(transactionCode);
+                        return sponsoredListingRepository.findById(uuid).orElse(null);
+                    } catch (IllegalArgumentException e) {
+                        return null;
+                    }
+                });
+
+        if (campaign == null) {
+            throw new AppException(ErrorCode.SPONSORED_LISTING_NOT_FOUND);
+        }
 
         if (SponsoredListingStatus.ACTIVE.equals(campaign.getStatus())) {
             return sponsoredListingMapper.toResponse(campaign);
@@ -341,13 +380,5 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
             c.setStatus(SponsoredListingStatus.EXPIRED);
             sponsoredListingRepository.save(c);
         }
-    }
-
-    private String buildMockPaymentUrl(String txnRef, BigDecimal amount, String method) {
-        String baseUrl = "VNPAY".equalsIgnoreCase(method)
-                ? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"
-                : "https://test-payment.momo.vn/v2/gateway/api/create";
-        return baseUrl + "?vnp_TxnRef=" + txnRef + "&vnp_Amount=" + amount.toBigInteger().multiply(java.math.BigInteger.valueOf(100))
-                + "&vnp_OrderInfo=" + java.net.URLEncoder.encode("Thanh toan MoodCafe Sponsored " + txnRef, java.nio.charset.StandardCharsets.UTF_8);
     }
 }
