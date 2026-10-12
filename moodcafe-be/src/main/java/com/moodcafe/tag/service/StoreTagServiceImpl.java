@@ -282,13 +282,20 @@ public class StoreTagServiceImpl implements StoreTagService {
         Set<UUID> storeIds = pendingTags.stream()
                 .map(StoreTag::getStoreId)
                 .collect(Collectors.toSet());
-        Map<UUID, String> storeNames = storeRepository.findAllById(storeIds).stream()
-                .collect(Collectors.toMap(Store::getStoreId, Store::getName, (a, b) -> a));
+        Map<UUID, Store> storeMap = storeRepository.findAllById(storeIds).stream()
+                .collect(Collectors.toMap(Store::getStoreId, s -> s, (a, b) -> a));
 
         return pendingTags.stream()
+                .filter(st -> {
+                    Store store = storeMap.get(st.getStoreId());
+                    return store != null && (StoreStatus.ACTIVE.equals(store.getStatus()) || StoreStatus.INACTIVE.equals(store.getStatus()));
+                })
                 .map(st -> {
                     StoreTagResponse resp = storeTagMapper.toResponse(st);
-                    resp.setStoreName(storeNames.get(st.getStoreId()));
+                    Store store = storeMap.get(st.getStoreId());
+                    if (store != null) {
+                        resp.setStoreName(store.getName());
+                    }
                     return resp;
                 })
                 .toList();

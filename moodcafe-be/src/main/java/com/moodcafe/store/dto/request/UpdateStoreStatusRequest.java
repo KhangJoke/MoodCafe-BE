@@ -8,6 +8,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+import java.util.UUID;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,4 +25,10 @@ public class UpdateStoreStatusRequest {
 
     @Builder.Default
     private Boolean allowResubmit = true;
+
+    private List<UUID> approvedTagIds;
+
+    private List<UUID> rejectedTagIds;
+
+    private String tagRejectReason;
 }

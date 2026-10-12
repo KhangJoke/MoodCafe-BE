@@ -18,6 +18,7 @@ import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreRole;
 import com.moodcafe.store.entity.StoreStaff;
 import com.moodcafe.store.mapper.StoreStaffMapper;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -92,6 +93,7 @@ class StoreStaffServiceImplTest {
         store = Store.builder()
                 .storeId(storeId)
                 .name("MoodCafe Branch 1")
+                .status(StoreStatus.ACTIVE)
                 .build();
 
         ownerRole = StoreRole.builder()

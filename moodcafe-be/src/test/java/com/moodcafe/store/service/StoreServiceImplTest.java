@@ -14,6 +14,7 @@ import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
 import com.moodcafe.store.abstraction.repository.StoreScheduleRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.store.mapper.StoreScheduleMapper;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
@@ -116,6 +117,8 @@ class StoreServiceImplTest {
     private StoreScheduleRepository storeScheduleRepository;
     @Mock
     private StoreScheduleMapper storeScheduleMapper;
+    @Mock
+    private NotificationDispatcherService notificationDispatcherService;
 
     @InjectMocks
     private StoreServiceImpl storeService;
@@ -333,13 +336,13 @@ class StoreServiceImplTest {
     }
 
     @Test
-    @DisplayName("changeStoreStatus - throws exception when activating store with pending tags")
-    void changeStoreStatus_ActivatingStoreWithPendingTags_ThrowsException() {
+    @DisplayName("changeStoreStatus - auto approves pending tags when activating store without specific tag reviews")
+    void changeStoreStatus_ActivatingStoreWithPendingTags_AutoApproves() {
         UUID storeId = store1.getStoreId();
         when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
 
         TagCategory vibeCat = TagCategory.builder().code("VIBE").build();
-        Tag vibe = Tag.builder().tagId(UUID.randomUUID()).category(vibeCat).build();
+        Tag vibe = Tag.builder().tagId(UUID.randomUUID()).category(vibeCat).active(false).build();
         StoreTag pendingTag = StoreTag.builder()
                 .storeId(storeId)
                 .tag(vibe)
@@ -347,14 +350,94 @@ class StoreServiceImplTest {
                 .build();
 
         when(storeTagRepository.findAllByStoreId(storeId)).thenReturn(List.of(pendingTag));
+        when(storeRepository.save(store1)).thenReturn(store1);
+        when(storeMapper.toResponse(store1)).thenReturn(StoreResponse.builder().storeId(storeId).status(StoreStatus.ACTIVE).build());
 
         UpdateStoreStatusRequest req = UpdateStoreStatusRequest.builder()
                 .status(StoreStatus.ACTIVE)
                 .build();
 
-        assertThatThrownBy(() -> storeService.changeStoreStatus(storeId, req))
-                .isInstanceOf(AppException.class)
-                .satisfies(e -> assertThat(((AppException) e).getErrorCode()).isEqualTo(ErrorCode.BAD_REQUEST));
+        StoreResponse response = storeService.changeStoreStatus(storeId, req);
+
+        assertThat(response).isNotNull();
+        assertThat(pendingTag.getStatus()).isEqualTo(StoreTagStatus.APPROVED);
+        assertThat(pendingTag.getApprovedAt()).isNotNull();
+        verify(tagRepository).save(vibe);
+        verify(storeTagRepository).save(pendingTag);
+    }
+
+    @Test
+    @DisplayName("changeStoreStatus - selectively approves and rejects tags when activating store")
+    void changeStoreStatus_ActivatingStore_SelectivelyApprovesAndRejectsTags() {
+        UUID storeId = store1.getStoreId();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
+
+        UUID tagId1 = UUID.randomUUID();
+        UUID tagId2 = UUID.randomUUID();
+        Tag vibe = Tag.builder().tagId(tagId1).active(true).build();
+        Tag noise = Tag.builder().tagId(tagId2).active(true).build();
+
+        StoreTag tagToApprove = StoreTag.builder()
+                .storeTagId(UUID.randomUUID())
+                .storeId(storeId)
+                .tag(vibe)
+                .status(StoreTagStatus.PENDING)
+                .build();
+        StoreTag tagToReject = StoreTag.builder()
+                .storeTagId(UUID.randomUUID())
+                .storeId(storeId)
+                .tag(noise)
+                .status(StoreTagStatus.PENDING)
+                .build();
+
+        when(storeTagRepository.findAllByStoreId(storeId)).thenReturn(List.of(tagToApprove, tagToReject));
+        when(storeRepository.save(store1)).thenReturn(store1);
+        when(storeMapper.toResponse(store1)).thenReturn(StoreResponse.builder().storeId(storeId).status(StoreStatus.ACTIVE).build());
+
+        UpdateStoreStatusRequest req = UpdateStoreStatusRequest.builder()
+                .status(StoreStatus.ACTIVE)
+                .approvedTagIds(List.of(tagToApprove.getStoreTagId()))
+                .rejectedTagIds(List.of(tagToReject.getStoreTagId()))
+                .tagRejectReason("Ảnh minh chứng không đạt tiêu chuẩn")
+                .build();
+
+        StoreResponse response = storeService.changeStoreStatus(storeId, req);
+
+        assertThat(response).isNotNull();
+        assertThat(tagToApprove.getStatus()).isEqualTo(StoreTagStatus.APPROVED);
+        assertThat(tagToApprove.getApprovedAt()).isNotNull();
+        assertThat(tagToReject.getStatus()).isEqualTo(StoreTagStatus.REJECTED);
+        assertThat(tagToReject.getRejectReason()).isEqualTo("Ảnh minh chứng không đạt tiêu chuẩn");
+    }
+
+    @Test
+    @DisplayName("changeStoreStatus - rejects all pending tags when store is rejected")
+    void changeStoreStatus_RejectingStore_RejectsAllPendingTags() {
+        UUID storeId = store1.getStoreId();
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(store1));
+
+        StoreTag pendingTag = StoreTag.builder()
+                .storeTagId(UUID.randomUUID())
+                .storeId(storeId)
+                .status(StoreTagStatus.PENDING)
+                .build();
+
+        when(storeTagRepository.findAllByStoreId(storeId)).thenReturn(List.of(pendingTag));
+        when(storeRepository.save(store1)).thenReturn(store1);
+        when(storeMapper.toResponse(store1)).thenReturn(StoreResponse.builder().storeId(storeId).status(StoreStatus.REJECTED).build());
+
+        UpdateStoreStatusRequest req = UpdateStoreStatusRequest.builder()
+                .status(StoreStatus.REJECTED)
+                .rejectReason("Giấy phép kinh doanh không hợp lệ")
+                .allowResubmit(true)
+                .build();
+
+        StoreResponse response = storeService.changeStoreStatus(storeId, req);
+
+        assertThat(response).isNotNull();
+        assertThat(pendingTag.getStatus()).isEqualTo(StoreTagStatus.REJECTED);
+        assertThat(pendingTag.getRejectReason()).isEqualTo("Giấy phép kinh doanh không hợp lệ");
+        assertThat(pendingTag.isAllowResubmit()).isTrue();
     }
 
     @Test

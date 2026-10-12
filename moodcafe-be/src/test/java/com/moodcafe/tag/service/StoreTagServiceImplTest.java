@@ -8,6 +8,7 @@ import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.entity.Store;
+import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagCategoryRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
@@ -80,10 +81,16 @@ class StoreTagServiceImplTest {
     private Tag tag;
     private StoreTag storeTag;
     private StoreTagResponse storeTagResponse;
+    private Store mockStore;
 
     @BeforeEach
     void setUp() {
         storeId = UUID.randomUUID();
+        mockStore = Store.builder()
+                .storeId(storeId)
+                .name("Mood Cafe Test")
+                .status(StoreStatus.ACTIVE)
+                .build();
         tagId = UUID.randomUUID();
         storeTagId = UUID.randomUUID();
 
@@ -129,6 +136,7 @@ class StoreTagServiceImplTest {
                 .proofImageUrls(List.of("https://res.cloudinary.com/proof.jpg"))
                 .build();
 
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(mockStore));
         when(tagRepository.findById(tagId)).thenReturn(Optional.of(tag));
         when(storeTagRepository.findByStoreIdAndTagTagId(storeId, tagId)).thenReturn(Optional.empty());
         when(storeTagRepository.save(any(StoreTag.class))).thenReturn(storeTag);
@@ -155,6 +163,7 @@ class StoreTagServiceImplTest {
                 .status(StoreTagStatus.APPROVED)
                 .build();
 
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(mockStore));
         when(tagRepository.findById(tagId)).thenReturn(Optional.of(tag));
         when(storeTagRepository.findByStoreIdAndTagTagId(storeId, tagId)).thenReturn(Optional.of(existingApproved));
 
@@ -240,6 +249,7 @@ class StoreTagServiceImplTest {
                 .tagId(noiseTagId2)
                 .build();
 
+        when(storeRepository.findById(storeId)).thenReturn(Optional.of(mockStore));
         when(tagRepository.findById(noiseTagId2)).thenReturn(Optional.of(newNoiseTag));
         when(storeTagRepository.findAllByStoreIdAndTagCategoryTagCategoryId(storeId, categoryId))
                 .thenReturn(List.of(oldStoreTag));
@@ -338,7 +348,6 @@ class StoreTagServiceImplTest {
     @Test
     @DisplayName("getPendingStoreTagRequests - returns pending store tags with store name")
     void getPendingStoreTagRequests_returnsPendingTagsWithStoreName() {
-        Store mockStore = Store.builder().storeId(storeId).name("Mood Cafe Test").build();
         when(storeTagRepository.findAllByStatusOrderByCreatedAtDesc(StoreTagStatus.PENDING))
                 .thenReturn(List.of(storeTag));
         when(storeRepository.findAllById(any())).thenReturn(List.of(mockStore));

@@ -96,6 +96,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -766,29 +767,76 @@ public class StoreServiceImpl implements StoreService {
             } else if (request.getStatus() == StoreStatus.REJECTED) {
                 store.setAllowResubmit(true);
             }
-        } else if (request.getStatus() == StoreStatus.ACTIVE) {
-            store.setRejectReason(null);
-            store.setAllowResubmit(true);
 
-            // Auto-approve OWNER_CUSTOM tags when store is approved
-            List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
-            for (StoreTag st : storeTags) {
-                if (st.getTag() != null && st.getTag().getCategory() != null) {
-                    TagCategory cat = st.getTag().getCategory();
-                    if (ApprovalMode.OWNER_CUSTOM.equals(cat.getApprovalMode()) && StoreTagStatus.PENDING.equals(st.getStatus())) {
-                        st.setStatus(StoreTagStatus.APPROVED);
-                        st.setApprovedAt(Instant.now());
+            if (request.getStatus() == StoreStatus.REJECTED) {
+                List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
+                String tagRejectMsg = store.getRejectReason() != null && !store.getRejectReason().isBlank()
+                        ? store.getRejectReason()
+                        : "Hồ sơ đăng ký quán bị từ chối";
+                for (StoreTag st : storeTags) {
+                    if (StoreTagStatus.PENDING.equals(st.getStatus())) {
+                        st.setStatus(StoreTagStatus.REJECTED);
+                        st.setRejectReason(tagRejectMsg);
+                        st.setAllowResubmit(store.isAllowResubmit());
                         storeTagRepository.save(st);
                     }
                 }
             }
+        } else if (request.getStatus() == StoreStatus.ACTIVE) {
+            store.setRejectReason(null);
+            store.setAllowResubmit(true);
 
-            // Enforce requirement: All tags of the store must be reviewed before activating the store
-            boolean hasPendingTags = storeTags.stream()
-                    .anyMatch(st -> StoreTagStatus.PENDING.equals(st.getStatus()));
-            if (hasPendingTags) {
-                throw new AppException(ErrorCode.BAD_REQUEST,
-                        "Không thể kích hoạt quán: Vui lòng duyệt hoặc từ chối tất cả các thẻ (vibe/tiện ích) của quán trước.");
+            List<StoreTag> storeTags = storeTagRepository.findAllByStoreId(storeId);
+            boolean hasSpecificTagReviews = (request.getApprovedTagIds() != null && !request.getApprovedTagIds().isEmpty())
+                    || (request.getRejectedTagIds() != null && !request.getRejectedTagIds().isEmpty());
+
+            String defaultTagRejectReason = (request.getTagRejectReason() != null && !request.getTagRejectReason().isBlank())
+                    ? request.getTagRejectReason().trim()
+                    : "Ảnh minh chứng không đạt tiêu chuẩn thẩm định khi xét duyệt hồ sơ quán";
+
+            for (StoreTag st : storeTags) {
+                if (!StoreTagStatus.PENDING.equals(st.getStatus())) {
+                    continue;
+                }
+
+                boolean shouldApprove;
+                if (hasSpecificTagReviews) {
+                    boolean isApprovedMatch = request.getApprovedTagIds() != null && (
+                            request.getApprovedTagIds().contains(st.getStoreTagId())
+                            || (st.getTag() != null && request.getApprovedTagIds().contains(st.getTag().getTagId()))
+                    );
+                    boolean isRejectedMatch = request.getRejectedTagIds() != null && (
+                            request.getRejectedTagIds().contains(st.getStoreTagId())
+                            || (st.getTag() != null && request.getRejectedTagIds().contains(st.getTag().getTagId()))
+                    );
+
+                    if (isApprovedMatch) {
+                        shouldApprove = true;
+                    } else if (isRejectedMatch) {
+                        shouldApprove = false;
+                    } else {
+                        shouldApprove = false;
+                    }
+                } else {
+                    shouldApprove = true;
+                }
+
+                if (shouldApprove) {
+                    st.setStatus(StoreTagStatus.APPROVED);
+                    st.setApprovedAt(Instant.now());
+                    st.setRejectReason(null);
+                    st.setAllowResubmit(true);
+                    if (st.getTag() != null && !st.getTag().isActive()) {
+                        Tag tag = st.getTag();
+                        tag.setActive(true);
+                        tagRepository.save(tag);
+                    }
+                } else {
+                    st.setStatus(StoreTagStatus.REJECTED);
+                    st.setRejectReason(defaultTagRejectReason);
+                    st.setAllowResubmit(true);
+                }
+                storeTagRepository.save(st);
             }
         }
         store = storeRepository.save(store);
@@ -1303,8 +1351,37 @@ public class StoreServiceImpl implements StoreService {
                 .toList();
         response.setTags(tags);
         response.setSchedules(resolveStoreSchedules(store));
+        if (response.getDistrict() == null && store.getAddress() != null) {
+            response.setDistrict(extractDistrictFromAddress(store.getAddress()));
+        }
 
         return response;
+    }
+
+    private String extractDistrictFromAddress(String address) {
+        if (address == null || address.isBlank()) {
+            return null;
+        }
+        String lower = address.toLowerCase();
+        if (lower.contains("thủ đức")) return "TP. Thủ Đức";
+        if (lower.contains("bình thạnh")) return "Bình Thạnh";
+        if (lower.contains("phú nhuận")) return "Phú Nhuận";
+        if (lower.contains("gò vấp")) return "Gò Vấp";
+        if (lower.contains("tân bình")) return "Tân Bình";
+        if (lower.contains("tân phú")) return "Tân Phú";
+        if (lower.contains("bình tân")) return "Bình Tân";
+        if (lower.contains("nhà bè")) return "Nhà Bè";
+        if (lower.contains("hóc môn")) return "Hóc Môn";
+        if (lower.contains("củ chi")) return "Củ Chi";
+        if (lower.contains("bình chánh")) return "Bình Chánh";
+        if (lower.contains("cần giờ")) return "Cần Giờ";
+
+        for (int i = 12; i >= 1; i--) {
+            if (Pattern.compile("(quận|q\\.?)\\s*0?" + i + "\\b", Pattern.CASE_INSENSITIVE).matcher(lower).find()) {
+                return "Quận " + i;
+            }
+        }
+        return null;
     }
 
     private StoreRegistrationStatusResponse toStoreRegistrationStatusResponse(Store store) {
@@ -1323,6 +1400,7 @@ public class StoreServiceImpl implements StoreService {
                 .name(store.getName())
                 .description(store.getDescription())
                 .address(store.getAddress())
+                .district(extractDistrictFromAddress(store.getAddress()))
                 .latitude(store.getLatitude())
                 .longitude(store.getLongitude())
                 .openingTime(store.getOpeningTime())
