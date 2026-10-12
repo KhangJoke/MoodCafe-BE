@@ -19,11 +19,11 @@ public interface AuthService {
 
     ConfirmOtpResponse confirmOtp(ConfirmOtpRequest request);
 
-    AuthResponse login(LoginRequest request);
+    AuthResponse login(LoginRequest request, String clientPlatform);
 
-    AuthResponse socialLogin(SocialLoginRequest request);
+    AuthResponse socialLogin(SocialLoginRequest request, String clientPlatform);
 
-    AuthResponse refresh(RefreshTokenRequest request);
+    AuthResponse refresh(RefreshTokenRequest request, String clientPlatform);
 
     void logout(String refreshToken);
 

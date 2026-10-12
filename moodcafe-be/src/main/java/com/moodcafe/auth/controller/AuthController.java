@@ -66,8 +66,9 @@ public class AuthController {
         public ResponseEntity<ApiResponse<AuthResponse>> login(
                         @Valid @RequestBody LoginRequest request,
                         @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        @RequestHeader(value = "X-Client-Platform", required = false) String clientPlatform,
                         HttpServletResponse response) {
-                AuthResponse authResponse = authService.login(request);
+                AuthResponse authResponse = authService.login(request, clientPlatform);
                 handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
 
                 return ResponseEntity.ok(
@@ -80,8 +81,9 @@ public class AuthController {
         public ResponseEntity<ApiResponse<AuthResponse>> socialLogin(
                         @Valid @RequestBody SocialLoginRequest request,
                         @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        @RequestHeader(value = "X-Client-Platform", required = false) String clientPlatform,
                         HttpServletResponse response) {
-                AuthResponse authResponse = authService.socialLogin(request);
+                AuthResponse authResponse = authService.socialLogin(request, clientPlatform);
                 handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
 
                 return ResponseEntity.ok(
@@ -95,6 +97,7 @@ public class AuthController {
                         @CookieValue(value = "refreshToken", required = false) String cookieRefreshToken,
                         @RequestBody(required = false) RefreshTokenRequest request,
                         @RequestHeader(value = "X-Cookies-Enabled", defaultValue = "true") String cookiesEnabled,
+                        @RequestHeader(value = "X-Client-Platform", required = false) String clientPlatform,
                         HttpServletResponse response) {
                 String tokenStr = (cookieRefreshToken != null && !cookieRefreshToken.isBlank())
                                 ? cookieRefreshToken
@@ -107,7 +110,7 @@ public class AuthController {
                 RefreshTokenRequest refreshRequest = new RefreshTokenRequest();
                 refreshRequest.setRefreshToken(tokenStr);
 
-                AuthResponse authResponse = authService.refresh(refreshRequest);
+                AuthResponse authResponse = authService.refresh(refreshRequest, clientPlatform);
                 handleRefreshTokenCookie(response, authResponse, cookiesEnabled);
 
                 return ResponseEntity.ok(

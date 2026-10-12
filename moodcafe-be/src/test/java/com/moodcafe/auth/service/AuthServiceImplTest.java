@@ -8,6 +8,8 @@ import com.moodcafe.auth.abstraction.service.RefreshTokenService;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.abstraction.service.SocialAuthService;
 import com.moodcafe.auth.dto.auth.SocialUserInfo;
+import com.moodcafe.auth.dto.auth.request.LoginRequest;
+import com.moodcafe.auth.dto.auth.request.RefreshTokenRequest;
 import com.moodcafe.auth.dto.auth.request.SetupPasswordRequest;
 import com.moodcafe.auth.dto.user.request.ChangePasswordRequest;
 import com.moodcafe.auth.dto.auth.request.SocialLoginRequest;
@@ -173,7 +175,7 @@ class AuthServiceImplTest {
                 .build();
         when(userMapper.toResponse(savedUser)).thenReturn(mappedResponse);
 
-        AuthResponse response = authService.socialLogin(request);
+        AuthResponse response = authService.socialLogin(request, null);
 
         assertThat(response).isNotNull();
         assertThat(response.getUser()).isNotNull();
@@ -245,7 +247,7 @@ class AuthServiceImplTest {
 
         when(googleAuthService.supports("TIKTOK")).thenReturn(false);
 
-        assertThatThrownBy(() -> authService.socialLogin(request))
+        assertThatThrownBy(() -> authService.socialLogin(request, null))
                 .isInstanceOf(AppException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BAD_REQUEST);
     }
@@ -295,6 +297,66 @@ class AuthServiceImplTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WRONG_PASSWORD);
 
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("login - Admin role logging in from MOBILE client throws FORBIDDEN")
+    void login_AdminRole_MobileClient_ThrowsForbidden() {
+        Role adminRole = Role.builder()
+                .roleId(UUID.randomUUID())
+                .name("ADMIN")
+                .build();
+        User adminUser = User.builder()
+                .userId(UUID.randomUUID())
+                .email("admin@moodcafe.vn")
+                .fullName("Admin User")
+                .role(adminRole)
+                .active(true)
+                .build();
+
+        when(userRepository.findByEmail("admin@moodcafe.vn")).thenReturn(Optional.of(adminUser));
+
+        LoginRequest request = new LoginRequest();
+        request.setEmail("admin@moodcafe.vn");
+        request.setPassword("anyPassword123");
+
+        assertThatThrownBy(() -> authService.login(request, "MOBILE"))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("socialLogin - Admin role logging in from MOBILE client throws FORBIDDEN")
+    void socialLogin_AdminRole_MobileClient_ThrowsForbidden() {
+        Role adminRole = Role.builder()
+                .roleId(UUID.randomUUID())
+                .name("ADMIN")
+                .build();
+        User adminUser = User.builder()
+                .userId(UUID.randomUUID())
+                .email("admin@moodcafe.vn")
+                .fullName("Admin User")
+                .role(adminRole)
+                .active(true)
+                .build();
+
+        SocialLoginRequest request = SocialLoginRequest.builder()
+                .provider("GOOGLE")
+                .token("valid_google_token")
+                .build();
+
+        SocialUserInfo socialInfo = SocialUserInfo.builder()
+                .email("admin@moodcafe.vn")
+                .fullName("Admin User")
+                .build();
+
+        when(googleAuthService.supports("GOOGLE")).thenReturn(true);
+        when(googleAuthService.verifyToken("valid_google_token")).thenReturn(socialInfo);
+        when(userRepository.findByEmail("admin@moodcafe.vn")).thenReturn(Optional.of(adminUser));
+
+        assertThatThrownBy(() -> authService.socialLogin(request, "MOBILE"))
+                .isInstanceOf(AppException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN);
     }
 }
 

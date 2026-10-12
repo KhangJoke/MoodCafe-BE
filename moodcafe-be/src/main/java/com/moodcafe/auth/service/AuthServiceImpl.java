@@ -206,7 +206,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String clientPlatform) {
 
         // 1. Find user
         User user = userRepository
@@ -216,6 +216,9 @@ public class AuthServiceImpl implements AuthService {
                                 ErrorCode.EMAIL_NOT_FOUND,
                                 "Invalid email or password"
                         ));
+
+        // Block Admin from logging in on Mobile app
+        validateClientPlatformAccess(user, clientPlatform);
 
         // 2. Check account
         if (!user.isActive()) {
@@ -251,9 +254,10 @@ public class AuthServiceImpl implements AuthService {
         );
     }
 
+
     @Override
     @Transactional
-    public AuthResponse socialLogin(SocialLoginRequest request) {
+    public AuthResponse socialLogin(SocialLoginRequest request, String clientPlatform) {
         String provider = request.getProvider() != null ? request.getProvider().trim().toUpperCase() : "";
 
         SocialAuthService socialAuthService = socialAuthServices.stream()
@@ -293,6 +297,7 @@ public class AuthServiceImpl implements AuthService {
 
             user = userRepository.save(user);
         } else {
+            validateClientPlatformAccess(user, clientPlatform);
             if (!user.isActive()) {
                 throw new AppException(ErrorCode.USER_IS_BLOCKED, "Account is disabled");
             }
@@ -324,7 +329,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public AuthResponse refresh(RefreshTokenRequest request) {
+    public AuthResponse refresh(RefreshTokenRequest request, String clientPlatform) {
 
         // 1. Validate old refresh token
         var oldRefreshToken =
@@ -339,6 +344,8 @@ public class AuthServiceImpl implements AuthService {
 
         // 3. Get user
         User user = oldRefreshToken.getUser();
+
+        validateClientPlatformAccess(user, clientPlatform);
 
         if (!user.isActive()) {
             throw new AppException(ErrorCode.FORBIDDEN, "User is inactive");
@@ -555,5 +562,14 @@ public class AuthServiceImpl implements AuthService {
                 .tokenType("Bearer")
                 .expiresIn(15 * 60)
                 .build();
+    }
+
+    private void validateClientPlatformAccess(User user, String clientPlatform) {
+        if ("MOBILE".equalsIgnoreCase(clientPlatform) && user.getRole() != null && "ADMIN".equalsIgnoreCase(user.getRole().getName())) {
+            throw new AppException(
+                    ErrorCode.FORBIDDEN,
+                    "Tài khoản Quản trị viên (Admin) chỉ được phép đăng nhập trên nền tảng Web"
+            );
+        }
     }
 }
