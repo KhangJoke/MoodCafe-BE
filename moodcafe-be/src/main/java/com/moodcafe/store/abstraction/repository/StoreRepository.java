@@ -5,6 +5,7 @@ import com.moodcafe.store.entity.enums.StoreStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -19,4 +20,7 @@ public interface StoreRepository extends JpaRepository<Store, UUID>, JpaSpecific
 
     @Query("SELECT s.status, COUNT(s) FROM Store s GROUP BY s.status")
     List<Object[]> countGroupedByStatus();
+
+    @Query("SELECT DISTINCT s.district FROM Store s WHERE s.status = :status AND s.district IS NOT NULL AND TRIM(s.district) <> '' ORDER BY s.district ASC")
+    List<String> findDistinctDistrictsByStatus(@Param("status") StoreStatus status);
 }

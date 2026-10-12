@@ -28,7 +28,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "stores", indexes = {
                 @Index(name = "idx_stores_status", columnList = "status"),
-                @Index(name = "idx_stores_location", columnList = "latitude, longitude")
+                @Index(name = "idx_stores_location", columnList = "latitude, longitude"),
+                @Index(name = "idx_stores_district", columnList = "district")
 })
 @SQLDelete(sql = "UPDATE stores SET is_deleted = true WHERE store_id = ?")
 @SQLRestriction("is_deleted = false")
@@ -52,6 +53,9 @@ public class Store {
 
         @Column(name = "address", nullable = false, length = 500)
         private String address;
+
+        @Column(name = "district", length = 100)
+        private String district;
 
         @Column(name = "latitude", precision = 10, scale = 7)
         private BigDecimal latitude;

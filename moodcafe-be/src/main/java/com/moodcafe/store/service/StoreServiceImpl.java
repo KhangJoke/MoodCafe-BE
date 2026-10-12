@@ -233,6 +233,7 @@ public class StoreServiceImpl implements StoreService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .address(request.getAddress())
+                .district(request.getDistrict())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
                 .openingTime(request.getOpeningTime())
@@ -335,6 +336,7 @@ public class StoreServiceImpl implements StoreService {
         store.setName(request.getName());
         store.setDescription(request.getDescription());
         store.setAddress(request.getAddress());
+        store.setDistrict(request.getDistrict());
         store.setLatitude(request.getLatitude());
         store.setLongitude(request.getLongitude());
         store.setOpeningTime(request.getOpeningTime());
@@ -1351,37 +1353,8 @@ public class StoreServiceImpl implements StoreService {
                 .toList();
         response.setTags(tags);
         response.setSchedules(resolveStoreSchedules(store));
-        if (response.getDistrict() == null && store.getAddress() != null) {
-            response.setDistrict(extractDistrictFromAddress(store.getAddress()));
-        }
 
         return response;
-    }
-
-    private String extractDistrictFromAddress(String address) {
-        if (address == null || address.isBlank()) {
-            return null;
-        }
-        String lower = address.toLowerCase();
-        if (lower.contains("thủ đức")) return "TP. Thủ Đức";
-        if (lower.contains("bình thạnh")) return "Bình Thạnh";
-        if (lower.contains("phú nhuận")) return "Phú Nhuận";
-        if (lower.contains("gò vấp")) return "Gò Vấp";
-        if (lower.contains("tân bình")) return "Tân Bình";
-        if (lower.contains("tân phú")) return "Tân Phú";
-        if (lower.contains("bình tân")) return "Bình Tân";
-        if (lower.contains("nhà bè")) return "Nhà Bè";
-        if (lower.contains("hóc môn")) return "Hóc Môn";
-        if (lower.contains("củ chi")) return "Củ Chi";
-        if (lower.contains("bình chánh")) return "Bình Chánh";
-        if (lower.contains("cần giờ")) return "Cần Giờ";
-
-        for (int i = 12; i >= 1; i--) {
-            if (Pattern.compile("(quận|q\\.?)\\s*0?" + i + "\\b", Pattern.CASE_INSENSITIVE).matcher(lower).find()) {
-                return "Quận " + i;
-            }
-        }
-        return null;
     }
 
     private StoreRegistrationStatusResponse toStoreRegistrationStatusResponse(Store store) {
@@ -1400,7 +1373,7 @@ public class StoreServiceImpl implements StoreService {
                 .name(store.getName())
                 .description(store.getDescription())
                 .address(store.getAddress())
-                .district(extractDistrictFromAddress(store.getAddress()))
+                .district(store.getDistrict())
                 .latitude(store.getLatitude())
                 .longitude(store.getLongitude())
                 .openingTime(store.getOpeningTime())
@@ -1824,6 +1797,6 @@ public class StoreServiceImpl implements StoreService {
     @Override
     @Transactional(readOnly = true)
     public List<String> getActiveDistricts() {
-        return Collections.emptyList();
+        return storeRepository.findDistinctDistrictsByStatus(StoreStatus.ACTIVE);
     }
 }
