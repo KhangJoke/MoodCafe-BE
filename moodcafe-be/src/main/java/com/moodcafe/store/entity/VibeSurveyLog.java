@@ -2,6 +2,7 @@ package com.moodcafe.store.entity;
 
 import com.moodcafe.store.entity.enums.VibeSurveyResponse;
 import com.moodcafe.tag.entity.Tag;
+
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;

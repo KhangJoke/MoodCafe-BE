@@ -2,6 +2,7 @@ package com.moodcafe.store.entity;
 
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.store.entity.enums.VisitVerificationStatus;
+
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
