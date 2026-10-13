@@ -21,5 +21,6 @@ public class SponsoredPricingResponse {
     private String warningBannerMessage;
     private boolean freeQuotaAvailable;
     private int freeQuotaRemaining;
+    private List<SponsoredPlanResponse> plans;
     private List<SponsoredPlacementPriceInfo> placements;
 }

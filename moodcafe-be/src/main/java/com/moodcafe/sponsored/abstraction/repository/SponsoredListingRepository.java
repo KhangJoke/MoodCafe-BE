@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -36,4 +37,29 @@ public interface SponsoredListingRepository extends JpaRepository<SponsoredListi
     Optional<SponsoredListing> findByTransactionCode(String transactionCode);
 
     List<SponsoredListing> findAllByStatusAndEndDateBefore(SponsoredListingStatus status, Instant now);
+
+    @Query("SELECT sl FROM SponsoredListing sl " +
+           "JOIN sl.store s " +
+           "WHERE (:search IS NULL OR LOWER(s.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "       OR LOWER(sl.title) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "       OR LOWER(sl.transactionCode) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "AND (:placement IS NULL OR sl.placement = :placement) " +
+           "AND (:status IS NULL OR sl.status = :status) " +
+           "ORDER BY sl.createdAt DESC")
+    Page<SponsoredListing> findAllAdmin(
+            @Param("search") String search,
+            @Param("placement") SponsoredPlacement placement,
+            @Param("status") SponsoredListingStatus status,
+            Pageable pageable
+    );
+
+    long countByStatus(SponsoredListingStatus status);
+
+    @Query("SELECT COALESCE(SUM(sl.amount), 0) FROM SponsoredListing sl WHERE sl.paymentStatus = 'SUCCESS'")
+    BigDecimal sumTotalRevenue();
+
+    @Query("SELECT COALESCE(SUM(sl.amount), 0) FROM SponsoredListing sl WHERE sl.paymentStatus = 'SUCCESS' AND sl.createdAt >= :since")
+    BigDecimal sumRevenueSince(@Param("since") Instant since);
+
+    long countByPlacementAndStatus(SponsoredPlacement placement, SponsoredListingStatus status);
 }

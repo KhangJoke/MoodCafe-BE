@@ -103,7 +103,10 @@ public enum ErrorCode {
     PAYMENT_ALREADY_PROCESSED(HttpStatus.BAD_REQUEST, "Giao dịch thanh toán này đã được xử lý trước đó"),
     INVALID_PAYMENT_METHOD(HttpStatus.BAD_REQUEST, "Phương thức thanh toán không hợp lệ"),
     MAX_BRANCH_LIMIT_EXCEEDED(HttpStatus.FORBIDDEN, "Số lượng chi nhánh đã đạt giới hạn tối đa của gói dịch vụ. Vui lòng nâng cấp gói để thêm chi nhánh mới."),
-    // Sponsored Listing
+    // Sponsored Listing & Plans
+    SPONSORED_PLAN_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy gói tài trợ"),
+    SPONSORED_PLAN_NAME_EXISTS(HttpStatus.CONFLICT, "Mã hoặc tên gói tài trợ đã tồn tại trong hệ thống"),
+    SPONSORED_PLAN_INACTIVE(HttpStatus.BAD_REQUEST, "Gói tài trợ này hiện không khả dụng hoặc đã tạm dừng"),
     SPONSORED_LISTING_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy chiến dịch quảng bá"),
     SPONSORED_LISTING_NOT_ALLOWED(HttpStatus.FORBIDDEN, "Tài khoản của bạn hiện ở gói Basic. Vui lòng nâng cấp lên gói PRO hoặc PREMIUM để mở khóa tương tác đăng ký các vị trí quảng bá"),
     SPONSORED_LISTING_CANNOT_CANCEL(HttpStatus.BAD_REQUEST, "Chỉ có thể hủy chiến dịch ở trạng thái chờ duyệt hoặc đang chạy"),

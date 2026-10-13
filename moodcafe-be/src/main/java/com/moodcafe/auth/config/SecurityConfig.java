@@ -136,6 +136,7 @@ public class SecurityConfig {
                                 "/api/tags",
                                 "/api/tags/*",
                                 "/api/subscriptions/plans",
+                                "/api/sponsored/plans",
                                 "/api/sponsored/placements/**"
                         ).permitAll()
 

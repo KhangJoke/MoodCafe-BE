@@ -3,6 +3,7 @@ package com.moodcafe.sponsored.mapper;
 import com.moodcafe.sponsored.dto.response.SponsoredListingResponse;
 import com.moodcafe.sponsored.dto.response.SponsoredStoreItemResponse;
 import com.moodcafe.sponsored.entity.SponsoredListing;
+import com.moodcafe.sponsored.entity.SponsoredPlan;
 import com.moodcafe.sponsored.entity.enums.SponsoredListingStatus;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
@@ -48,8 +49,13 @@ public class SponsoredListingMapper {
             remainingText = "Đã hủy";
         }
 
+        SponsoredPlan plan = listing.getSponsoredPlan();
+
         return SponsoredListingResponse.builder()
                 .sponsoredListingId(listing.getSponsoredListingId())
+                .planId(plan != null ? plan.getSponsoredPlanId() : null)
+                .planName(plan != null ? plan.getName() : null)
+                .planDisplayName(plan != null ? plan.getDisplayName() : null)
                 .storeId(store != null ? store.getStoreId() : null)
                 .storeName(store != null ? store.getName() : null)
                 .storeAddress(store != null ? store.getAddress() : null)

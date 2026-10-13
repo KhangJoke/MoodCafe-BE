@@ -65,12 +65,16 @@ public class SponsoredListing {
     @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_sponsored_user"))
     private User user;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sponsored_plan_id", foreignKey = @ForeignKey(name = "fk_sponsored_plan"))
+    private SponsoredPlan sponsoredPlan;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "placement", nullable = false, length = 50)
     private SponsoredPlacement placement;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "duration_type", nullable = false, length = 30)
+    @Column(name = "duration_type", length = 30)
     private SponsoredDurationType durationType;
 
     @Column(name = "start_date", nullable = false)

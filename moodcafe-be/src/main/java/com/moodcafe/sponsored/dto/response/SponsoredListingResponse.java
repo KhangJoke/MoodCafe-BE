@@ -21,6 +21,9 @@ import java.util.UUID;
 public class SponsoredListingResponse {
 
     private UUID sponsoredListingId;
+    private UUID planId;
+    private String planName;
+    private String planDisplayName;
     private UUID storeId;
     private String storeName;
     private String storeAddress;

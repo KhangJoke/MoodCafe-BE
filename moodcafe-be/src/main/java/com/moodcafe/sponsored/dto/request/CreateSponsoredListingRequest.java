@@ -22,10 +22,19 @@ public class CreateSponsoredListingRequest {
     @NotNull(message = "storeId không được để trống")
     private UUID storeId;
 
-    @NotNull(message = "Vị trí quảng bá không được để trống")
+    /**
+     * ID của gói tài trợ do Admin thiết lập giá và cấu hình (Khuyên dùng)
+     */
+    private UUID planId;
+
+    /**
+     * Vị trí quảng bá (Dùng cho fallback nếu không truyền planId)
+     */
     private SponsoredPlacement placement;
 
-    @NotNull(message = "Thời hạn đăng ký không được để trống")
+    /**
+     * Thời hạn đăng ký (Dùng cho fallback nếu không truyền planId)
+     */
     private SponsoredDurationType durationType;
 
     private Instant startDate;
@@ -35,7 +44,7 @@ public class CreateSponsoredListingRequest {
     private String title;
 
     @Builder.Default
-    private String paymentMethod = "VNPAY";
+    private String paymentMethod = "PAYOS";
 
     @Builder.Default
     private boolean useFreeQuota = false;

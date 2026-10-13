@@ -7,6 +7,7 @@ import com.moodcafe.sponsored.abstraction.service.SponsoredListingService;
 import com.moodcafe.sponsored.dto.request.CreateSponsoredListingRequest;
 import com.moodcafe.sponsored.dto.response.SponsoredCheckoutResponse;
 import com.moodcafe.sponsored.dto.response.SponsoredListingResponse;
+import com.moodcafe.sponsored.dto.response.SponsoredPlanResponse;
 import com.moodcafe.sponsored.dto.response.SponsoredPricingResponse;
 import com.moodcafe.sponsored.dto.response.SponsoredStoreItemResponse;
 import com.moodcafe.sponsored.entity.enums.SponsoredPlacement;
@@ -39,7 +40,14 @@ public class SponsoredListingController {
     private final SponsoredListingService sponsoredListingService;
     private final CurrentUserService currentUserService;
 
-    @Operation(summary = "Lấy bảng giá 4 vị trí tài trợ & kiểm tra quyền hạn gói (Basic bị khóa, PRO/PREMIUM mở khóa)")
+    @Operation(summary = "Xem danh sách các gói tài trợ khả dụng do Admin quản lý")
+    @GetMapping("/plans")
+    public ResponseEntity<ApiResponse<List<SponsoredPlanResponse>>> getAvailablePlans() {
+        List<SponsoredPlanResponse> plans = sponsoredListingService.getAvailablePlans();
+        return ResponseEntity.ok(ApiResponse.success(plans));
+    }
+
+    @Operation(summary = "Lấy bảng giá các vị trí tài trợ & kiểm tra quyền hạn gói (Basic bị khóa, PRO/PREMIUM mở khóa)")
     @GetMapping("/pricing")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<SponsoredPricingResponse>> getPricingAndEligibility(
@@ -50,7 +58,7 @@ public class SponsoredListingController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @Operation(summary = "Chủ quán đăng ký vị trí tài trợ cho chi nhánh (Hỗ trợ lượt miễn phí gói Premium hoặc thanh toán VNPay/MoMo)")
+    @Operation(summary = "Chủ quán đăng ký gói tài trợ cho chi nhánh (Hỗ trợ lượt miễn phí gói Premium hoặc thanh toán PayOS VietQR)")
     @PostMapping("/campaigns")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<SponsoredCheckoutResponse>> registerCampaign(
