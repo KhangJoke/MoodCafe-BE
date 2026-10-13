@@ -19,6 +19,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Principal;
+import java.util.Date;
 
 @Component
 @RequiredArgsConstructor
@@ -90,8 +91,8 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         }
 
         try {
-            java.util.Date now = new java.util.Date();
-            java.util.Date exp = jwtService.extractExpiration(token);
+            Date now = new Date();
+            Date exp = jwtService.extractExpiration(token);
             long remainingSec = exp != null ? (exp.getTime() - now.getTime()) / 1000 : 0;
             log.info("STOMP CONNECT validating token: now={}, exp={}, remaining={}s", now, exp, remainingSec);
 

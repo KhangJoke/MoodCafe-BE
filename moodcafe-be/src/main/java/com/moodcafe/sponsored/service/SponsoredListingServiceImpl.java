@@ -2,6 +2,7 @@ package com.moodcafe.sponsored.service;
 
 import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.payment.service.PayOSService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.shared.response.PageResponse;
@@ -68,7 +69,7 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
     private final SponsoredListingMapper sponsoredListingMapper;
     private final SponsoredPlanMapper sponsoredPlanMapper;
     @Lazy
-    private final com.moodcafe.payment.service.PayOSService payOSService;
+    private final PayOSService payOSService;
 
     // =========================================================================
     // MERCHANT & PUBLIC FACING METHODS
@@ -275,7 +276,7 @@ public class SponsoredListingServiceImpl implements SponsoredListingService {
 
         campaign = sponsoredListingRepository.save(campaign);
 
-        // Tạo link thanh toán VietQR qua PayOS
+        // Tạo link thanh toán VietQR độc quyền qua PayOS
         if (payOSService == null || !payOSService.isConfigured()) {
             throw new AppException(ErrorCode.BAD_REQUEST, "Cổng thanh toán PayOS chưa được cấu hình trên máy chủ");
         }
