@@ -4,6 +4,7 @@ import com.moodcafe.store.dto.request.AddStoreStaffRequest;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
 import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStaffRequest;
+import com.moodcafe.store.dto.response.CheckEmailAvailabilityResponse;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import com.moodcafe.store.dto.response.UserStoreResponse;
 import com.moodcafe.store.entity.StoreStaff;
@@ -12,6 +13,8 @@ import java.util.List;
 import java.util.UUID;
 
 public interface StoreStaffService {
+
+    CheckEmailAvailabilityResponse checkEmailAvailability(UUID storeId, String email);
 
     StoreStaffResponse createStaffAccount(UUID storeId, CreateStaffAccountRequest request);
 

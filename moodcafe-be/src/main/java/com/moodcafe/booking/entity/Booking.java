@@ -1,0 +1,136 @@
+package com.moodcafe.booking.entity;
+
+import com.moodcafe.auth.entity.User;
+import com.moodcafe.booking.entity.enums.BookingStatus;
+import com.moodcafe.store.entity.Store;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.Instant;
+import java.util.UUID;
+
+@Entity
+@Table(
+        name = "bookings",
+        indexes = {
+                @Index(name = "idx_bookings_store_id", columnList = "store_id"),
+                @Index(name = "idx_bookings_category_id", columnList = "category_id"),
+                @Index(name = "idx_bookings_user_id", columnList = "user_id"),
+                @Index(name = "idx_bookings_code", columnList = "booking_code"),
+                @Index(name = "idx_bookings_status_start_time", columnList = "status, start_time"),
+                @Index(name = "idx_bookings_status_created_at", columnList = "status, created_at"),
+                @Index(name = "idx_bookings_payment_order_code", columnList = "payment_order_code")
+        }
+)
+@SQLDelete(sql = "UPDATE bookings SET is_deleted = true WHERE booking_id = ?")
+@SQLRestriction("is_deleted = false")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class Booking {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "booking_id", nullable = false, updatable = false)
+    private UUID bookingId;
+
+    @Column(name = "booking_code", nullable = false, length = 32)
+    private String bookingCode;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
+    private TableCategory tableCategory;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @Column(name = "customer_name", nullable = false, length = 255)
+    private String customerName;
+
+    @Column(name = "customer_phone", length = 50)
+    private String customerPhone;
+
+    @Column(name = "customer_email", length = 255)
+    private String customerEmail;
+
+    @Column(name = "start_time", nullable = false)
+    private Instant startTime;
+
+    @Column(name = "end_time", nullable = false)
+    private Instant endTime;
+
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    @Column(name = "status", nullable = false, length = 50)
+    private BookingStatus status = BookingStatus.PENDING_PAYMENT;
+
+    @Builder.Default
+    @Column(name = "min_spend_amount", nullable = false)
+    private Long minSpendAmount = 0L;
+
+    @Column(name = "payment_order_code")
+    private Long paymentOrderCode;
+
+    @Column(name = "qr_code_token", length = 255)
+    private String qrCodeToken;
+
+    @Column(name = "checked_in_at")
+    private Instant checkedInAt;
+
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    @Column(name = "claimed_late_at")
+    private Instant claimedLateAt;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "cancel_reason", columnDefinition = "TEXT")
+    private String cancelReason;
+
+    @Builder.Default
+    @Column(name = "refund_processed", nullable = false)
+    private Boolean refundProcessed = false;
+
+    @Column(name = "note", columnDefinition = "TEXT")
+    private String note;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @Builder.Default
+    @Column(name = "is_deleted", nullable = false)
+    private boolean isDeleted = false;
+}

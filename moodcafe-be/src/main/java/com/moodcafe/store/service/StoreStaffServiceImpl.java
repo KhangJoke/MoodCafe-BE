@@ -17,6 +17,7 @@ import com.moodcafe.store.dto.request.AddStoreStaffRequest;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
 import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStaffRequest;
+import com.moodcafe.store.dto.response.CheckEmailAvailabilityResponse;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import com.moodcafe.store.dto.response.UserStoreResponse;
 import com.moodcafe.store.entity.Store;
@@ -50,11 +51,40 @@ public class StoreStaffServiceImpl implements StoreStaffService {
     private final PasswordEncoder passwordEncoder;
     private final CurrentUserService currentUserService;
 
+    @Override
+    @Transactional(readOnly = true)
+    public CheckEmailAvailabilityResponse checkEmailAvailability(UUID storeId, String email) {
+        requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        if (email == null || email.trim().isBlank()) {
+            return CheckEmailAvailabilityResponse.builder()
+                    .email(email)
+                    .available(false)
+                    .message("Email không được để trống")
+                    .build();
+        }
+
+        String cleanEmail = email.trim().toLowerCase();
+        boolean exists = userService.existsByEmail(cleanEmail);
+
+        return CheckEmailAvailabilityResponse.builder()
+                .email(cleanEmail)
+                .available(!exists)
+                .message(!exists ? "Tên đăng nhập khả dụng" : "Tên đăng nhập này đã tồn tại trong hệ thống")
+                .build();
+    }
 
     @Override
     @Transactional
     public StoreStaffResponse createStaffAccount(UUID storeId, CreateStaffAccountRequest request) {
-        requireStoreAccess(storeId, "OWNER");
+        StoreStaff executingStaff = requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        String targetRole = request.getStoreRole().trim().toUpperCase();
+        String currentStaffRole = executingStaff.getStoreRole() != null ? executingStaff.getStoreRole().getName().toUpperCase() : "";
+
+        if ("MANAGER".equals(currentStaffRole) && !"CASHIER".equals(targetRole)) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Quản lý chi nhánh chỉ có quyền cấp tài khoản Thu ngân");
+        }
 
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
@@ -145,6 +175,10 @@ public class StoreStaffServiceImpl implements StoreStaffService {
         StoreStaff staff = storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, userId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_STAFF_NOT_FOUND));
 
+        if (request.getFullName() != null && !request.getFullName().isBlank()) {
+            staff.getUser().setFullName(request.getFullName().trim());
+        }
+
         if (request.getStoreRole() != null && !request.getStoreRole().isBlank()) {
             StoreRole role = storeRoleRepository.findByName(request.getStoreRole().trim().toUpperCase())
                     .orElseThrow(() -> new AppException(ErrorCode.STORE_ROLE_NOT_FOUND));
@@ -176,8 +210,11 @@ public class StoreStaffServiceImpl implements StoreStaffService {
     public void removeStaff(UUID storeId, UUID userId) {
         requireStoreAccess(storeId, "OWNER");
 
-        if (!storeStaffRepository.existsByStoreStoreIdAndUserUserId(storeId, userId)) {
-            throw new AppException(ErrorCode.STORE_STAFF_NOT_FOUND);
+        StoreStaff targetStaff = storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, userId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_STAFF_NOT_FOUND));
+
+        if (targetStaff.getStoreRole() != null && "OWNER".equalsIgnoreCase(targetStaff.getStoreRole().getName())) {
+            throw new AppException(ErrorCode.FORBIDDEN, "Không thể xóa tài khoản Chủ quán khỏi cơ sở");
         }
 
         storeStaffRepository.deleteByStoreStoreIdAndUserUserId(storeId, userId);
@@ -186,7 +223,7 @@ public class StoreStaffServiceImpl implements StoreStaffService {
     @Override
     @Transactional(readOnly = true)
     public List<StoreStaffResponse> getStoreStaff(UUID storeId) {
-        requireStoreAccess(storeId, "OWNER", "MANAGER", "STAFF");
+        requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         if (!storeRepository.existsById(storeId)) {
             throw new AppException(ErrorCode.STORE_NOT_FOUND);

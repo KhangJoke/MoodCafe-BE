@@ -6,6 +6,7 @@ import com.moodcafe.auth.entity.User;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
+import com.moodcafe.payment.dto.response.PaymentOrderInfoResponse;
 import com.moodcafe.sponsored.abstraction.repository.SponsoredListingRepository;
 import com.moodcafe.sponsored.abstraction.service.SponsoredListingService;
 import com.moodcafe.sponsored.entity.SponsoredListing;
@@ -14,6 +15,10 @@ import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepos
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
 import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
+import com.moodcafe.booking.abstraction.repository.BookingRepository;
+import com.moodcafe.booking.abstraction.service.BookingService;
+import com.moodcafe.booking.entity.Booking;
+import com.moodcafe.booking.entity.enums.BookingStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -51,6 +56,13 @@ public class PayOSService {
     @Autowired(required = false)
     @Lazy
     private SponsoredListingService sponsoredListingService;
+
+    @Autowired(required = false)
+    private BookingRepository bookingRepository;
+
+    @Autowired(required = false)
+    @Lazy
+    private BookingService bookingService;
 
     public PayOSService(
             @Autowired(required = false) PayOS payOS,
@@ -201,8 +213,8 @@ public class PayOSService {
                 .amount(amount)
                 .description(description)
                 .items(Collections.singletonList(item))
-                .returnUrl(payOSConfig.getReturnUrl())
-                .cancelUrl(payOSConfig.getCancelUrl())
+                .returnUrl(appendQueryParam(payOSConfig.getReturnUrl(), "type=SUBSCRIPTION"))
+                .cancelUrl(appendQueryParam(payOSConfig.getCancelUrl(), "type=SUBSCRIPTION"))
                 .build();
 
         CreatePaymentLinkResponse checkoutData = payOS.paymentRequests().create(paymentData);
@@ -262,8 +274,8 @@ public class PayOSService {
                 .amount(amount)
                 .description(description)
                 .items(Collections.singletonList(item))
-                .returnUrl(payOSConfig.getReturnUrl())
-                .cancelUrl(payOSConfig.getCancelUrl())
+                .returnUrl(appendQueryParam(payOSConfig.getReturnUrl(), "type=SPONSORED"))
+                .cancelUrl(appendQueryParam(payOSConfig.getCancelUrl(), "type=SPONSORED"))
                 .build();
 
         try {
@@ -295,6 +307,65 @@ public class PayOSService {
         } catch (Exception e) {
             log.error("PayOS createPaymentLinkForSponsoredListing error: {}", e.getMessage(), e);
             throw new RuntimeException("Lỗi tạo link thanh toán PayOS: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Tạo Link thanh toán PayOS / VietQR cho đơn Đặt chỗ trước (Pre-order Booking)
+     */
+    @Transactional
+    public PayOSResponse createPaymentLinkForBooking(Booking booking) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Cổng thanh toán PayOS chưa được cấu hình.");
+        }
+
+        try {
+            long amount = booking.getMinSpendAmount();
+            long orderCode = generateOrderCode();
+            String description = sanitizeDescription("DAT BAN " + booking.getBookingCode());
+            String itemName = "Dat ban " + (booking.getTableCategory() != null ? booking.getTableCategory().getName() : "MoodCafe");
+
+            PaymentLinkItem item = PaymentLinkItem.builder()
+                    .name(itemName.length() > 50 ? itemName.substring(0, 50) : itemName)
+                    .quantity(1)
+                    .price(amount)
+                    .build();
+
+            CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
+                    .orderCode(orderCode)
+                    .amount(amount)
+                    .description(description)
+                    .items(Collections.singletonList(item))
+                    .returnUrl(appendQueryParam(payOSConfig.getReturnUrl(), "type=BOOKING&bookingCode=" + booking.getBookingCode()))
+                    .cancelUrl(appendQueryParam(payOSConfig.getCancelUrl(), "type=BOOKING&bookingCode=" + booking.getBookingCode()))
+                    .build();
+
+            CreatePaymentLinkResponse checkoutData = payOS.paymentRequests().create(paymentData);
+
+            String officialQrImageUrl = "https://img.vietqr.io/image/" + checkoutData.getBin() + "-"
+                    + checkoutData.getAccountNumber() + "-compact2.png?amount=" + amount
+                    + "&addInfo=" + URLEncoder.encode(description, StandardCharsets.UTF_8)
+                    + "&accountName=" + URLEncoder.encode(checkoutData.getAccountName(), StandardCharsets.UTF_8);
+
+            booking.setPaymentOrderCode(orderCode);
+            if (bookingRepository != null) {
+                bookingRepository.save(booking);
+            }
+
+            return PayOSResponse.builder()
+                    .checkoutUrl(checkoutData.getCheckoutUrl())
+                    .qrCode(officialQrImageUrl)
+                    .accountNumber(checkoutData.getAccountNumber())
+                    .accountName(checkoutData.getAccountName())
+                    .bin(checkoutData.getBin())
+                    .orderCode(orderCode)
+                    .amount((double) amount)
+                    .description(description)
+                    .status("PENDING")
+                    .build();
+        } catch (Exception e) {
+            log.error("PayOS createPaymentLinkForBooking error: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi tạo link thanh toán PayOS cho đơn đặt bàn: " + e.getMessage(), e);
         }
     }
 
@@ -350,11 +421,11 @@ public class PayOSService {
             } else {
                 log.info("Subscription payment {} already SUCCESS for orderCode {}", payment.getPaymentId(), orderCode);
             }
-        } else if (sponsoredListingRepository != null && sponsoredListingService != null) {
+            return;
+        }
+
+        if (sponsoredListingRepository != null && sponsoredListingService != null) {
             Optional<SponsoredListing> campaignOpt = sponsoredListingRepository.findByTransactionCode(txCode);
-            if (campaignOpt.isEmpty() && data.getDescription() != null) {
-                campaignOpt = sponsoredListingRepository.findByTransactionCode(data.getDescription().trim());
-            }
             if (campaignOpt.isPresent()) {
                 SponsoredListing campaign = campaignOpt.get();
                 if (!SponsoredListingStatus.ACTIVE.equals(campaign.getStatus())) {
@@ -365,12 +436,27 @@ public class PayOSService {
                     log.info("Sponsored campaign {} already ACTIVE for orderCode {}",
                             campaign.getSponsoredListingId(), orderCode);
                 }
-            } else {
-                log.warn("No SubscriptionPayment or SponsoredListing found matching orderCode: {}", orderCode);
+                return;
             }
-        } else {
-            log.warn("No SubscriptionPayment found matching orderCode: {}", orderCode);
         }
+
+        if (bookingRepository != null && bookingService != null) {
+            Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
+            if (bookingOpt.isPresent()) {
+                Booking booking = bookingOpt.get();
+                if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+                    bookingService.confirmBookingPayment(orderCode);
+                    log.info("Booking {} successfully confirmed via webhook for orderCode {}",
+                            booking.getBookingCode(), orderCode);
+                } else {
+                    log.info("Booking {} already in status {} for orderCode {}",
+                            booking.getBookingCode(), booking.getStatus(), orderCode);
+                }
+                return;
+            }
+        }
+
+        log.warn("No SubscriptionPayment, SponsoredListing, or Booking found matching orderCode: {}", orderCode);
     }
 
     /**
@@ -398,7 +484,10 @@ public class PayOSService {
                         log.info("Subscription payment {} confirmed via checkPaymentStatus for orderCode {}",
                                 payment.getPaymentId(), orderCode);
                     }
-                } else if (sponsoredListingRepository != null && sponsoredListingService != null) {
+                    return true;
+                }
+
+                if (sponsoredListingRepository != null && sponsoredListingService != null) {
                     Optional<SponsoredListing> campaignOpt = sponsoredListingRepository.findByTransactionCode(txCode);
                     if (campaignOpt.isPresent()) {
                         SponsoredListing campaign = campaignOpt.get();
@@ -407,6 +496,20 @@ public class PayOSService {
                             log.info("Sponsored campaign {} confirmed via checkPaymentStatus for orderCode {}",
                                     campaign.getSponsoredListingId(), orderCode);
                         }
+                        return true;
+                    }
+                }
+
+                if (bookingRepository != null && bookingService != null) {
+                    Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
+                    if (bookingOpt.isPresent()) {
+                        Booking booking = bookingOpt.get();
+                        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+                            bookingService.confirmBookingPayment(orderCode);
+                            log.info("Booking {} confirmed via checkPaymentStatus for orderCode {}",
+                                    booking.getBookingCode(), orderCode);
+                        }
+                        return true;
                     }
                 }
                 return true;
@@ -516,5 +619,91 @@ public class PayOSService {
             cleaned = cleaned.substring(0, 25).trim();
         }
         return cleaned;
+    }
+
+    /**
+     * Lấy thông tin ngữ cảnh của một mã đơn thanh toán PayOS (Booking, Subscription, Sponsored)
+     */
+    @Transactional(readOnly = true)
+    public PaymentOrderInfoResponse getOrderInfo(Long orderCode) {
+        if (orderCode == null) {
+            return PaymentOrderInfoResponse.builder()
+                    .paymentType("UNKNOWN")
+                    .status("UNKNOWN")
+                    .redirectUrl("/")
+                    .build();
+        }
+
+        String txCode = String.valueOf(orderCode);
+
+        // 1. Kiểm tra Đặt bàn trước (Booking)
+        if (bookingRepository != null) {
+            Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
+            if (bookingOpt.isPresent()) {
+                Booking booking = bookingOpt.get();
+                String storeName = booking.getStore() != null ? booking.getStore().getName() : "quán";
+                return PaymentOrderInfoResponse.builder()
+                        .orderCode(orderCode)
+                        .paymentType("BOOKING")
+                        .status(booking.getStatus() != null ? booking.getStatus().name() : "PENDING")
+                        .amount(booking.getMinSpendAmount())
+                        .title("Cọc giữ bàn tại " + storeName)
+                        .referenceCode(booking.getBookingCode())
+                        .redirectUrl("/customer/bookings")
+                        .build();
+            }
+        }
+
+        // 2. Kiểm tra Gói hội viên (Subscription)
+        Optional<SubscriptionPayment> paymentOpt = subscriptionPaymentRepository.findByTransactionCode(txCode);
+        if (paymentOpt.isPresent()) {
+            SubscriptionPayment payment = paymentOpt.get();
+            String planName = payment.getSubscriptionPlan() != null
+                    ? payment.getSubscriptionPlan().getDisplayName()
+                    : "Gói Hội Viên";
+            return PaymentOrderInfoResponse.builder()
+                    .orderCode(orderCode)
+                    .paymentType("SUBSCRIPTION")
+                    .status(payment.getStatus() != null ? payment.getStatus().name() : "PENDING")
+                    .amount(payment.getAmount() != null ? payment.getAmount().longValue() : 0L)
+                    .title("Gói hội viên: " + planName)
+                    .referenceCode(payment.getTransactionCode())
+                    .redirectUrl("/merchant/subscription")
+                    .build();
+        }
+
+        // 3. Kiểm tra Chiến dịch tài trợ (SponsoredListing)
+        if (sponsoredListingRepository != null) {
+            Optional<SponsoredListing> campaignOpt = sponsoredListingRepository.findByTransactionCode(txCode);
+            if (campaignOpt.isPresent()) {
+                SponsoredListing campaign = campaignOpt.get();
+                String placementName = campaign.getPlacement() != null
+                        ? campaign.getPlacement().getDisplayName()
+                        : "Chiến dịch quảng cáo";
+                return PaymentOrderInfoResponse.builder()
+                        .orderCode(orderCode)
+                        .paymentType("SPONSORED")
+                        .status(campaign.getPaymentStatus() != null ? campaign.getPaymentStatus() : "PENDING")
+                        .amount(campaign.getAmount() != null ? campaign.getAmount().longValue() : 0L)
+                        .title("Tài trợ: " + placementName)
+                        .referenceCode(campaign.getTransactionCode())
+                        .redirectUrl("/merchant/sponsored")
+                        .build();
+            }
+        }
+
+        return PaymentOrderInfoResponse.builder()
+                .orderCode(orderCode)
+                .paymentType("UNKNOWN")
+                .status("UNKNOWN")
+                .redirectUrl("/")
+                .build();
+    }
+
+    private String appendQueryParam(String baseUrl, String param) {
+        if (baseUrl == null) {
+            return "";
+        }
+        return baseUrl.contains("?") ? baseUrl + "&" + param : baseUrl + "?" + param;
     }
 }

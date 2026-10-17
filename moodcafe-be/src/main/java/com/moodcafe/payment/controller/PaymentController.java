@@ -2,6 +2,7 @@ package com.moodcafe.payment.controller;
 
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
+import com.moodcafe.payment.dto.response.PaymentOrderInfoResponse;
 import com.moodcafe.payment.service.PayOSService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,5 +46,11 @@ public class PaymentController {
     @PostMapping("/check/{orderCode}")
     public ResponseEntity<Boolean> checkPaymentStatusPost(@PathVariable Long orderCode) {
         return ResponseEntity.ok(payOSService.checkPaymentStatus(orderCode));
+    }
+
+    @Operation(summary = "4. Lấy thông tin loại đơn hàng PayOS theo orderCode (Booking, Subscription, Sponsored)")
+    @GetMapping("/info/{orderCode}")
+    public ResponseEntity<PaymentOrderInfoResponse> getPaymentOrderInfo(@PathVariable Long orderCode) {
+        return ResponseEntity.ok(payOSService.getOrderInfo(orderCode));
     }
 }

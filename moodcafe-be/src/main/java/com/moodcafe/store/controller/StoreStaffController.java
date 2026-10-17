@@ -6,6 +6,7 @@ import com.moodcafe.store.dto.request.AddStoreStaffRequest;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
 import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStaffRequest;
+import com.moodcafe.store.dto.response.CheckEmailAvailabilityResponse;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,14 @@ import java.util.UUID;
 public class StoreStaffController {
 
     private final StoreStaffService storeStaffService;
+
+    @GetMapping("/check-email")
+    public ResponseEntity<ApiResponse<CheckEmailAvailabilityResponse>> checkEmailAvailability(
+            @PathVariable UUID storeId,
+            @RequestParam String email) {
+        CheckEmailAvailabilityResponse response = storeStaffService.checkEmailAvailability(storeId, email);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
 
     @PostMapping("/create")
     public ResponseEntity<ApiResponse<StoreStaffResponse>> createStaffAccount(

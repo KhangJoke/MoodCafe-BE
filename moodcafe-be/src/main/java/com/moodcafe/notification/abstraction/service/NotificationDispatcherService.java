@@ -13,4 +13,8 @@ public interface NotificationDispatcherService {
     void dispatchToUsers(List<UUID> userIds, String title, String message, NotificationType type, String referenceId, String actionUrl);
 
     void dispatchToAdmins(String title, String message, NotificationType type, String referenceId, String actionUrl);
+
+    void dispatchToStoreStaff(UUID storeId, String title, String message, NotificationType type, String referenceId, String actionUrl);
+
+    void dispatchToStoreStaff(UUID storeId, String title, String message, NotificationType type, String referenceId, String actionUrl, UUID excludeUserId);
 }

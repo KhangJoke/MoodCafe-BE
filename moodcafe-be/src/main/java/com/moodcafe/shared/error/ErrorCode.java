@@ -111,7 +111,17 @@ public enum ErrorCode {
     SPONSORED_LISTING_NOT_ALLOWED(HttpStatus.FORBIDDEN, "Tài khoản của bạn hiện ở gói Basic. Vui lòng nâng cấp lên gói PRO hoặc PREMIUM để mở khóa tương tác đăng ký các vị trí quảng bá"),
     SPONSORED_LISTING_CANNOT_CANCEL(HttpStatus.BAD_REQUEST, "Chỉ có thể hủy chiến dịch ở trạng thái chờ duyệt hoặc đang chạy"),
     SPONSORED_FREE_QUOTA_EXCEEDED(HttpStatus.BAD_REQUEST, "Bạn đã sử dụng hết lượt tài trợ miễn phí 7 ngày trong tháng này"),
-    INVALID_SPONSORED_DATES(HttpStatus.BAD_REQUEST, "Ngày bắt đầu chiến dịch quảng bá không hợp lệ"),
+    // Booking
+    BOOKING_CONFIG_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy cấu hình đặt chỗ của quán"),
+    BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy đơn đặt chỗ"),
+    TABLE_CATEGORY_NOT_FOUND(HttpStatus.NOT_FOUND, "Không tìm thấy loại bàn"),
+    BOOKING_DISABLED_BY_STORE(HttpStatus.BAD_REQUEST, "Quán hiện đang tạm tắt tính năng nhận đặt chỗ"),
+    BOOKING_TIME_INVALID(HttpStatus.BAD_REQUEST, "Thời gian đặt bàn không hợp lệ hoặc nằm ngoài giờ mở cửa của quán"),
+    BOOKING_ADVANCE_TIME_INVALID(HttpStatus.BAD_REQUEST, "Thời gian hẹn phải cách thời điểm hiện tại tối thiểu theo quy định của quán"),
+    NO_TABLE_AVAILABLE(HttpStatus.CONFLICT, "Loại bàn này đã kín chỗ trong khung giờ được chọn. Vui lòng chọn khung giờ hoặc loại bàn khác."),
+    CANNOT_CANCEL_BOOKING(HttpStatus.BAD_REQUEST, "Đã quá thời hạn cho phép hủy đơn giữ bàn hoặc trạng thái đơn không thể hủy"),
+    INVALID_BOOKING_STATUS_TRANSITION(HttpStatus.BAD_REQUEST, "Trạng thái đơn không hợp lệ cho thao tác này"),
+    BOOKING_STORE_MISMATCH(HttpStatus.BAD_REQUEST, "Đơn đặt chỗ không thuộc về cơ sở này"),
     // Generic
     FILE_EMPTY(HttpStatus.BAD_REQUEST, "File is empty"),
     FILE_TOO_LARGE(HttpStatus.BAD_REQUEST, "File size exceeds the 25MB limit"),

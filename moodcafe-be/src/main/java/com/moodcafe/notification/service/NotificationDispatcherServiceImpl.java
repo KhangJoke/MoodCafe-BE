@@ -13,6 +13,9 @@ import com.moodcafe.notification.entity.enums.NotificationType;
 import com.moodcafe.notification.mapper.NotificationMapper;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
+import com.moodcafe.store.entity.StoreStaff;
+import com.moodcafe.store.entity.enums.StoreStaffStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -35,6 +38,7 @@ public class NotificationDispatcherServiceImpl implements NotificationDispatcher
     private final PushNotificationService pushNotificationService;
     private final UserRepository userRepository;
     private final UserService userService;
+    private final StoreStaffRepository storeStaffRepository;
 
     @Override
     @Transactional
@@ -142,4 +146,52 @@ public class NotificationDispatcherServiceImpl implements NotificationDispatcher
         log.info("Multicasting notification [type={}] to {} admin(s)", type, adminIds.size());
         dispatchToUsers(adminIds, title, message, type, referenceId, actionUrl);
     }
+
+    @Override
+    @Transactional
+    public void dispatchToStoreStaff(
+            UUID storeId,
+            String title,
+            String message,
+            NotificationType type,
+            String referenceId,
+            String actionUrl
+    ) {
+        dispatchToStoreStaff(storeId, title, message, type, referenceId, actionUrl, null);
+    }
+
+    @Override
+    @Transactional
+    public void dispatchToStoreStaff(
+            UUID storeId,
+            String title,
+            String message,
+            NotificationType type,
+            String referenceId,
+            String actionUrl,
+            UUID excludeUserId
+    ) {
+        if (storeId == null) {
+            return;
+        }
+
+        List<StoreStaff> staffList = storeStaffRepository.findAllByStoreStoreId(storeId);
+        if (staffList == null || staffList.isEmpty()) {
+            log.warn("No active staff found for store {}", storeId);
+            return;
+        }
+
+        List<UUID> staffUserIds = staffList.stream()
+                .filter(staff -> staff.getStatus() == StoreStaffStatus.ACTIVE)
+                .map(staff -> staff.getUser().getUserId())
+                .filter(id -> excludeUserId == null || !id.equals(excludeUserId))
+                .distinct()
+                .toList();
+
+        if (!staffUserIds.isEmpty()) {
+            log.info("Multicasting notification [type={}] to {} active staff member(s) for store {}", type, staffUserIds.size(), storeId);
+            dispatchToUsers(staffUserIds, title, message, type, referenceId, actionUrl);
+        }
+    }
 }
+

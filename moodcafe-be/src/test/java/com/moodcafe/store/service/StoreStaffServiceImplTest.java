@@ -12,6 +12,7 @@ import com.moodcafe.store.abstraction.repository.StoreRoleRepository;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
 import com.moodcafe.store.dto.request.CreateStaffAccountRequest;
 import com.moodcafe.store.dto.request.UpdateStaffPasswordRequest;
+import com.moodcafe.store.dto.response.CheckEmailAvailabilityResponse;
 import com.moodcafe.store.dto.response.StoreStaffResponse;
 import com.moodcafe.store.dto.response.UserStoreResponse;
 import com.moodcafe.store.entity.Store;
@@ -237,6 +238,51 @@ class StoreStaffServiceImplTest {
         List<UserStoreResponse> result = storeStaffService.getUserStores();
 
         assertThat(result).isNotNull().isEmpty();
+    }
+
+    @Test
+    @DisplayName("checkEmailAvailability should return true when email does not exist")
+    void checkEmailAvailability_WhenAvailable_ReturnsTrue() {
+        when(storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, ownerUser.getUserId()))
+                .thenReturn(Optional.of(StoreStaff.builder().store(store).user(ownerUser).storeRole(ownerRole).build()));
+        when(userService.existsByEmail("cashier.available@moodcafe.com")).thenReturn(false);
+
+        CheckEmailAvailabilityResponse response = storeStaffService.checkEmailAvailability(storeId, "cashier.available@moodcafe.com");
+
+        assertThat(response.isAvailable()).isTrue();
+        assertThat(response.getMessage()).contains("khả dụng");
+    }
+
+    @Test
+    @DisplayName("checkEmailAvailability should return false when email exists")
+    void checkEmailAvailability_WhenExists_ReturnsFalse() {
+        when(storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, ownerUser.getUserId()))
+                .thenReturn(Optional.of(StoreStaff.builder().store(store).user(ownerUser).storeRole(ownerRole).build()));
+        when(userService.existsByEmail("cashier.exists@moodcafe.com")).thenReturn(true);
+
+        CheckEmailAvailabilityResponse response = storeStaffService.checkEmailAvailability(storeId, "cashier.exists@moodcafe.com");
+
+        assertThat(response.isAvailable()).isFalse();
+        assertThat(response.getMessage()).contains("đã tồn tại");
+    }
+
+    @Test
+    @DisplayName("createStaffAccount should throw FORBIDDEN when manager tries to create a manager")
+    void createStaffAccount_WhenManagerCreatesManager_ThrowsForbidden() {
+        StoreRole managerRole = StoreRole.builder().storeRoleId(UUID.randomUUID()).name("MANAGER").build();
+        when(storeStaffRepository.findByStoreStoreIdAndUserUserId(storeId, ownerUser.getUserId()))
+                .thenReturn(Optional.of(StoreStaff.builder().store(store).user(ownerUser).storeRole(managerRole).build()));
+
+        CreateStaffAccountRequest request = new CreateStaffAccountRequest();
+        request.setName("New Manager");
+        request.setEmail("manager2@moodcafe.com");
+        request.setPassword("Password123@");
+        request.setStoreRole("MANAGER");
+
+        assertThatThrownBy(() -> storeStaffService.createStaffAccount(storeId, request))
+                .isInstanceOf(AppException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.FORBIDDEN_STORE_ACCESS);
     }
 }
 

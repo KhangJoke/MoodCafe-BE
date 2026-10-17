@@ -27,6 +27,6 @@ public class CreateStaffAccountRequest {
     private String password;
 
     @NotBlank(message = "Store role is required (CASHIER or MANAGER)")
-    @Pattern(regexp = "^(?i)(CASHIER|STAFF|MANAGER)$", message = "Store role must be CASHIER, STAFF, or MANAGER")
+    @Pattern(regexp = "^(?i)(CASHIER|MANAGER)$", message = "Store role must be CASHIER or MANAGER")
     private String storeRole;
 }

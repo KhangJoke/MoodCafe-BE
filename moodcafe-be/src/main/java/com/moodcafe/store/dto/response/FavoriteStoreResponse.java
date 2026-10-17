@@ -1,5 +1,6 @@
 package com.moodcafe.store.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.moodcafe.store.dto.response.StoreSearchItemResponse.StoreSearchTagItem;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,7 +31,14 @@ public class FavoriteStoreResponse {
     private Long priceTo;
     private LocalTime openingTime;
     private LocalTime closingTime;
+
+    @JsonProperty("isOpenNow")
     private boolean isOpenNow;
+
+    @JsonProperty("isOpenNow")
+    public boolean isOpenNow() {
+        return isOpenNow;
+    }
     private Double overallRating;
     private Long reviewCount;
     private List<StoreSearchTagItem> highlightTags;
