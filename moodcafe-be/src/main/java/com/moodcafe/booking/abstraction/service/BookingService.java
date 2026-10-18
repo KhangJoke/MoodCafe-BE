@@ -10,6 +10,9 @@ import com.moodcafe.booking.dto.response.StoreDailyScheduleResponse;
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.enums.BookingEventType;
 
+import com.moodcafe.shared.response.PageResponse;
+import org.springframework.data.domain.Pageable;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -35,7 +38,11 @@ public interface BookingService {
 
     List<BookingResponse> getMyBookings();
 
+    PageResponse<BookingResponse> getMyBookings(Pageable pageable);
+
     List<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to);
+
+    PageResponse<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to, Pageable pageable);
 
     BookingDeskSummaryResponse getStoreDeskSummary(UUID storeId, LocalDate date);
 

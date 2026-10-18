@@ -9,8 +9,12 @@ import com.moodcafe.booking.dto.response.BookingResponse;
 import com.moodcafe.booking.dto.response.SlotAvailabilityResponse;
 import com.moodcafe.booking.dto.response.StoreDailyScheduleResponse;
 import com.moodcafe.shared.response.ApiResponse;
+import com.moodcafe.shared.response.PageResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -97,22 +101,24 @@ public class BookingController {
 
     @GetMapping("/bookings/my")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<List<BookingResponse>>> getMyBookings() {
-        List<BookingResponse> list = bookingService.getMyBookings();
-        return ResponseEntity.ok(ApiResponse.success(list));
+    public ResponseEntity<ApiResponse<PageResponse<BookingResponse>>> getMyBookings(
+            @PageableDefault(size = 15, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        PageResponse<BookingResponse> page = bookingService.getMyBookings(pageable);
+        return ResponseEntity.ok(ApiResponse.success(page));
     }
 
     // ==================== Merchant Desk Operations ====================
 
     @GetMapping("/stores/{storeId}/bookings")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<List<BookingResponse>>> getStoreDeskBookings(
+    public ResponseEntity<ApiResponse<PageResponse<BookingResponse>>> getStoreDeskBookings(
             @PathVariable UUID storeId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam(required = false) Instant from,
-            @RequestParam(required = false) Instant to) {
-        List<BookingResponse> list = bookingService.getStoreDeskBookings(storeId, date, from, to);
-        return ResponseEntity.ok(ApiResponse.success(list));
+            @RequestParam(required = false) Instant to,
+            @PageableDefault(size = 15, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        PageResponse<BookingResponse> page = bookingService.getStoreDeskBookings(storeId, date, from, to, pageable);
+        return ResponseEntity.ok(ApiResponse.success(page));
     }
 
     @GetMapping("/stores/{storeId}/bookings/summary")

@@ -38,6 +38,11 @@ public class BookingResponse {
     private Long minSpendAmount;
     private Long paymentOrderCode;
     private String checkoutUrl;
+    private String paymentQrCode;
+    private String paymentAccountNumber;
+    private String paymentAccountName;
+    private String paymentBin;
+    private String paymentDescription;
     private String qrCodeToken;
     private Instant checkedInAt;
     private Instant completedAt;

@@ -27,6 +27,7 @@ import com.moodcafe.booking.mapper.BookingMapper;
 import com.moodcafe.payment.dto.response.PayOSResponse;
 import com.moodcafe.payment.service.PayOSService;
 import com.moodcafe.shared.error.ErrorCode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -36,6 +37,10 @@ import com.moodcafe.store.entity.StoreImage;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.moodcafe.shared.response.PageResponse;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,6 +80,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingMapper bookingMapper;
     private final StoreImageRepository storeImageRepository;
     private final NotificationDispatcherService notificationDispatcherService;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -404,18 +411,25 @@ public class BookingServiceImpl implements BookingService {
         booking = bookingRepository.save(booking);
 
         // Tạo link thanh toán PayOS cho hạn mức đồ uống trả trước (F&B Credit) nếu có cọc
-        String checkoutUrl = null;
+        PayOSResponse payResponse = null;
         if (requiresDeposit) {
             try {
-                PayOSResponse payResponse = payOSService.createPaymentLinkForBooking(booking);
-                checkoutUrl = payResponse.getCheckoutUrl();
+                payResponse = payOSService.createPaymentLinkForBooking(booking);
+                cachePayOSResponse(booking.getBookingId(), payResponse);
             } catch (Exception e) {
                 log.error("Failed to create PayOS payment link for booking {}: {}", booking.getBookingCode(), e.getMessage());
             }
         }
 
         BookingResponse response = enrichBookingResponse(booking, config);
-        response.setCheckoutUrl(checkoutUrl);
+        if (payResponse != null) {
+            response.setCheckoutUrl(payResponse.getCheckoutUrl());
+            response.setPaymentQrCode(payResponse.getQrCode());
+            response.setPaymentAccountNumber(payResponse.getAccountNumber());
+            response.setPaymentAccountName(payResponse.getAccountName());
+            response.setPaymentBin(payResponse.getBin());
+            response.setPaymentDescription(payResponse.getDescription());
+        }
 
         BookingEventType eventType = requiresDeposit ? BookingEventType.CREATED : BookingEventType.PAID_CONFIRMED;
         String eventMsg = requiresDeposit
@@ -436,6 +450,8 @@ public class BookingServiceImpl implements BookingService {
             booking.setStatus(BookingStatus.PAID_CONFIRMED);
             bookingRepository.save(booking);
             log.info("Booking {} confirmed payment successfully", booking.getBookingCode());
+
+            evictCachedPayOSResponse(booking.getBookingId());
 
             dispatchBookingNotification(
                     booking,
@@ -493,6 +509,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setRefundProcessed(false); // Lưu log để chủ quán/admin chuyển khoản hoàn tiền thủ công
 
         booking = bookingRepository.save(booking);
+        evictCachedPayOSResponse(booking.getBookingId());
         BookingResponse response = enrichBookingResponse(booking, config);
 
         dispatchBookingNotification(
@@ -520,10 +537,21 @@ public class BookingServiceImpl implements BookingService {
 
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
 
-        PayOSResponse payResponse = payOSService.createPaymentLinkForBooking(booking);
+        PayOSResponse payResponse = getCachedPayOSResponse(booking.getBookingId());
+        if (payResponse == null) {
+            payResponse = payOSService.createPaymentLinkForBooking(booking);
+            cachePayOSResponse(booking.getBookingId(), payResponse);
+        }
 
         BookingResponse res = enrichBookingResponse(booking, config);
-        res.setCheckoutUrl(payResponse.getCheckoutUrl());
+        if (payResponse != null) {
+            res.setCheckoutUrl(payResponse.getCheckoutUrl());
+            res.setPaymentQrCode(payResponse.getQrCode());
+            res.setPaymentAccountNumber(payResponse.getAccountNumber());
+            res.setPaymentAccountName(payResponse.getAccountName());
+            res.setPaymentBin(payResponse.getBin());
+            res.setPaymentDescription(payResponse.getDescription());
+        }
         return res;
     }
 
@@ -536,6 +564,26 @@ public class BookingServiceImpl implements BookingService {
         return bookings.stream()
                 .map(b -> enrichBookingResponse(b, getOrCreateConfig(b.getStore())))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<BookingResponse> getMyBookings(Pageable pageable) {
+        User currentUser = currentUserService.getCurrentUser();
+        Page<Booking> bookingPage = bookingRepository.findAllByUserUserIdOrderByCreatedAtDesc(currentUser.getUserId(), pageable);
+
+        List<BookingResponse> items = bookingPage.getContent().stream()
+                .map(b -> enrichBookingResponse(b, getOrCreateConfig(b.getStore())))
+                .toList();
+
+        return PageResponse.<BookingResponse>builder()
+                .items(items)
+                .page(bookingPage.getNumber())
+                .size(bookingPage.getSize())
+                .totalElements(bookingPage.getTotalElements())
+                .totalPages(bookingPage.getTotalPages())
+                .last(bookingPage.isLast())
+                .build();
     }
 
     @Override
@@ -587,6 +635,71 @@ public class BookingServiceImpl implements BookingService {
         return bookings.stream()
                 .map(b -> enrichBookingResponse(b, config))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to, Pageable pageable) {
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
+
+        Page<Booking> bookingPage;
+
+        if (from != null && to != null) {
+            bookingPage = bookingRepository.findAllByStoreStoreIdAndStartTimeBetweenOrderByCreatedAtDesc(
+                    storeId,
+                    from,
+                    to,
+                    pageable
+            );
+        } else if (from != null) {
+            bookingPage = bookingRepository.findAllByStoreStoreIdAndStartTimeBetweenOrderByCreatedAtDesc(
+                    storeId,
+                    from,
+                    from.plus(Duration.ofDays(30)),
+                    pageable
+            );
+        } else if (to != null) {
+            bookingPage = bookingRepository.findAllByStoreStoreIdAndStartTimeBetweenOrderByCreatedAtDesc(
+                    storeId,
+                    to.minus(Duration.ofDays(30)),
+                    to,
+                    pageable
+            );
+        } else if (date != null) {
+            ZonedDateTime startOfDay = date.atStartOfDay(VN_ZONE);
+            ZonedDateTime endOfDay = date.atTime(LocalTime.MAX).atZone(VN_ZONE);
+            bookingPage = bookingRepository.findAllByStoreStoreIdAndStartTimeBetweenOrderByCreatedAtDesc(
+                    storeId,
+                    startOfDay.toInstant(),
+                    endOfDay.toInstant(),
+                    pageable
+            );
+        } else {
+            // Mặc định lấy đơn của ngày hôm nay (giờ VN), sắp xếp mới nhất
+            LocalDate today = LocalDate.now(VN_ZONE);
+            ZonedDateTime startOfDay = today.atStartOfDay(VN_ZONE);
+            ZonedDateTime endOfDay = today.atTime(LocalTime.MAX).atZone(VN_ZONE);
+            bookingPage = bookingRepository.findAllByStoreStoreIdAndStartTimeBetweenOrderByCreatedAtDesc(
+                    storeId,
+                    startOfDay.toInstant(),
+                    endOfDay.toInstant(),
+                    pageable
+            );
+        }
+
+        StoreBookingConfig config = getOrCreateConfig(storeRepository.getReferenceById(storeId));
+        List<BookingResponse> items = bookingPage.getContent().stream()
+                .map(b -> enrichBookingResponse(b, config))
+                .toList();
+
+        return PageResponse.<BookingResponse>builder()
+                .items(items)
+                .page(bookingPage.getNumber())
+                .size(bookingPage.getSize())
+                .totalElements(bookingPage.getTotalElements())
+                .totalPages(bookingPage.getTotalPages())
+                .last(bookingPage.isLast())
+                .build();
     }
 
     @Override
@@ -807,6 +920,18 @@ public class BookingServiceImpl implements BookingService {
                 && Instant.now().isBefore(booking.getStartTime().minus(Duration.ofHours(config.getFreeCancelHours())));
         res.setIsCancelable(cancelable);
 
+        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+            PayOSResponse cached = getCachedPayOSResponse(booking.getBookingId());
+            if (cached != null) {
+                res.setCheckoutUrl(cached.getCheckoutUrl());
+                res.setPaymentQrCode(cached.getQrCode());
+                res.setPaymentAccountNumber(cached.getAccountNumber());
+                res.setPaymentAccountName(cached.getAccountName());
+                res.setPaymentBin(cached.getBin());
+                res.setPaymentDescription(cached.getDescription());
+            }
+        }
+
         return res;
     }
 
@@ -881,7 +1006,7 @@ public class BookingServiceImpl implements BookingService {
             case CREATED -> {
                 notifType = NotificationType.RESERVATION_CREATED;
                 customerTitle = "Tạo đơn đặt bàn (" + bookingCode + ")";
-                customerMsg = "Vui lòng thanh toán cọc trong vòng 10 phút để hoàn tất giữ chỗ tại " + storeName + ".";
+                customerMsg = "Vui lòng thanh toán cọc trong vòng 15 phút để hoàn tất giữ chỗ tại " + storeName + ".";
             }
             default -> {
                 log.info("Booking event {} not requiring notification dispatch.", eventType);
@@ -925,5 +1050,44 @@ public class BookingServiceImpl implements BookingService {
                 log.error("Failed to dispatch booking notification to store staff for store {}: {}", storeId, e.getMessage());
             }
         }
+    }
+
+    private void cachePayOSResponse(UUID bookingId, PayOSResponse payResponse) {
+        if (bookingId == null || payResponse == null || redisTemplate == null) {
+            return;
+        }
+        try {
+            String key = "booking:payos:" + bookingId;
+            String json = objectMapper.writeValueAsString(payResponse);
+            redisTemplate.opsForValue().set(key, json, Duration.ofMinutes(15));
+            log.info("Cached PayOS payment details in Redis for booking {} with TTL 15m", bookingId);
+        } catch (Exception e) {
+            log.warn("Failed to cache PayOS info in Redis for booking {}: {}", bookingId, e.getMessage());
+        }
+    }
+
+    private PayOSResponse getCachedPayOSResponse(UUID bookingId) {
+        if (bookingId == null || redisTemplate == null) {
+            return null;
+        }
+        try {
+            String key = "booking:payos:" + bookingId;
+            String json = redisTemplate.opsForValue().get(key);
+            if (json != null && !json.isBlank()) {
+                return objectMapper.readValue(json, PayOSResponse.class);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read cached PayOS info from Redis for booking {}: {}", bookingId, e.getMessage());
+        }
+        return null;
+    }
+
+    private void evictCachedPayOSResponse(UUID bookingId) {
+        if (bookingId == null || redisTemplate == null) {
+            return;
+        }
+        try {
+            redisTemplate.delete("booking:payos:" + bookingId);
+        } catch (Exception ignored) {}
     }
 }

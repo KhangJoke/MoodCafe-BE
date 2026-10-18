@@ -2,6 +2,8 @@ package com.moodcafe.booking.abstraction.repository;
 
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.enums.BookingStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -24,9 +26,13 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     List<Booking> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId);
 
+    Page<Booking> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
     List<Booking> findAllByStoreStoreIdOrderByStartTimeDesc(UUID storeId);
 
     List<Booking> findAllByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
+
+    Page<Booking> findAllByStoreStoreIdOrderByCreatedAtDesc(UUID storeId, Pageable pageable);
 
     List<Booking> findAllByStoreStoreIdAndStartTimeBetweenOrderByStartTimeAsc(
             UUID storeId,
@@ -38,6 +44,13 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             UUID storeId,
             Instant rangeStart,
             Instant rangeEnd
+    );
+
+    Page<Booking> findAllByStoreStoreIdAndStartTimeBetweenOrderByCreatedAtDesc(
+            UUID storeId,
+            Instant rangeStart,
+            Instant rangeEnd,
+            Pageable pageable
     );
 
     /**

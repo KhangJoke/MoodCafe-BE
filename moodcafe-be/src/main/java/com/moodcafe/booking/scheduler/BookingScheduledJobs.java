@@ -33,26 +33,26 @@ public class BookingScheduledJobs {
     private final BookingService bookingService;
 
     /**
-     * Tác vụ 1: Quét các đơn PENDING_PAYMENT quá 10 phút chưa thanh toán
+     * Tác vụ 1: Quét các đơn PENDING_PAYMENT quá 15 phút chưa thanh toán
      * -> Chuyển sang PAYMENT_FAILED và lập tức giải phóng slot bàn.
      */
     @Scheduled(fixedRate = 60000)
     @Transactional
     public void timeoutUnpaidBookings() {
-        Instant threshold = Instant.now().minus(Duration.ofMinutes(10));
+        Instant threshold = Instant.now().minus(Duration.ofMinutes(15));
         List<Booking> unpaidList = bookingRepository.findAllByStatusAndCreatedAtBefore(
                 BookingStatus.PENDING_PAYMENT,
                 threshold
         );
 
         if (!unpaidList.isEmpty()) {
-            log.info("Processing {} unpaid bookings past 10 minutes timeout", unpaidList.size());
+            log.info("Processing {} unpaid bookings past 15 minutes timeout", unpaidList.size());
             for (Booking booking : unpaidList) {
                 booking.setStatus(BookingStatus.PAYMENT_FAILED);
                 bookingService.dispatchBookingNotification(
                         booking,
                         BookingEventType.PAYMENT_FAILED,
-                        "Đơn đặt bàn " + booking.getBookingCode() + " đã hết hạn thanh toán 10 phút."
+                        "Đơn đặt bàn " + booking.getBookingCode() + " đã hết hạn thanh toán 15 phút."
                 );
             }
             bookingRepository.saveAll(unpaidList);
