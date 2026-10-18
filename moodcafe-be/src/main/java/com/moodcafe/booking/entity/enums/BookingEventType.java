@@ -8,5 +8,6 @@ public enum BookingEventType {
     CLAIMED_LATE,
     COMPLETED,
     CANCELLED,
-    PAYMENT_FAILED
+    PAYMENT_FAILED,
+    EXPIRED_NO_SHOW
 }

@@ -462,21 +462,23 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public BookingResponse getBookingDetail(UUID bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
+        booking = reconcileBookingStatus(booking);
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
         return enrichBookingResponse(booking, config);
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public BookingResponse getBookingByCode(String bookingCode) {
         Booking booking = bookingRepository.findByBookingCode(bookingCode.trim().toUpperCase())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
+        booking = reconcileBookingStatus(booking);
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
         return enrichBookingResponse(booking, config);
     }
@@ -556,23 +558,25 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<BookingResponse> getMyBookings() {
         User currentUser = currentUserService.getCurrentUser();
         List<Booking> bookings = bookingRepository.findAllByUserUserIdOrderByCreatedAtDesc(currentUser.getUserId());
 
         return bookings.stream()
+                .map(this::reconcileBookingStatus)
                 .map(b -> enrichBookingResponse(b, getOrCreateConfig(b.getStore())))
                 .toList();
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public PageResponse<BookingResponse> getMyBookings(Pageable pageable) {
         User currentUser = currentUserService.getCurrentUser();
         Page<Booking> bookingPage = bookingRepository.findAllByUserUserIdOrderByCreatedAtDesc(currentUser.getUserId(), pageable);
 
         List<BookingResponse> items = bookingPage.getContent().stream()
+                .map(this::reconcileBookingStatus)
                 .map(b -> enrichBookingResponse(b, getOrCreateConfig(b.getStore())))
                 .toList();
 
@@ -587,7 +591,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
@@ -633,12 +637,13 @@ public class BookingServiceImpl implements BookingService {
 
         StoreBookingConfig config = getOrCreateConfig(storeRepository.getReferenceById(storeId));
         return bookings.stream()
+                .map(this::reconcileBookingStatus)
                 .map(b -> enrichBookingResponse(b, config))
                 .toList();
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public PageResponse<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to, Pageable pageable) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
@@ -689,6 +694,7 @@ public class BookingServiceImpl implements BookingService {
 
         StoreBookingConfig config = getOrCreateConfig(storeRepository.getReferenceById(storeId));
         List<BookingResponse> items = bookingPage.getContent().stream()
+                .map(this::reconcileBookingStatus)
                 .map(b -> enrichBookingResponse(b, config))
                 .toList();
 
@@ -703,7 +709,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public BookingDeskSummaryResponse getStoreDeskSummary(UUID storeId, LocalDate date) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
@@ -715,7 +721,7 @@ public class BookingServiceImpl implements BookingService {
                 storeId,
                 startOfDay.toInstant(),
                 endOfDay.toInstant()
-        );
+        ).stream().map(this::reconcileBookingStatus).toList();
 
         long pendingArrival = bookings.stream().filter(b -> b.getStatus() == BookingStatus.PAID_CONFIRMED).count();
         long checkedIn = bookings.stream().filter(b -> b.getStatus() == BookingStatus.CHECKED_IN).count();
@@ -753,6 +759,13 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.BOOKING_STORE_MISMATCH);
         }
 
+        booking = reconcileBookingStatus(booking);
+
+        if (booking.getStatus() == BookingStatus.EXPIRED_NO_SHOW) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
+                    "Đơn đặt bàn này đã hết hạn hiệu lực hoàn toàn (EXPIRED_NO_SHOW).");
+        }
+
         if (booking.getStatus() == BookingStatus.TABLE_EXPIRED) {
             throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
                     "Đơn này đã quá giờ giữ bàn và bị thu hồi slot (TABLE_EXPIRED). Vui lòng dùng chức năng 'Xác nhận giao nước trễ' tại quầy.");
@@ -788,6 +801,13 @@ public class BookingServiceImpl implements BookingService {
 
         if (!booking.getStore().getStoreId().equals(storeId)) {
             throw new AppException(ErrorCode.BOOKING_STORE_MISMATCH);
+        }
+
+        booking = reconcileBookingStatus(booking);
+
+        if (booking.getStatus() == BookingStatus.EXPIRED_NO_SHOW) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
+                    "Đơn đặt bàn này đã quá thời hạn bảo lưu nước (kết thúc ngày tại quán). Không thể nhận nước trễ.");
         }
 
         if (booking.getStatus() != BookingStatus.TABLE_EXPIRED) {
@@ -898,6 +918,47 @@ public class BookingServiceImpl implements BookingService {
         }
 
         return closingZoned.toInstant();
+    }
+
+    @Transactional
+    public Booking reconcileBookingStatus(Booking booking) {
+        if (booking == null || booking.getStatus() == null) {
+            return booking;
+        }
+
+        Instant now = Instant.now();
+        LocalDate bookingDate = booking.getStartTime().atZone(VN_ZONE).toLocalDate();
+        Store store = booking.getStore();
+        LocalTime closingTime = (store != null && store.getClosingTime() != null)
+                ? store.getClosingTime()
+                : LocalTime.of(23, 0);
+        Instant closingInstant = bookingDate.atTime(closingTime).atZone(VN_ZONE).toInstant();
+
+        if (booking.getStatus() == BookingStatus.PAID_CONFIRMED) {
+            StoreBookingConfig config = getOrCreateConfig(booking.getStore());
+            int graceMins = config != null && config.getGracePeriodMins() != null ? config.getGracePeriodMins() : 30;
+            Instant graceExpiry = booking.getStartTime().plus(Duration.ofMinutes(graceMins));
+
+            if (now.isAfter(graceExpiry)) {
+                if (now.isAfter(closingInstant)) {
+                    booking.setStatus(BookingStatus.EXPIRED_NO_SHOW);
+                    booking = bookingRepository.save(booking);
+                    log.info("Reconciled booking {} from PAID_CONFIRMED to EXPIRED_NO_SHOW (past store closing deadline)", booking.getBookingCode());
+                } else {
+                    booking.setStatus(BookingStatus.TABLE_EXPIRED);
+                    booking = bookingRepository.save(booking);
+                    log.info("Reconciled booking {} from PAID_CONFIRMED to TABLE_EXPIRED (past grace period)", booking.getBookingCode());
+                }
+            }
+        } else if (booking.getStatus() == BookingStatus.TABLE_EXPIRED) {
+            if (now.isAfter(closingInstant)) {
+                booking.setStatus(BookingStatus.EXPIRED_NO_SHOW);
+                booking = bookingRepository.save(booking);
+                log.info("Reconciled booking {} from TABLE_EXPIRED to EXPIRED_NO_SHOW (past store closing deadline)", booking.getBookingCode());
+            }
+        }
+
+        return booking;
     }
 
     private BookingResponse enrichBookingResponse(Booking booking, StoreBookingConfig config) {

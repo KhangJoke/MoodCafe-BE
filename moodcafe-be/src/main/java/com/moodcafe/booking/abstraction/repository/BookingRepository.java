@@ -125,4 +125,12 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("status") BookingStatus status,
             @Param("dayEnd") Instant dayEnd
     );
+
+    /**
+     * Tìm tất cả các đơn theo trạng thái kèm nạp Store để tính toán hạn mức giờ đóng cửa.
+     */
+    @Query("SELECT b FROM Booking b JOIN FETCH b.store s WHERE b.status = :status")
+    List<Booking> findAllByStatusWithStore(@Param("status") BookingStatus status);
+
+    List<Booking> findAllByStatus(BookingStatus status);
 }

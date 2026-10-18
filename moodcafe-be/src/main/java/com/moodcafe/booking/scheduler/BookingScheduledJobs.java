@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -126,29 +127,28 @@ public class BookingScheduledJobs {
      * Tác vụ 4: Quét các đơn TABLE_EXPIRED vào cuối ngày khi quán đóng cửa (store_closing_time)
      * -> Nếu khách không tới lấy nước trước giờ đóng cửa, chuyển sang EXPIRED_NO_SHOW (đóng đơn vĩnh viễn).
      */
-    @Scheduled(fixedRate = 300000)
+    @Scheduled(fixedRate = 60000)
     @Transactional
     public void expireNoShowAtClosing() {
         Instant now = Instant.now();
-        ZonedDateTime nowZoned = now.atZone(VN_ZONE);
-        LocalTime currentTime = nowZoned.toLocalTime();
-
-        // Quét các đơn TABLE_EXPIRED của ngày hôm nay
-        ZonedDateTime startOfDay = nowZoned.toLocalDate().atStartOfDay(VN_ZONE);
-        ZonedDateTime endOfDay = nowZoned.toLocalDate().atTime(LocalTime.MAX).atZone(VN_ZONE);
-
-        List<Booking> expiredCandidates = bookingRepository.findAll().stream()
-                .filter(b -> b.getStatus() == BookingStatus.TABLE_EXPIRED)
-                .filter(b -> b.getStartTime().isAfter(startOfDay.toInstant()) && b.getStartTime().isBefore(endOfDay.toInstant()))
-                .toList();
+        List<Booking> expiredCandidates = bookingRepository.findAllByStatusWithStore(BookingStatus.TABLE_EXPIRED);
 
         for (Booking booking : expiredCandidates) {
+            LocalDate bookingDate = booking.getStartTime().atZone(VN_ZONE).toLocalDate();
             Store store = booking.getStore();
-            LocalTime closingTime = store.getClosingTime() != null ? store.getClosingTime() : LocalTime.of(23, 0);
+            LocalTime closingTime = (store != null && store.getClosingTime() != null)
+                    ? store.getClosingTime()
+                    : LocalTime.of(23, 0);
+            Instant closingInstant = bookingDate.atTime(closingTime).atZone(VN_ZONE).toInstant();
 
-            if (currentTime.isAfter(closingTime)) {
+            if (now.isAfter(closingInstant)) {
                 booking.setStatus(BookingStatus.EXPIRED_NO_SHOW);
                 bookingRepository.save(booking);
+                bookingService.dispatchBookingNotification(
+                        booking,
+                        BookingEventType.EXPIRED_NO_SHOW,
+                        "Đơn đặt bàn " + booking.getBookingCode() + " đã hết hạn bảo lưu nước do đã qua giờ đóng cửa quán."
+                );
                 log.info("Booking {} marked as EXPIRED_NO_SHOW at store closing time", booking.getBookingCode());
             }
         }
