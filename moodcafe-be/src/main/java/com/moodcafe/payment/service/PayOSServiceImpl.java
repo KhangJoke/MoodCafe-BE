@@ -3,6 +3,11 @@ package com.moodcafe.payment.service;
 import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.booking.abstraction.repository.BookingRepository;
+import com.moodcafe.booking.abstraction.service.BookingService;
+import com.moodcafe.booking.entity.Booking;
+import com.moodcafe.booking.entity.enums.BookingStatus;
+import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
@@ -15,10 +20,6 @@ import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepos
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
 import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
-import com.moodcafe.booking.abstraction.repository.BookingRepository;
-import com.moodcafe.booking.abstraction.service.BookingService;
-import com.moodcafe.booking.entity.Booking;
-import com.moodcafe.booking.entity.enums.BookingStatus;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -41,7 +42,7 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-public class PayOSService {
+public class PayOSServiceImpl implements PayOSService {
 
     private final PayOS payOS;
     private final PayOSConfig payOSConfig;
@@ -64,7 +65,7 @@ public class PayOSService {
     @Lazy
     private BookingService bookingService;
 
-    public PayOSService(
+    public PayOSServiceImpl(
             @Autowired(required = false) PayOS payOS,
             PayOSConfig payOSConfig,
             SubscriptionPaymentRepository subscriptionPaymentRepository,
@@ -88,6 +89,15 @@ public class PayOSService {
         this.sponsoredListingService = sponsoredListingService;
     }
 
+    public void setBookingRepository(BookingRepository bookingRepository) {
+        this.bookingRepository = bookingRepository;
+    }
+
+    public void setBookingService(BookingService bookingService) {
+        this.bookingService = bookingService;
+    }
+
+    @Override
     public boolean isConfigured() {
         return payOS != null && payOSConfig.isConfigured();
     }
@@ -95,6 +105,7 @@ public class PayOSService {
     /**
      * Tạo Link thanh toán PayOS / VietQR cho UUID (Hỗ trợ cả Subscription và Sponsored Campaign)
      */
+    @Override
     @Transactional
     public PayOSResponse createPaymentLink(UUID orderId) {
         if (orderId == null) {
@@ -106,6 +117,7 @@ public class PayOSService {
     /**
      * 1. Tạo Link thanh toán PayOS / VietQR cho Order ID (Long)
      */
+    @Override
     @Transactional
     public PayOSResponse createPaymentLink(Long orderId) {
         return createPaymentLink(String.valueOf(orderId));
@@ -114,6 +126,7 @@ public class PayOSService {
     /**
      * 1. Tạo Link thanh toán PayOS / VietQR (Hỗ trợ cả String orderId / UUID PaymentId / CampaignId)
      */
+    @Override
     @Transactional
     public PayOSResponse createPaymentLink(String orderId) {
         if (!isConfigured()) {
@@ -185,6 +198,7 @@ public class PayOSService {
     /**
      * Tạo Link thanh toán trực tiếp cho một thực thể SubscriptionPayment đã tạo
      */
+    @Override
     @Transactional
     public PayOSResponse createPaymentLinkForSubscriptionPayment(SubscriptionPayment payment) {
         if (!isConfigured()) {
@@ -246,6 +260,7 @@ public class PayOSService {
     /**
      * Tạo Link thanh toán PayOS / VietQR trực tiếp cho thực thể SponsoredListing đã tạo
      */
+    @Override
     @Transactional
     public PayOSResponse createPaymentLinkForSponsoredListing(SponsoredListing campaign) {
         if (!isConfigured()) {
@@ -313,6 +328,7 @@ public class PayOSService {
     /**
      * Tạo Link thanh toán PayOS / VietQR cho đơn Đặt chỗ trước (Pre-order Booking)
      */
+    @Override
     @Transactional
     public PayOSResponse createPaymentLinkForBooking(Booking booking) {
         if (!isConfigured()) {
@@ -372,6 +388,7 @@ public class PayOSService {
     /**
      * 2. Tiếp nhận Webhook từ PayOS khi khách đã thanh toán thành công
      */
+    @Override
     @Transactional
     public void handlePayOSWebhook(PayOSWebhookRequest request) {
         if (request == null) {
@@ -462,6 +479,7 @@ public class PayOSService {
     /**
      * 3. Kiểm tra trạng thái đơn chủ động (Polling / Khách ấn 'Tôi đã thanh toán')
      */
+    @Override
     @Transactional
     public boolean checkPaymentStatus(Long orderCode) {
         if (orderCode == null) {
@@ -604,6 +622,7 @@ public class PayOSService {
     /**
      * Format description: Tối đa 25 ký tự, chữ và số không dấu, không ký tự đặc biệt
      */
+    @Override
     public String sanitizeDescription(String input) {
         if (input == null || input.isBlank()) {
             return "MOODCAFE";
@@ -624,6 +643,7 @@ public class PayOSService {
     /**
      * Lấy thông tin ngữ cảnh của một mã đơn thanh toán PayOS (Booking, Subscription, Sponsored)
      */
+    @Override
     @Transactional(readOnly = true)
     public PaymentOrderInfoResponse getOrderInfo(Long orderCode) {
         if (orderCode == null) {

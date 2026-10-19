@@ -4,7 +4,8 @@ import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
-import com.moodcafe.payment.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.service.PayOSServiceImpl;
 import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepository;
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
@@ -51,11 +52,11 @@ class PayOSServiceTest {
     @Mock
     private com.moodcafe.sponsored.abstraction.service.SponsoredListingService sponsoredListingService;
 
-    private PayOSService payOSService;
+    private PayOSServiceImpl payOSService;
 
     @BeforeEach
     void setUp() {
-        payOSService = new PayOSService(
+        payOSService = new PayOSServiceImpl(
                 payOS,
                 payOSConfig,
                 subscriptionPaymentRepository,

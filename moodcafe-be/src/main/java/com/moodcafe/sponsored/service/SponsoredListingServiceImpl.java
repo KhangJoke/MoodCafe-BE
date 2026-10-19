@@ -2,7 +2,7 @@ package com.moodcafe.sponsored.service;
 
 import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.entity.User;
-import com.moodcafe.payment.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.shared.response.PageResponse;

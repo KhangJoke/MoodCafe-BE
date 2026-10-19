@@ -25,7 +25,7 @@ import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.booking.entity.enums.SlotStatus;
 import com.moodcafe.booking.mapper.BookingMapper;
 import com.moodcafe.payment.dto.response.PayOSResponse;
-import com.moodcafe.payment.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moodcafe.shared.exceptions.AppException;

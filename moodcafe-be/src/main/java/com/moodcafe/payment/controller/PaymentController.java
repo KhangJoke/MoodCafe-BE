@@ -3,7 +3,7 @@ package com.moodcafe.payment.controller;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
 import com.moodcafe.payment.dto.response.PaymentOrderInfoResponse;
-import com.moodcafe.payment.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PayOSService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

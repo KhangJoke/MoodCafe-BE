@@ -27,6 +27,7 @@ import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
 import com.moodcafe.subscription.entity.enums.SubscriptionPlanCode;
 import com.moodcafe.subscription.entity.enums.SubscriptionStatus;
 import com.moodcafe.subscription.mapper.SubscriptionMapper;
+import com.moodcafe.payment.abstraction.service.PayOSService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -63,7 +64,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final StoreStaffRepository storeStaffRepository;
     private final SubscriptionMapper subscriptionMapper;
     @org.springframework.context.annotation.Lazy
-    private final com.moodcafe.payment.service.PayOSService payOSService;
+    private final PayOSService payOSService;
 
     @Override
     @Transactional(readOnly = true)
