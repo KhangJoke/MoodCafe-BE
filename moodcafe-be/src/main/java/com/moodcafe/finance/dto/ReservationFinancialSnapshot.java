@@ -35,6 +35,8 @@ public class ReservationFinancialSnapshot {
      */
     private BigDecimal commissionRate;
 
+    private java.util.UUID commissionPolicyId;
+
     /**
      * Platform gross commission (commission_amount = gross * commission_rate).
      */

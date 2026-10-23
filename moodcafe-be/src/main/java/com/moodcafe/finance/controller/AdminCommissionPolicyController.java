@@ -1,106 +1,40 @@
 package com.moodcafe.finance.controller;
 
-import com.moodcafe.finance.abstraction.repository.CommissionPolicyRepository;
-import com.moodcafe.finance.entity.CommissionPolicy;
-import com.moodcafe.shared.error.ErrorCode;
-import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.finance.service.CommissionPolicyService;
 import com.moodcafe.shared.response.ApiResponse;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
+import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
-@Tag(name = "Admin - Commission Policies", description = "APIs quản lý chính sách hoa hồng sàn & theo cơ sở")
 @RestController
 @RequestMapping("/api/admin/commission-policies")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminCommissionPolicyController {
-
-    private final CommissionPolicyRepository commissionPolicyRepository;
-
-    @Operation(summary = "1. Lấy danh sách chính sách hoa hồng (Global & Store)")
+    private final CommissionPolicyService service;
+    public record PolicyRequest(UUID storeId, BigDecimal commissionRate, Instant effectiveFrom, Instant effectiveTo, Boolean isActive) {}
+    public record RevisionRequest(BigDecimal commissionRate, Instant effectiveFrom) {}
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<List<CommissionPolicy>>> getPolicies(
-            @RequestParam(required = false) UUID storeId
-    ) {
-        List<CommissionPolicy> policies;
-        if (storeId != null) {
-            policies = commissionPolicyRepository.findByStoreId(storeId);
-        } else {
-            policies = commissionPolicyRepository.findAll();
-        }
-        return ResponseEntity.ok(ApiResponse.success(policies, "Lấy danh sách chính sách hoa hồng thành công"));
+    public ApiResponse<List<CommissionPolicyService.PolicyView>> list(@RequestParam(required = false) UUID storeId) {
+        return ApiResponse.success(service.list(storeId));
     }
-
-    @Operation(summary = "2. Tạo mới chính sách hoa hồng (storeId = null là Global)")
+    @GetMapping("/{policyId}/audit")
+    public ApiResponse<List<Map<String,Object>>> audit(@PathVariable UUID policyId) {
+        return ApiResponse.success(service.audit(policyId));
+    }
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<CommissionPolicy>> createPolicy(
-            @RequestBody CreateCommissionPolicyRequest request
-    ) {
-        if (request.getCommissionRate() == null ||
-                request.getCommissionRate().compareTo(BigDecimal.ZERO) < 0 ||
-                request.getCommissionRate().compareTo(BigDecimal.ONE) > 0) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Tỷ lệ hoa hồng phải từ 0.00 đến 1.00 (0% - 100%)");
-        }
-
-        CommissionPolicy policy = CommissionPolicy.builder()
-                .storeId(request.getStoreId())
-                .commissionRate(request.getCommissionRate())
-                .effectiveFrom(request.getEffectiveFrom() != null ? request.getEffectiveFrom() : Instant.now())
-                .effectiveTo(request.getEffectiveTo())
-                .isActive(request.getIsActive() != null ? request.getIsActive() : true)
-                .build();
-
-        CommissionPolicy saved = commissionPolicyRepository.save(policy);
-        return ResponseEntity.ok(ApiResponse.success(saved, "Tạo chính sách hoa hồng thành công"));
+    public ApiResponse<CommissionPolicyService.PolicyView> create(@RequestBody PolicyRequest request) {
+        return ApiResponse.success(service.create(request.storeId(), request.commissionRate(), request.effectiveFrom(), request.effectiveTo(), request.isActive()));
     }
-
-    @Operation(summary = "3. Cập nhật trạng thái chính sách hoa hồng")
+    @PostMapping("/{policyId}/revisions")
+    public ApiResponse<CommissionPolicyService.PolicyView> revise(@PathVariable UUID policyId, @RequestBody RevisionRequest request) {
+        return ApiResponse.success(service.revise(policyId, request.commissionRate(), request.effectiveFrom()));
+    }
     @PutMapping("/{policyId}/status")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<CommissionPolicy>> updatePolicyStatus(
-            @PathVariable UUID policyId,
-            @RequestParam boolean isActive
-    ) {
-        CommissionPolicy policy = commissionPolicyRepository.findById(policyId)
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy chính sách hoa hồng"));
-
-        policy.setIsActive(isActive);
-        CommissionPolicy updated = commissionPolicyRepository.save(policy);
-        return ResponseEntity.ok(ApiResponse.success(updated, "Cập nhật trạng thái thành công"));
-    }
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class CreateCommissionPolicyRequest {
-        private UUID storeId;
-        private BigDecimal commissionRate;
-        private Instant effectiveFrom;
-        private Instant effectiveTo;
-        private Boolean isActive;
+    public ApiResponse<CommissionPolicyService.PolicyView> toggle(@PathVariable UUID policyId, @RequestParam boolean isActive) {
+        return ApiResponse.success(service.toggle(policyId, isActive));
     }
 }

@@ -118,6 +118,9 @@ public class Booking {
     @Column(name = "customer_paid_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal customerPaidAmount = BigDecimal.ZERO;
 
+    @Column(name = "commission_policy_id")
+    private UUID commissionPolicyId;
+
     @Builder.Default
     @Column(name = "commission_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal commissionAmount = BigDecimal.ZERO;

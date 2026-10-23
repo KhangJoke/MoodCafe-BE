@@ -41,7 +41,8 @@ public class ReservationPricingService {
         Instant now = Instant.now();
 
         // 1. Resolve commission rate (store override -> global policy -> default 15%)
-        BigDecimal commissionRate = resolveCommissionRate(input, now);
+        CommissionPolicy policy = resolveCommissionPolicy(input, now);
+        BigDecimal commissionRate = policy == null ? DEFAULT_COMMISSION_RATE : policy.getCommissionRate();
 
         // 2. Gross commission amount
         BigDecimal commissionAmount = grossAmount.multiply(commissionRate).setScale(0, RoundingMode.HALF_UP);
@@ -88,6 +89,7 @@ public class ReservationPricingService {
                 .voucherDiscount(voucherDiscount)
                 .customerPaidAmount(customerPaidAmount)
                 .commissionRate(commissionRate)
+                .commissionPolicyId(policy == null ? null : policy.getPolicyId())
                 .commissionAmount(commissionAmount)
                 .merchantNetAmount(merchantNetAmount)
                 .platformNetRevenue(platformNetRevenue)
@@ -96,19 +98,19 @@ public class ReservationPricingService {
                 .build();
     }
 
-    private BigDecimal resolveCommissionRate(ReservationPricingInput input, Instant now) {
+    private CommissionPolicy resolveCommissionPolicy(ReservationPricingInput input, Instant now) {
         if (input.getStoreId() != null) {
             List<CommissionPolicy> storePolicies = commissionPolicyRepository.findActiveStorePolicies(input.getStoreId(), now);
             if (!storePolicies.isEmpty()) {
-                return storePolicies.get(0).getCommissionRate();
+                return storePolicies.get(0);
             }
         }
 
         List<CommissionPolicy> globalPolicies = commissionPolicyRepository.findActiveGlobalPolicies(now);
         if (!globalPolicies.isEmpty()) {
-            return globalPolicies.get(0).getCommissionRate();
+            return globalPolicies.get(0);
         }
 
-        return DEFAULT_COMMISSION_RATE;
+        return null;
     }
 }

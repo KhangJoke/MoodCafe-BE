@@ -59,6 +59,12 @@ public class CommissionPolicy {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Column(name = "supersedes_policy_id")
+    private UUID supersedesPolicyId;
+
+    @Column(name = "changed_by")
+    private UUID changedBy;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

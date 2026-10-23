@@ -38,6 +38,8 @@ public class BookingScheduledJobs {
 
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
+    @Autowired
+    private com.moodcafe.finance.service.BookingCommissionService commissionService;
     private final BookingRepository bookingRepository;
     private final StoreBookingConfigRepository configRepository;
     private final BookingService bookingService;
@@ -126,7 +128,7 @@ public class BookingScheduledJobs {
                 booking.setCompletedAt(Instant.now());
                 bookingRepository.save(booking);
 
-                if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+                if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
                     merchantWalletService.settleToAvailable(
                             booking.getStore().getStoreId(),
                             booking.getMerchantNetAmount(),
@@ -177,7 +179,7 @@ public class BookingScheduledJobs {
                 booking.setStatus(BookingStatus.EXPIRED_NO_SHOW);
                 bookingRepository.save(booking);
 
-                if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+                if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
                     merchantWalletService.settleToAvailable(
                             booking.getStore().getStoreId(),
                             booking.getMerchantNetAmount(),

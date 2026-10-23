@@ -87,6 +87,9 @@ public class BookingQuote {
     @Column(name = "commission_rate", nullable = false, precision = 5, scale = 4)
     private BigDecimal commissionRate;
 
+    @Column(name = "commission_policy_id")
+    private UUID commissionPolicyId;
+
     @Column(name = "commission_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal commissionAmount;
 

@@ -19,8 +19,8 @@ public interface CommissionPolicyRepository extends JpaRepository<CommissionPoli
         WHERE cp.storeId = :storeId
           AND cp.isActive = true
           AND cp.effectiveFrom <= :now
-          AND (cp.effectiveTo IS NULL OR cp.effectiveTo >= :now)
-        ORDER BY cp.createdAt DESC
+          AND (cp.effectiveTo IS NULL OR cp.effectiveTo > :now)
+        ORDER BY cp.effectiveFrom DESC, cp.createdAt DESC, cp.policyId DESC
     """)
     List<CommissionPolicy> findActiveStorePolicies(@Param("storeId") UUID storeId, @Param("now") Instant now);
 
@@ -29,12 +29,16 @@ public interface CommissionPolicyRepository extends JpaRepository<CommissionPoli
         WHERE cp.storeId IS NULL
           AND cp.isActive = true
           AND cp.effectiveFrom <= :now
-          AND (cp.effectiveTo IS NULL OR cp.effectiveTo >= :now)
-        ORDER BY cp.createdAt DESC
+          AND (cp.effectiveTo IS NULL OR cp.effectiveTo > :now)
+        ORDER BY cp.effectiveFrom DESC, cp.createdAt DESC, cp.policyId DESC
     """)
     List<CommissionPolicy> findActiveGlobalPolicies(@Param("now") Instant now);
 
     List<CommissionPolicy> findByStoreId(UUID storeId);
 
     List<CommissionPolicy> findByStoreIdIsNull();
+
+    @Query("SELECT cp FROM CommissionPolicy cp WHERE cp.storeId = :storeId OR cp.storeId IS NULL ORDER BY cp.effectiveFrom DESC, cp.policyId DESC")
+    org.springframework.data.domain.Page<CommissionPolicy> findRelevantPolicies(@Param("storeId") UUID storeId, org.springframework.data.domain.Pageable pageable);
+
 }

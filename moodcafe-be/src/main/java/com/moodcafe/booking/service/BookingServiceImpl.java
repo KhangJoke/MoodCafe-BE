@@ -97,6 +97,9 @@ public class BookingServiceImpl implements BookingService {
             BookingStatus.CHECKED_IN
     );
 
+    @Autowired
+    private com.moodcafe.finance.service.BookingCommissionService commissionService;
+
     private final BookingRepository bookingRepository;
     private final TableCategoryRepository tableCategoryRepository;
     private final StoreBookingConfigRepository configRepository;
@@ -511,6 +514,7 @@ public class BookingServiceImpl implements BookingService {
                 .voucherDiscount(snapshot.getVoucherDiscount())
                 .customerPaidAmount(snapshot.getCustomerPaidAmount())
                 .commissionRate(snapshot.getCommissionRate())
+                .commissionPolicyId(snapshot.getCommissionPolicyId())
                 .commissionAmount(snapshot.getCommissionAmount())
                 .merchantNetAmount(snapshot.getMerchantNetAmount())
                 .voucherRefundFundedAmount(snapshot.getVoucherRefundFundedAmount())
@@ -708,6 +712,7 @@ public class BookingServiceImpl implements BookingService {
                 .voucherDiscount(quote.getVoucherDiscount())
                 .customerPaidAmount(quote.getCustomerPaidAmount())
                 .commissionRate(quote.getCommissionRate())
+                .commissionPolicyId(quote.getCommissionPolicyId())
                 .commissionAmount(quote.getCommissionAmount())
                 .merchantNetAmount(quote.getMerchantNetAmount())
                 .voucherRefundFundedAmount(quote.getVoucherRefundFundedAmount())
@@ -738,6 +743,7 @@ public class BookingServiceImpl implements BookingService {
                 .grossAmount(snapshot.getGrossAmount())
                 .voucherDiscount(snapshot.getVoucherDiscount())
                 .customerPaidAmount(snapshot.getCustomerPaidAmount())
+                .commissionPolicyId(snapshot.getCommissionPolicyId())
                 .commissionAmount(snapshot.getCommissionAmount())
                 .merchantNetAmount(snapshot.getMerchantNetAmount())
                 .voucher(voucher)
@@ -786,7 +792,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         if (!requiresDeposit) {
-            if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+            if (commissionService.record(booking, "HOLD") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
                 if (merchantWalletService != null) merchantWalletService.holdPending(
                         booking.getStore().getStoreId(),
                         booking.getMerchantNetAmount(),
@@ -884,7 +890,7 @@ public class BookingServiceImpl implements BookingService {
             }
 
             // Hold net amount in merchant pending balance
-            if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+            if (commissionService.record(booking, "HOLD") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
                 if (merchantWalletService != null) merchantWalletService.holdPending(
                         booking.getStore().getStoreId(),
                         booking.getMerchantNetAmount(),
@@ -1133,7 +1139,7 @@ public class BookingServiceImpl implements BookingService {
 
         // Revert merchant pending balance if booking was PAID_CONFIRMED
         if (booking.getStatus() == BookingStatus.PAID_CONFIRMED) {
-            if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+            if (commissionService.record(booking, "REVERSE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
                 if (merchantWalletService != null) merchantWalletService.revertPending(
                         booking.getStore().getStoreId(),
                         booking.getMerchantNetAmount(),
@@ -1573,7 +1579,7 @@ public class BookingServiceImpl implements BookingService {
         User currentUser = currentUserService.getCurrentUser();
         storeStaffService.requireStoreAccess(storeId);
 
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (!booking.getStore().getStoreId().equals(storeId)) {
@@ -1589,7 +1595,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setClaimedLateAt(Instant.now());
         booking = bookingRepository.save(booking);
 
-        if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
             if (merchantWalletService != null) merchantWalletService.settleToAvailable(
                     booking.getStore().getStoreId(),
                     booking.getMerchantNetAmount(),
@@ -1622,7 +1628,7 @@ public class BookingServiceImpl implements BookingService {
         User currentUser = currentUserService.getCurrentUser();
         storeStaffService.requireStoreAccess(storeId);
 
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (!booking.getStore().getStoreId().equals(storeId)) {
@@ -1638,7 +1644,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setCompletedAt(Instant.now());
         booking = bookingRepository.save(booking);
 
-        if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
             if (merchantWalletService != null) merchantWalletService.settleToAvailable(
                     booking.getStore().getStoreId(),
                     booking.getMerchantNetAmount(),
@@ -1669,7 +1675,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse selfCheckIn(UUID bookingId, String qrToken) {
         User currentUser = currentUserService.getCurrentUser();
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (!booking.getUser().getUserId().equals(currentUser.getUserId())) {
@@ -1714,7 +1720,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse selfCheckOut(UUID bookingId, String qrToken) {
         User currentUser = currentUserService.getCurrentUser();
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (!booking.getUser().getUserId().equals(currentUser.getUserId())) {
@@ -1734,7 +1740,7 @@ public class BookingServiceImpl implements BookingService {
         booking.setCompletedAt(now);
         booking = bookingRepository.save(booking);
 
-        if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
             if (merchantWalletService != null) merchantWalletService.settleToAvailable(
                     booking.getStore().getStoreId(),
                     booking.getMerchantNetAmount(),
@@ -1805,7 +1811,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void settleNoShowRevenue(Booking booking) {
-        if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
             if (merchantWalletService != null) {
                 merchantWalletService.settleToAvailable(
                         booking.getStore().getStoreId(),
