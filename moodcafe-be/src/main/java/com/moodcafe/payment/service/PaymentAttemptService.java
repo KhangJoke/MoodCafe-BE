@@ -14,6 +14,8 @@ import vn.payos.model.v2.paymentRequests.PaymentLinkStatus;
 
 import java.math.BigDecimal;
 import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -64,6 +66,15 @@ public class PaymentAttemptService {
 
     public Optional<PaymentAttempt> findByOrderCode(Long orderCode) {
         return paymentAttemptRepository.findByOrderCode(orderCode);
+    }
+
+    public List<PaymentAttempt> findBookingAttempts(String bookingId) {
+        return paymentAttemptRepository.findAllByBusinessTypeAndBusinessIdOrderByCreatedAtDesc("BOOKING", bookingId);
+    }
+
+    public Optional<PaymentAttempt> findActiveBookingAttempt(String bookingId) {
+        return paymentAttemptRepository.findFirstByBusinessTypeAndBusinessIdAndStatusInOrderByCreatedAtDesc(
+                "BOOKING", bookingId, List.of("PENDING", "UNKNOWN"));
     }
 
     public Optional<PaymentAttempt> findByIntentKey(String intentKey) {

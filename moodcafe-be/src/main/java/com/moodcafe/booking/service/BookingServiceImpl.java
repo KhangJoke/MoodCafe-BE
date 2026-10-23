@@ -747,6 +747,7 @@ public class BookingServiceImpl implements BookingService {
                 .actualPaidAmount(BigDecimal.ZERO)
                 .paidAt(requiresDeposit ? null : Instant.now())
                 .paymentOrderCode(orderCode)
+                .paymentExpiresAt(Instant.now().plus(Duration.ofMinutes(15)))
                 .freeCancelDeadline(deadlines.freeCancelDeadline())
                 .graceDeadline(deadlines.graceDeadline())
                 .serviceClosingDeadline(deadlines.serviceClosingDeadline())
@@ -816,7 +817,16 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public void confirmBookingPayment(Long paymentOrderCode, Long paidAmountVnd) {
-        Booking booking = bookingRepository.findByOrderCodeForUpdate(paymentOrderCode)
+        Booking booking = paymentAttemptService.findByOrderCode(paymentOrderCode)
+                .filter(a -> "BOOKING".equalsIgnoreCase(a.getBusinessType()))
+                .flatMap(a -> {
+                    try {
+                        return bookingRepository.findByIdForUpdate(UUID.fromString(a.getBusinessId()));
+                    } catch (IllegalArgumentException ignored) {
+                        return Optional.empty();
+                    }
+                })
+                .or(() -> bookingRepository.findByOrderCodeForUpdate(paymentOrderCode))
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (paidAmountVnd == null || paidAmountVnd < 0) {
@@ -1225,15 +1235,23 @@ public class BookingServiceImpl implements BookingService {
         Long orderCode = prepared.getPaymentOrderCode();
         // Recover persisted gateway details first. Never allocate a new order code on retry.
         Optional<PaymentAttempt> attempt = paymentAttemptService.findByOrderCode(orderCode);
-        if (attempt.isPresent() && "CANCELLED".equalsIgnoreCase(attempt.get().getStatus())) {
+        if (isPaymentDeadlinePassed(prepared)) {
             timeoutPendingBooking(prepared.getBookingId());
-            throw new AppException(ErrorCode.BAD_REQUEST, "Giao dịch thanh toán đã bị hủy trên PayOS. Vui lòng đặt lại đơn mới.");
+            throw new AppException(ErrorCode.BAD_REQUEST, "Đơn đặt bàn đã hết thời gian giữ chỗ.");
+        }
+        if (attempt.isPresent() && isTerminalAttempt(attempt.get().getStatus())) {
+            prepared = createReplacementPaymentAttempt(prepared);
+            orderCode = prepared.getPaymentOrderCode();
+            attempt = paymentAttemptService.findByOrderCode(orderCode);
         }
         if (attempt.isPresent() && attempt.get().getCheckoutUrl() != null) {
             var observation = paymentAttemptService.reconcile(orderCode);
-            if (observation != null && observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.CANCELLED) {
-                timeoutPendingBooking(prepared.getBookingId());
-                throw new AppException(ErrorCode.BAD_REQUEST, "Giao dịch thanh toán đã bị hủy trên PayOS. Vui lòng đặt lại đơn mới.");
+            if (observation != null && (observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.CANCELLED
+                    || observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.EXPIRED)) {
+                paymentAttemptService.markStatus(orderCode, observation.getStatus().name());
+                prepared = createReplacementPaymentAttempt(prepared);
+                orderCode = prepared.getPaymentOrderCode();
+                attempt = paymentAttemptService.findByOrderCode(orderCode);
             }
             if (observation != null && observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
                 inTransaction(() -> {
@@ -1289,6 +1307,41 @@ public class BookingServiceImpl implements BookingService {
             log.warn("Gateway outcome unknown for booking {} / order {}", prepared.getBookingId(), orderCode);
             return prepared;
         }
+    }
+
+    private boolean isTerminalAttempt(String status) {
+        return "CANCELLED".equalsIgnoreCase(status) || "EXPIRED".equalsIgnoreCase(status);
+    }
+
+    private boolean isPaymentDeadlinePassed(BookingResponse booking) {
+        return booking.getPaymentExpiresAt() != null && !Instant.now().isBefore(booking.getPaymentExpiresAt());
+    }
+
+    /** Creates a new PayOS session while preserving the original booking hold and voucher lock. */
+    private BookingResponse createReplacementPaymentAttempt(BookingResponse prepared) {
+        return inTransaction(() -> {
+            Booking booking = bookingRepository.findByIdForUpdate(prepared.getBookingId())
+                    .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+            if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+                return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
+            }
+            if (booking.getPaymentExpiresAt() != null && !Instant.now().isBefore(booking.getPaymentExpiresAt())) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Đơn đặt bàn đã hết thời gian giữ chỗ.");
+            }
+            Optional<PaymentAttempt> active = paymentAttemptService.findActiveBookingAttempt(booking.getBookingId().toString());
+            if (active.isPresent()) {
+                booking.setPaymentOrderCode(active.get().getOrderCode());
+                bookingRepository.save(booking);
+                return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
+            }
+            long replacementOrderCode = orderCodeGeneratorService.nextOrderCode();
+            paymentAttemptService.createAttempt("BOOKING", booking.getBookingId().toString(), replacementOrderCode,
+                    booking.getCustomerPaidAmount(), "VND", null, booking.getUser().getUserId(), null);
+            booking.setPaymentOrderCode(replacementOrderCode);
+            booking.setPaymentUrl(null);
+            bookingRepository.save(booking);
+            return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
+        });
     }
 
     @Override
@@ -1782,6 +1835,9 @@ public class BookingServiceImpl implements BookingService {
         res.setVoucherDiscount(booking.getVoucherDiscount());
         res.setCustomerPaidAmount(booking.getCustomerPaidAmount());
         res.setActualPaidAmount(booking.getActualPaidAmount());
+        res.setPaymentExpiresAt(booking.getPaymentExpiresAt());
+        paymentAttemptService.findByOrderCode(booking.getPaymentOrderCode())
+                .ifPresent(attempt -> res.setPaymentSessionStatus(attempt.getStatus()));
         res.setGuestCount(booking.getGuestCount());
         res.setFreeCancelDeadline(booking.getFreeCancelDeadline());
         res.setGraceDeadline(booking.getGraceDeadline());

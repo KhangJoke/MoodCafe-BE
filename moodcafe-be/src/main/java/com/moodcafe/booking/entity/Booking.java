@@ -156,6 +156,13 @@ public class Booking {
     @Column(name = "payment_order_code")
     private Long paymentOrderCode;
 
+    /**
+     * Server-side hold deadline for the booking. Recreating a PayOS link must
+     * never extend this value.
+     */
+    @Column(name = "payment_expires_at")
+    private Instant paymentExpiresAt;
+
     @Column(name = "qr_code_token", length = 255)
     private String qrCodeToken;
 

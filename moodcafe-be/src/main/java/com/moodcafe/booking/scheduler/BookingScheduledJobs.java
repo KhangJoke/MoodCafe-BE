@@ -58,8 +58,8 @@ public class BookingScheduledJobs {
      */
     @Scheduled(fixedRate = 60000)
     public void timeoutUnpaidBookings() {
-        Instant threshold = Instant.now().minus(Duration.ofMinutes(15));
-        for (Booking candidate : bookingRepository.findAllByStatusAndCreatedAtBefore(BookingStatus.PENDING_PAYMENT, threshold)) {
+        Instant threshold = Instant.now();
+        for (Booking candidate : bookingRepository.findAllByStatusAndPaymentExpiresAtBefore(BookingStatus.PENDING_PAYMENT, threshold)) {
             try {
                 bookingService.timeoutPendingBooking(candidate.getBookingId());
             } catch (Exception e) {

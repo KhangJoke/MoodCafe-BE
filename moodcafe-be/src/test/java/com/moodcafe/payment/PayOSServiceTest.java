@@ -224,6 +224,27 @@ class PayOSServiceTest {
     }
 
     @Test
+    void cancelledBookingPaymentSessionDoesNotCancelTheBooking() {
+        long orderCode = 1800000004L;
+        var bookingRepository = mock(com.moodcafe.booking.abstraction.repository.BookingRepository.class);
+        var bookingService = mock(com.moodcafe.booking.abstraction.service.BookingService.class);
+        payOSService.setBookingRepository(bookingRepository);
+        payOSService.setBookingService(bookingService);
+        when(payOSConfig.isConfigured()).thenReturn(true);
+
+        var requests = mock(vn.payos.service.blocking.v2.paymentRequests.PaymentRequestsService.class);
+        var link = mock(vn.payos.model.v2.paymentRequests.PaymentLink.class);
+        when(payOS.paymentRequests()).thenReturn(requests);
+        when(requests.get(orderCode)).thenReturn(link);
+        when(link.getStatus()).thenReturn(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.CANCELLED);
+
+        assertFalse(payOSService.checkPaymentStatus(orderCode));
+
+        verify(paymentAttemptService).markStatus(orderCode, "CANCELLED");
+        verify(bookingService, never()).timeoutPendingBooking(any());
+    }
+
+    @Test
     void duplicateCreateAfterAcceptedTimeoutRecoversSameGatewayLink() {
         when(payOSConfig.getReturnUrl()).thenReturn("https://app.test/payment/return");
         when(payOSConfig.getCancelUrl()).thenReturn("https://app.test/payment/return");

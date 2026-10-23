@@ -44,6 +44,8 @@ public class BookingResponse {
     private BigDecimal customerPaidAmount;
     private BigDecimal actualPaidAmount;
     private Long paymentOrderCode;
+    private Instant paymentExpiresAt;
+    private String paymentSessionStatus;
     private String checkoutUrl;
     private String paymentQrCode;
     private String paymentAccountNumber;

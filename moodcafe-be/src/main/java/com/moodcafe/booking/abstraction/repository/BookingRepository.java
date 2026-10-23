@@ -150,4 +150,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     List<Booking> findAllByStatusWithStore(@Param("status") BookingStatus status);
 
     List<Booking> findAllByStatus(BookingStatus status);
+
+    List<Booking> findAllByStatusAndPaymentExpiresAtBefore(BookingStatus status, Instant threshold);
 }
