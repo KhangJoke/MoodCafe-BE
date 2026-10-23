@@ -1252,39 +1252,42 @@ public class BookingServiceImpl implements BookingService {
                 prepared = createReplacementPaymentAttempt(prepared);
                 orderCode = prepared.getPaymentOrderCode();
                 attempt = paymentAttemptService.findByOrderCode(orderCode);
-            }
-            if (observation != null && observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
+            } else if (observation != null && observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
+                final Long paidOrderCode = orderCode;
                 inTransaction(() -> {
-                    confirmBookingPayment(orderCode,
+                    confirmBookingPayment(paidOrderCode,
                             observation.getAmount() != null ? observation.getAmount().longValueExact() : null);
                     return null;
                 });
                 Booking booking = bookingRepository.findById(prepared.getBookingId()).orElseThrow();
                 return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
+            } else {
+                prepared.setCheckoutUrl(attempt.get().getCheckoutUrl());
+                prepared.setPaymentQrCode(attempt.get().getQrCodeUrl());
+                return prepared;
             }
-            prepared.setCheckoutUrl(attempt.get().getCheckoutUrl());
-            prepared.setPaymentQrCode(attempt.get().getQrCodeUrl());
-            return prepared;
         }
+        final BookingResponse activeBooking = prepared;
+        final Long activeOrderCode = orderCode;
         try {
-            PayOSResponse gateway = payOSService.createBookingPaymentLink(prepared.getBookingId(), orderCode,
-                    prepared.getCustomerPaidAmount().longValueExact(), "DATBAN " + orderCode);
-            if (gateway == null) return prepared;
+            PayOSResponse gateway = payOSService.createBookingPaymentLink(activeBooking.getBookingId(), activeOrderCode,
+                    activeBooking.getCustomerPaidAmount().longValueExact(), "DATBAN " + activeOrderCode);
+            if (gateway == null) return activeBooking;
             if ("PAID".equals(gateway.getStatus())) {
-                var observed = paymentAttemptService.reconcile(orderCode);
+                var observed = paymentAttemptService.reconcile(activeOrderCode);
                 if (observed != null && observed.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
-                    inTransaction(() -> { confirmBookingPayment(orderCode,
+                    inTransaction(() -> { confirmBookingPayment(activeOrderCode,
                             observed.getAmount() != null ? observed.getAmount().longValueExact() : null); return null; });
                 }
             }
             return inTransaction(() -> {
-                Booking booking = bookingRepository.findById(prepared.getBookingId())
+                Booking booking = bookingRepository.findById(activeBooking.getBookingId())
                         .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
                 if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
                     booking.setPaymentUrl(gateway.getCheckoutUrl());
                     bookingRepository.save(booking);
                 }
-                paymentAttemptService.recordGatewayResponse(orderCode, gateway.getPaymentLinkId(),
+                paymentAttemptService.recordGatewayResponse(activeOrderCode, gateway.getPaymentLinkId(),
                         gateway.getCheckoutUrl(), gateway.getQrCode());
                 cachePayOSResponse(booking.getBookingId(), gateway);
                 BookingResponse response = enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
@@ -1301,11 +1304,11 @@ public class BookingServiceImpl implements BookingService {
         } catch (Exception ex) {
             // Preparation already committed: accepted-but-timeout must retain booking, voucher and attempt.
             inTransaction(() -> {
-                paymentAttemptService.markStatus(orderCode, "UNKNOWN");
+                paymentAttemptService.markStatus(activeOrderCode, "UNKNOWN");
                 return null;
             });
-            log.warn("Gateway outcome unknown for booking {} / order {}", prepared.getBookingId(), orderCode);
-            return prepared;
+            log.warn("Gateway outcome unknown for booking {} / order {}", activeBooking.getBookingId(), activeOrderCode);
+            return activeBooking;
         }
     }
 
