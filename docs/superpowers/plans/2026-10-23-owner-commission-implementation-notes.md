@@ -1,5 +1,7 @@
 # Bàn giao quản lý hoa hồng Owner/Admin
 
+> Cập nhật sau bàn giao: lint FE đã được xử lý về 0 lỗi và V48 đã deploy lên AWS. Xem `2026-10-23-owner-commission-release.md` để biết trạng thái phát hành mới nhất; các giới hạn bên dưới mô tả lần bàn giao code ban đầu.
+
 Plan: `2026-10-23-owner-commission-management-plan.md`.
 
 ## Đã triển khai
