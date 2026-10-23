@@ -1,0 +1,65 @@
+# KẾ HOẠCH CHI TIẾT NGHIỆP VỤ & LUỒNG HOẠT ĐỘNG: HỆ THỐNG VÍ ĐỐI SOÁT, CHUYỂN TIỀN CHO QUÁN & KHUYẾN MÃI TÍCH ĐIỂM (MOODCAFE)
+
+Hệ thống tài chính và khuyến mãi của **MoodCafe** được thiết kế dựa trên mô hình **Thu hộ qua PayOS – Quản lý sổ cái nội bộ (Internal Ledger) – Đối soát rút tiền qua VietQR**, kết hợp chặt chẽ với vòng đời của đơn đặt chỗ.
+
+---
+
+## PHẦN 1: KIẾN TRÚC TỔNG QUAN 2 LOẠI VÍ TRONG HỆ THỐNG
+
+Để tách bạch hoàn toàn giữa **Tiền mặt (VNĐ)** của quán và **Điểm thưởng (`MoodPoints`)** của khách hàng, hệ thống vận hành 2 loại ví độc lập:
+
+| Loại Ví | Đối tượng sở hữu | Đơn vị tính | Mục đích cốt lõi |
+| :--- | :--- | :---: | :--- |
+| **1. Ví Cửa Hàng (`Merchant Wallet`)** | Mỗi Chi nhánh (`Store`) hoặc Chủ quán (`OWNER`)[cite: 3] | **VNĐ** *(Tiền thật)* | Ghi nhận doanh thu từ các đơn đặt bàn qua PayOS (sau khi đã trừ hoa hồng của App), tách bạch tiền đang tạm giữ và tiền khả dụng để `OWNER` rút về tài khoản ngân hàng. |
+| **2. Ví Điểm Thưởng (`Customer Loyalty Wallet`)** | Khách hàng (`CUSTOMER`) | **`MoodPoints`** *(Điểm nội bộ)* | Tích lũy điểm từ chi tiêu đặt bàn và hành vi tốt (đến đúng giờ, tự quét QR Check-out, viết Review) để đổi lấy **Voucher giảm giá** cho các lần đặt bàn sau. |
+
+---
+
+## PHẦN 2: CÔNG THỨC TÀI CHÍNH, HOA HỒNG & KHUYẾN MÃI TRÊN MỖI ĐƠN HÀNG
+
+Đây là phần nghiệp vụ quan trọng nhất để đảm bảo: **Khách được giảm giá bằng Voucher đổi điểm, nhưng Quán vẫn giao đủ nước và không bị thiệt hại doanh thu.**
+
+### 2.1. Ai chịu chi phí khi Khách hàng dùng Voucher Đổi Điểm?
+* Điểm `MoodPoints` là chương trình khách hàng thân thiết của nền tảng **MoodCafe** (khách tích điểm ở quán A có thể đổi Voucher dùng ở quán B).
+* Do đó, **Voucher đổi từ `MoodPoints` là Voucher do Sàn (MoodCafe) tài trợ**.
+* **Nguyên tắc bất di bất dịch:** Quán cà phê luôn nhận được doanh thu và giao nước dựa trên **Hạn mức gốc của bàn (`min_spend_amount`)**, không bị trừ tiền vì Voucher của Sàn. Khoản giảm giá Voucher sẽ được khấu trừ vào phần hoa hồng của MoodCafe (hoặc quỹ Marketing của Sàn).
+
+### 2.2. Bảng 5 Thông số Tài chính bắt buộc lưu trên mỗi Đơn Đặt Chỗ (`RESERVATIONS`)
+
+Giả sử:
+* Khách đặt **Bàn Đôi** có hạn mức đồ uống tối thiểu (`min_spend_amount`) = **`100.000đ`**.
+* Tỷ lệ hoa hồng MoodCafe thu của quán (`commission_rate`) = **`15%`** (tương đương `15.000đ`).
+* Khách dùng **Voucher đổi điểm** giảm **`10.000đ`**.
+
+Hệ thống sẽ tính toán và đóng băng 5 con số sau ngay lúc tạo đơn:
+
+| Tên trường trong DB | Công thức tính toán | Ví dụ minh họa | Quy tắc hiển thị & Sử dụng |
+| :--- | :--- | :---: | :--- |
+| **1. `gross_amount`** *(Hạn mức nước tại quầy)* | `= table_category.min_spend_amount` | **`100.000đ`** | **Hiển thị cho Thu ngân (`CASHIER`) trên Web FE[cite: 1, 3]:** Khi khách đến quầy, Thu ngân nhìn con số `100.000đ` này để cho khách chọn đủ `100.000đ` tiền nước. Thu ngân không cần biết khách đã áp mã giảm giá gì trên App. |
+| **2. `voucher_discount`** *(Tiền giảm từ Voucher)* | Mệnh giá Voucher hợp lệ khách áp vào đơn | **`10.000đ`** | Hiển thị trên hóa đơn của Khách hàng trên Mobile App. |
+| **3. `customer_paid_amount`** *(Khách thực trả)* | `= gross_amount - voucher_discount` | **`90.000đ`** | **Số tiền truyền vào API PayOS** để tạo mã VietQR cho khách quét thanh toán. |
+| **4. `commission_amount`** *(Hoa hồng gộp của Sàn)* | `= gross_amount * commission_rate` | **`15.000đ`** | Phí hoa hồng MoodCafe thu của quán (tính cố định trên `gross_amount`). |
+| **5. `merchant_net_amount`** *(Quán thực nhận về Ví)* | `= gross_amount - commission_amount` | **`85.000đ`** | **Số tiền cộng vào `Merchant Wallet` của quán.** Dù khách có dùng Voucher hay không, cứ 1 đơn `100.000đ` hoàn tất là quán nhận về đúng `85.000đ`. |
+| *(Chỉ số nội bộ Sàn)* **`platform_net_revenue`** | `= commission_amount - voucher_discount` | **`5.000đ`** | Doanh thu ròng thực tế MoodCafe giữ lại sau khi đã bù `10.000đ` tiền Voucher cho khách (`90k` thu từ PayOS - `85k` trả cho quán = `5k`). |
+
+> **Chốt chặn chống lỗ cho Sàn:** Hệ thống chỉ cho phép áp dụng Voucher có mệnh giá giảm tối đa bằng hoặc nhỏ hơn một ngưỡng quy định (ví dụ giảm tối đa `10.000đ – 20.000đ` cho đơn từ `100.000đ`) để dòng tiền thu vào từ PayOS (`customer_paid_amount`) luôn đủ trả phần `merchant_net_amount` cho quán.
+
+---
+
+## PHẦN 3: NGHIỆP VỤ VÍ CỬA HÀNG (`MERCHANT WALLET`) & LUỒNG CHUYỂN TIỀN CHO QUÁN
+
+### 3.1. Cơ chế 2 Ngăn Số Dư trong Ví Cửa Hàng
+Để tránh việc khách vừa thanh toán xong (nhưng chưa tới giờ hẹn, vẫn còn quyền hủy đơn trước `free_cancel_hours`[cite: 2]) mà chủ quán đã rút mất tiền, mỗi `Merchant Wallet` được thiết kế gồm **3 chỉ số**:
+
+1. **`pending_balance` (Số dư Tạm giữ / Chờ phục vụ):**
+   * Chứa khoản tiền `merchant_net_amount` của các đơn khách đã trả tiền (`PAID_CONFIRMED` hoặc `TABLE_EXPIRED`) nhưng **chưa hoàn tất phục vụ tại quán**.
+   * Chủ quán nhìn thấy số tiền này để yên tâm giữ bàn, nhưng **chưa được phép rút**.
+2. **`available_balance` (Số dư Khả dụng / Được phép rút):**
+   * Chứa khoản tiền `merchant_net_amount` của các đơn đã thực sự phục vụ xong hoặc đã hết hạn hoàn tiền.
+   * Chủ quán có thể tạo lệnh rút bất kỳ lúc nào từ ngăn này.
+3. **`locked_balance` (Số dư Đang chờ Admin chuyển khoản):**
+   * Khi Chủ quán bấm "Tạo lệnh rút tiền", tiền từ `available_balance` sẽ chuyển tạm sang `locked_balance` để chờ Admin quét QR chuyển khoản (chống việc Chủ quán bấm rút tiền nhiều lần liên tiếp khi Admin chưa kịp duyệt).
+
+---
+
+### 3.2. Ma trận Biến động Số dư

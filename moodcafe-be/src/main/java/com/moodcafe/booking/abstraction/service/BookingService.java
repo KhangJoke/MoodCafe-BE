@@ -1,10 +1,14 @@
 package com.moodcafe.booking.abstraction.service;
 
+import com.moodcafe.booking.dto.request.BookingQuoteRequest;
 import com.moodcafe.booking.dto.request.CancelBookingRequest;
 import com.moodcafe.booking.dto.request.CreateBookingRequest;
 import com.moodcafe.booking.dto.request.DeskCheckInRequest;
+import com.moodcafe.booking.dto.response.BookingCustomerDetailResponse;
 import com.moodcafe.booking.dto.response.BookingDeskSummaryResponse;
+import com.moodcafe.booking.dto.response.BookingQuoteResponse;
 import com.moodcafe.booking.dto.response.BookingResponse;
+import com.moodcafe.booking.dto.response.BookingStaffDetailResponse;
 import com.moodcafe.booking.dto.response.SlotAvailabilityResponse;
 import com.moodcafe.booking.dto.response.StoreDailyScheduleResponse;
 import com.moodcafe.booking.entity.Booking;
@@ -24,11 +28,19 @@ public interface BookingService {
 
     SlotAvailabilityResponse checkSlotAvailability(UUID storeId, UUID categoryId, Instant startTime);
 
+    BookingQuoteResponse getBookingQuote(BookingQuoteRequest request);
+
     BookingResponse createBooking(CreateBookingRequest request);
 
     void confirmBookingPayment(Long paymentOrderCode);
 
+    void confirmBookingPayment(Long paymentOrderCode, Long paidAmountVnd);
+
     BookingResponse getBookingDetail(UUID bookingId);
+
+    BookingCustomerDetailResponse getCustomerBookingDetail(UUID bookingId);
+
+    BookingStaffDetailResponse getStaffBookingDetail(UUID storeId, UUID bookingId);
 
     BookingResponse getBookingByCode(String bookingCode);
 
@@ -36,9 +48,13 @@ public interface BookingService {
 
     BookingResponse getBookingPaymentLink(UUID bookingId);
 
+    void timeoutPendingBooking(UUID bookingId);
+
     List<BookingResponse> getMyBookings();
 
     PageResponse<BookingResponse> getMyBookings(Pageable pageable);
+
+    PageResponse<BookingResponse> getMyBookings(String status, Pageable pageable);
 
     List<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to);
 
@@ -51,6 +67,10 @@ public interface BookingService {
     BookingResponse deskClaimLate(UUID storeId, UUID bookingId);
 
     BookingResponse deskComplete(UUID storeId, UUID bookingId);
+
+    BookingResponse selfCheckIn(UUID bookingId, String qrToken);
+
+    BookingResponse selfCheckOut(UUID bookingId, String qrToken);
 
     void dispatchBookingNotification(Booking booking, BookingEventType eventType, String customMsg);
 }

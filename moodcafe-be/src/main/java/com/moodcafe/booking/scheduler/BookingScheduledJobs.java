@@ -8,8 +8,17 @@ import com.moodcafe.booking.entity.StoreBookingConfig;
 import com.moodcafe.booking.entity.enums.BookingEventType;
 import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.store.entity.Store;
+import com.moodcafe.loyalty.service.LoyaltyRewardService;
+import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
+import com.moodcafe.voucher.entity.CustomerVoucher;
+import com.moodcafe.voucher.service.VoucherLifecycleService;
+import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.wallet.service.MerchantWalletService;
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,31 +41,30 @@ public class BookingScheduledJobs {
     private final BookingRepository bookingRepository;
     private final StoreBookingConfigRepository configRepository;
     private final BookingService bookingService;
+    private final CustomerVoucherRepository customerVoucherRepository;
+    private final MerchantWalletService merchantWalletService;
+    private final LoyaltyRewardService loyaltyRewardService;
+
+    @Autowired(required = false)
+    @Lazy
+    private PayOSService payOSService;
+
+    @Autowired(required = false)
+    private VoucherLifecycleService voucherLifecycleService;
 
     /**
      * Tác vụ 1: Quét các đơn PENDING_PAYMENT quá 15 phút chưa thanh toán
      * -> Chuyển sang PAYMENT_FAILED và lập tức giải phóng slot bàn.
      */
     @Scheduled(fixedRate = 60000)
-    @Transactional
     public void timeoutUnpaidBookings() {
         Instant threshold = Instant.now().minus(Duration.ofMinutes(15));
-        List<Booking> unpaidList = bookingRepository.findAllByStatusAndCreatedAtBefore(
-                BookingStatus.PENDING_PAYMENT,
-                threshold
-        );
-
-        if (!unpaidList.isEmpty()) {
-            log.info("Processing {} unpaid bookings past 15 minutes timeout", unpaidList.size());
-            for (Booking booking : unpaidList) {
-                booking.setStatus(BookingStatus.PAYMENT_FAILED);
-                bookingService.dispatchBookingNotification(
-                        booking,
-                        BookingEventType.PAYMENT_FAILED,
-                        "Đơn đặt bàn " + booking.getBookingCode() + " đã hết hạn thanh toán 15 phút."
-                );
+        for (Booking candidate : bookingRepository.findAllByStatusAndCreatedAtBefore(BookingStatus.PENDING_PAYMENT, threshold)) {
+            try {
+                bookingService.timeoutPendingBooking(candidate.getBookingId());
+            } catch (Exception e) {
+                log.warn("Deferring timeout of booking {}: {}", candidate.getBookingId(), e.getMessage());
             }
-            bookingRepository.saveAll(unpaidList);
         }
     }
 
@@ -74,7 +82,9 @@ public class BookingScheduledJobs {
         );
 
         Instant now = Instant.now();
-        for (Booking booking : candidates) {
+        for (Booking candidate : candidates) {
+            Booking booking = bookingRepository.findByIdForUpdate(candidate.getBookingId()).orElse(null);
+            if (booking == null || booking.getStatus() != BookingStatus.PAID_CONFIRMED) continue;
             StoreBookingConfig config = configRepository.findByStoreStoreId(booking.getStore().getStoreId())
                     .orElse(null);
             int graceMins = config != null ? config.getGracePeriodMins() : 30;
@@ -105,7 +115,9 @@ public class BookingScheduledJobs {
                 Instant.now()
         );
 
-        for (Booking booking : overtimed) {
+        for (Booking candidate : overtimed) {
+            Booking booking = bookingRepository.findByIdForUpdate(candidate.getBookingId()).orElse(null);
+            if (booking == null || booking.getStatus() != BookingStatus.CHECKED_IN) continue;
             StoreBookingConfig config = configRepository.findByStoreStoreId(booking.getStore().getStoreId())
                     .orElse(null);
 
@@ -113,6 +125,23 @@ public class BookingScheduledJobs {
                 booking.setStatus(BookingStatus.COMPLETED);
                 booking.setCompletedAt(Instant.now());
                 bookingRepository.save(booking);
+
+                if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    merchantWalletService.settleToAvailable(
+                            booking.getStore().getStoreId(),
+                            booking.getMerchantNetAmount(),
+                            "BOOKING",
+                            booking.getBookingId().toString(),
+                            "Giải ngân đơn tự động hoàn tất #" + booking.getBookingCode()
+                    );
+                }
+
+                try {
+                    loyaltyRewardService.awardBookingSpendReward(booking);
+                } catch (Exception ex) {
+                    log.warn("Failed to award spend reward: {}", ex.getMessage());
+                }
+
                 bookingService.dispatchBookingNotification(
                         booking,
                         BookingEventType.COMPLETED,
@@ -133,17 +162,31 @@ public class BookingScheduledJobs {
         Instant now = Instant.now();
         List<Booking> expiredCandidates = bookingRepository.findAllByStatusWithStore(BookingStatus.TABLE_EXPIRED);
 
-        for (Booking booking : expiredCandidates) {
+        for (Booking candidate : expiredCandidates) {
+            Booking booking = bookingRepository.findByIdForUpdate(candidate.getBookingId()).orElse(null);
+            if (booking == null || booking.getStatus() != BookingStatus.TABLE_EXPIRED) continue;
             LocalDate bookingDate = booking.getStartTime().atZone(VN_ZONE).toLocalDate();
             Store store = booking.getStore();
             LocalTime closingTime = (store != null && store.getClosingTime() != null)
                     ? store.getClosingTime()
                     : LocalTime.of(23, 0);
-            Instant closingInstant = bookingDate.atTime(closingTime).atZone(VN_ZONE).toInstant();
+            Instant closingInstant = booking.getServiceClosingDeadline() != null ? booking.getServiceClosingDeadline()
+                    : bookingDate.atTime(closingTime).atZone(VN_ZONE).toInstant();
 
             if (now.isAfter(closingInstant)) {
                 booking.setStatus(BookingStatus.EXPIRED_NO_SHOW);
                 bookingRepository.save(booking);
+
+                if (booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    merchantWalletService.settleToAvailable(
+                            booking.getStore().getStoreId(),
+                            booking.getMerchantNetAmount(),
+                            "BOOKING",
+                            booking.getBookingId().toString(),
+                            "Giải ngân đơn no-show cuối ngày #" + booking.getBookingCode()
+                    );
+                }
+
                 bookingService.dispatchBookingNotification(
                         booking,
                         BookingEventType.EXPIRED_NO_SHOW,

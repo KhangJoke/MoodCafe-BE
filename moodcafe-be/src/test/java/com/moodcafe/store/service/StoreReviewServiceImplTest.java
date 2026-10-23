@@ -7,6 +7,8 @@ import com.moodcafe.auth.entity.User;
 import com.moodcafe.shared.abstraction.service.FileStorageService;
 import com.moodcafe.shared.dto.UploadImageResponse;
 import com.moodcafe.shared.error.ErrorCode;
+import com.moodcafe.loyalty.service.LoyaltyRewardService;
+import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
@@ -53,6 +55,21 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class StoreReviewServiceImplTest {
 
+    @Test
+    void createReview_RejectsTwoBookingSourcesBeforeUploadOrRewards() {
+        CreateStoreReviewRequest request = CreateStoreReviewRequest.builder()
+                .bookingId(UUID.randomUUID())
+                .reservationId(UUID.randomUUID())
+                .overallRating(BigDecimal.valueOf(5))
+                .content("Verified review")
+                .build();
+
+        assertThatThrownBy(() -> storeReviewService.createReview(UUID.randomUUID(), request, null, null))
+                .isInstanceOf(AppException.class)
+                .hasMessageContaining("một nguồn đặt bàn");
+        org.mockito.Mockito.verifyNoInteractions(fileStorageService, loyaltyRewardService);
+    }
+
     @Mock
     private StoreReviewRepository storeReviewRepository;
     @Mock
@@ -71,6 +88,10 @@ class StoreReviewServiceImplTest {
     private StoreStaffRepository storeStaffRepository;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private ReservationRepository reservationRepository;
+    @Mock
+    private LoyaltyRewardService loyaltyRewardService;
 
 
     @InjectMocks

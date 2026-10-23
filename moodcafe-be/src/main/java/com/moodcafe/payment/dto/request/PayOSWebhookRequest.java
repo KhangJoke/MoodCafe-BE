@@ -1,8 +1,17 @@
 package com.moodcafe.payment.dto.request;
 
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
@@ -12,6 +21,23 @@ public class PayOSWebhookRequest {
     private String desc;
     private PayOSWebhookData data;
     private String signature;
+
+    // Preserve gateway fields that participate in signature verification, including
+    // counterAccount* / virtualAccount* fields and future SDK additions.
+    @JsonIgnore
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private final Map<String, Object> additionalFields = new LinkedHashMap<>();
+
+    @JsonAnySetter
+    public void putAdditionalField(String name, Object value) {
+        additionalFields.put(name, value);
+    }
+
+    @JsonAnyGetter
+    public Map<String, Object> additionalFields() {
+        return additionalFields;
+    }
 
     @Data
     @NoArgsConstructor
@@ -27,5 +53,23 @@ public class PayOSWebhookRequest {
         private String paymentLinkId;
         private String code;
         private String desc;
+
+        // Preserve gateway fields that participate in signature verification, including
+        // counterAccount* / virtualAccount* fields and future SDK additions.
+        @JsonIgnore
+        @Getter(AccessLevel.NONE)
+        @Setter(AccessLevel.NONE)
+        private final Map<String, Object> additionalFields = new LinkedHashMap<>();
+
+        @JsonAnySetter
+        public void putAdditionalField(String name, Object value) {
+            additionalFields.put(name, value);
+        }
+
+        @JsonAnyGetter
+        public Map<String, Object> additionalFields() {
+            return additionalFields;
+        }
+
     }
 }

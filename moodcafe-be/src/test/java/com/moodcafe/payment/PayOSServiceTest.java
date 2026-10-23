@@ -4,12 +4,14 @@ import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
-import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.payment.service.PayOSServiceImpl;
+import com.moodcafe.payment.service.PaymentAttemptService;
 import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepository;
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
 import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
+import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
+import com.moodcafe.reservation.service.ReservationPaymentCaptureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,12 @@ class PayOSServiceTest {
 
     @Mock
     private CurrentUserService currentUserService;
+    @Mock
+    private ReservationRepository reservationRepository;
+    @Mock
+    private ReservationPaymentCaptureService reservationPaymentCaptureService;
+    @Mock
+    private PaymentAttemptService paymentAttemptService;
 
     @Mock
     private com.moodcafe.sponsored.abstraction.repository.SponsoredListingRepository sponsoredListingRepository;
@@ -62,7 +70,10 @@ class PayOSServiceTest {
                 subscriptionPaymentRepository,
                 subscriptionService,
                 userRepository,
-                currentUserService
+                currentUserService,
+                reservationRepository,
+                reservationPaymentCaptureService,
+                paymentAttemptService
         );
         payOSService.setSponsoredListingRepository(sponsoredListingRepository);
         payOSService.setSponsoredListingService(sponsoredListingService);
@@ -106,6 +117,9 @@ class PayOSServiceTest {
                 .status(SubscriptionPaymentStatus.PENDING)
                 .build();
 
+        when(payOSConfig.isConfigured()).thenReturn(true);
+        vn.payos.service.blocking.webhooks.WebhooksService webhooksMock = mock(vn.payos.service.blocking.webhooks.WebhooksService.class);
+        when(payOS.webhooks()).thenReturn(webhooksMock);
         when(subscriptionPaymentRepository.findByTransactionCode(txCode)).thenReturn(Optional.of(payment));
 
         payOSService.handlePayOSWebhook(request);
@@ -142,11 +156,103 @@ class PayOSServiceTest {
                 .status(com.moodcafe.sponsored.entity.enums.SponsoredListingStatus.PENDING)
                 .build();
 
+        when(payOSConfig.isConfigured()).thenReturn(true);
+        when(payOS.webhooks()).thenReturn(mock(vn.payos.service.blocking.webhooks.WebhooksService.class));
         when(subscriptionPaymentRepository.findByTransactionCode(txCode)).thenReturn(Optional.empty());
         when(sponsoredListingRepository.findByTransactionCode(txCode)).thenReturn(Optional.of(campaign));
 
         payOSService.handlePayOSWebhook(request);
 
         verify(sponsoredListingService, times(1)).confirmCampaignPayment(txCode);
+    }
+
+    @Test
+    void verifiedWebhookStillConfirmsLegacyBooking() {
+        var bookingRepository = mock(com.moodcafe.booking.abstraction.repository.BookingRepository.class);
+        var bookingService = mock(com.moodcafe.booking.abstraction.service.BookingService.class);
+        payOSService.setBookingRepository(bookingRepository);
+        payOSService.setBookingService(bookingService);
+        long orderCode = 1800000001L;
+        var booking = com.moodcafe.booking.entity.Booking.builder()
+                .status(com.moodcafe.booking.entity.enums.BookingStatus.PENDING_PAYMENT).build();
+        when(bookingRepository.findByPaymentOrderCode(orderCode)).thenReturn(Optional.of(booking));
+        when(payOSConfig.isConfigured()).thenReturn(true);
+        when(payOS.webhooks()).thenReturn(mock(vn.payos.service.blocking.webhooks.WebhooksService.class));
+
+        payOSService.handlePayOSWebhook(successWebhook(orderCode));
+
+        verify(bookingService).confirmBookingPayment(orderCode, 100000L);
+        verifyNoInteractions(reservationPaymentCaptureService);
+    }
+
+    @Test
+    void verifiedWebhookCapturesNewReservationAndMarksAttemptPaid() {
+        long orderCode = 1800000002L;
+        UUID reservationId = UUID.randomUUID();
+        var reservation = com.moodcafe.reservation.entity.Reservation.builder()
+                .reservationId(reservationId).status("PENDING_PAYMENT").build();
+        when(reservationRepository.findByPayosOrderCode(orderCode)).thenReturn(Optional.of(reservation));
+        when(payOSConfig.isConfigured()).thenReturn(true);
+        when(payOS.webhooks()).thenReturn(mock(vn.payos.service.blocking.webhooks.WebhooksService.class));
+
+        payOSService.handlePayOSWebhook(successWebhook(orderCode));
+
+        verify(reservationPaymentCaptureService).capturePaymentSuccess(reservationId, orderCode, 100000L);
+        verify(paymentAttemptService).markStatus(orderCode, "PAID");
+    }
+
+    @Test
+    void pollingCapturesNewReservationWithoutLosingLegacyDispatch() {
+        long orderCode = 1800000003L;
+        UUID reservationId = UUID.randomUUID();
+        var reservation = com.moodcafe.reservation.entity.Reservation.builder()
+                .reservationId(reservationId).status("PENDING_PAYMENT").build();
+        when(reservationRepository.findByPayosOrderCode(orderCode)).thenReturn(Optional.of(reservation));
+        when(payOSConfig.isConfigured()).thenReturn(true);
+        var requests = mock(vn.payos.service.blocking.v2.paymentRequests.PaymentRequestsService.class);
+        when(payOS.paymentRequests()).thenReturn(requests);
+        var link = mock(vn.payos.model.v2.paymentRequests.PaymentLink.class);
+        when(link.getStatus()).thenReturn(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PAID);
+        lenient().when(link.getAmount()).thenReturn(150000L);
+        when(link.getAmountPaid()).thenReturn(100000L);
+        when(requests.get(orderCode)).thenReturn(link);
+
+        assertTrue(payOSService.checkPaymentStatus(orderCode));
+
+        verify(reservationPaymentCaptureService).capturePaymentSuccess(reservationId, orderCode, 100000L);
+        verify(paymentAttemptService).markStatus(orderCode, "PAID");
+    }
+
+    @Test
+    void duplicateCreateAfterAcceptedTimeoutRecoversSameGatewayLink() {
+        when(payOSConfig.getReturnUrl()).thenReturn("https://app.test/payment/return");
+        when(payOSConfig.getCancelUrl()).thenReturn("https://app.test/payment/return");
+        when(payOSConfig.isConfigured()).thenReturn(true);
+        var requests = mock(vn.payos.service.blocking.v2.paymentRequests.PaymentRequestsService.class);
+        when(payOS.paymentRequests()).thenReturn(requests);
+        when(requests.create(any(vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest.class)))
+                .thenThrow(new RuntimeException("accepted but response lost / duplicate order"));
+        var link = mock(vn.payos.model.v2.paymentRequests.PaymentLink.class);
+        when(link.getId()).thenReturn("124c33293c934a85be5b7f8761a27a07");
+        lenient().when(link.getOrderCode()).thenReturn(123L);
+        lenient().when(link.getAmount()).thenReturn(100000L);
+        lenient().when(link.getAmountPaid()).thenReturn(0L);
+        lenient().when(link.getStatus()).thenReturn(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PENDING);
+        when(requests.get(123L)).thenReturn(link);
+        var response = payOSService.createBookingPaymentLink(UUID.randomUUID(), 123L, 100000L, "DATBAN 123");
+        assertEquals("https://pay.payos.vn/web/" + link.getId(), response.getCheckoutUrl());
+        assertEquals(link.getId(), response.getPaymentLinkId());
+        assertEquals(123L, response.getOrderCode());
+    }
+
+    private PayOSWebhookRequest successWebhook(long orderCode) {
+        var data = new PayOSWebhookRequest.PayOSWebhookData();
+        data.setOrderCode(orderCode);
+        data.setAmount(100000.0);
+        data.setCurrency("VND");
+        var request = new PayOSWebhookRequest();
+        request.setCode("00");
+        request.setData(data);
+        return request;
     }
 }

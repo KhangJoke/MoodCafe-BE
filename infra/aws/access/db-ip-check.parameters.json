@@ -1,0 +1,5 @@
+{
+  "commands": [
+    "sudo docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' moodcafe-postgres-1"
+  ]
+}

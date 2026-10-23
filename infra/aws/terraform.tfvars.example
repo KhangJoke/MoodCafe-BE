@@ -1,0 +1,15 @@
+aws_region    = "ap-southeast-1"
+project_name  = "moodcafe"
+instance_type = "t4g.small"
+
+# Tổng 22 GB gp3: 12 GB OS/Docker/swap + 10 GB dữ liệu.
+root_volume_gb = 12
+data_volume_gb = 10
+enable_backups = true
+
+# Chưa có domain: HTTP cho kiểm tra ban đầu.
+domain_name = ""
+
+# Mặc định không cần SSH key; vào EC2 bằng AWS Systems Manager Session Manager.
+ssh_cidr       = ""
+ssh_public_key = ""

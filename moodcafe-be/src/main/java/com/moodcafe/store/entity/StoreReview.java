@@ -22,7 +22,8 @@ import java.util.UUID;
                 @Index(name = "idx_reviews_store_id", columnList = "store_id"),
                 @Index(name = "idx_reviews_user_id", columnList = "user_id"),
                 @Index(name = "idx_reviews_created_at", columnList = "created_at"),
-                @Index(name = "idx_reviews_user_store", columnList = "user_id, store_id")
+                @Index(name = "idx_reviews_user_store", columnList = "user_id, store_id"),
+                @Index(name = "idx_reviews_booking_id", columnList = "booking_id")
         }
 )
 @SQLDelete(sql = "UPDATE reviews SET is_deleted = true WHERE review_id = ?")
@@ -49,6 +50,12 @@ public class StoreReview {
 
     @Column(name = "visit_verification_id")
     private UUID visitVerificationId;
+
+    @Column(name = "reservation_id")
+    private UUID reservationId;
+
+    @Column(name = "booking_id")
+    private UUID bookingId;
 
     @Column(name = "overall_rating", nullable = false, precision = 2, scale = 1)
     private BigDecimal overallRating;

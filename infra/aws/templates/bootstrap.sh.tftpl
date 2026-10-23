@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec > >(tee -a /var/log/moodcafe-bootstrap.log) 2>&1
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y ca-certificates curl unzip gnupg
+install -m 0755 -d /etc/apt/keyrings
+curl --fail --retry 3 -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+
+if ! command -v aws >/dev/null; then
+  CLI_DIR=$(mktemp -d)
+  curl --fail --retry 3 -fsSL https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip -o "$CLI_DIR/aws.zip"
+  unzip -q "$CLI_DIR/aws.zip" -d "$CLI_DIR"
+  "$CLI_DIR/aws/install"
+fi
+if ! snap list amazon-ssm-agent >/dev/null 2>&1; then
+  snap install amazon-ssm-agent --classic
+fi
+systemctl enable --now snap.amazon-ssm-agent.amazon-ssm-agent.service
+
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+fi
+swapon --show=NAME --noheadings | grep -qx /swapfile || swapon /swapfile
+grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+echo 'vm.swappiness=10' > /etc/sysctl.d/90-moodcafe.conf
+sysctl -p /etc/sysctl.d/90-moodcafe.conf
+
+# Identify only the separately provisioned EBS volume; never assume nvme1n1 is data.
+DATA_DEVICE=""
+for attempt in $(seq 1 120); do
+  DATA_DEVICE=$(lsblk -dn -o PATH,SERIAL | awk -v serial='${volume_serial}' '$2 == serial {print $1; exit}')
+  [ -n "$DATA_DEVICE" ] && break
+  sleep 5
+done
+[ -n "$DATA_DEVICE" ] || { echo 'Data volume attachment not found'; exit 1; }
+FS_TYPE=$(blkid -s TYPE -o value "$DATA_DEVICE" || true)
+if [ -z "$FS_TYPE" ]; then
+  mkfs.ext4 "$DATA_DEVICE"
+elif [ "$FS_TYPE" != ext4 ]; then
+  echo "Unexpected filesystem on data volume: $FS_TYPE; refusing to format"
+  exit 1
+fi
+mkdir -p /opt/moodcafe
+UUID=$(blkid -s UUID -o value "$DATA_DEVICE")
+grep -q "UUID=$UUID " /etc/fstab || echo "UUID=$UUID /opt/moodcafe ext4 defaults 0 2" >> /etc/fstab
+mountpoint -q /opt/moodcafe || mount /opt/moodcafe
+chmod 700 /opt/moodcafe
+
+# Do not start persisted containers on an empty mountpoint after a reboot.
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/moodcafe-data.conf <<'UNIT'
+[Unit]
+RequiresMountsFor=/opt/moodcafe
+UNIT
+systemctl daemon-reload
+
+write_asset() {
+  printf '%s' "$2" | base64 --decode > "$1"
+}
+write_asset /opt/moodcafe/compose.yml '${compose_b64}'
+write_asset /opt/moodcafe/.env.example '${env_b64}'
+write_asset /opt/moodcafe/deploy.sh '${deploy_b64}'
+write_asset /opt/moodcafe/backup.sh '${backup_b64}'
+write_asset /opt/moodcafe/Caddyfile '${caddy_b64}'
+write_asset /opt/moodcafe/runtime.conf '${config_b64}'
+chmod 600 /opt/moodcafe/.env.example /opt/moodcafe/runtime.conf
+chmod 700 /opt/moodcafe/deploy.sh /opt/moodcafe/backup.sh
+mkdir -p /opt/moodcafe/postgres /opt/moodcafe/redis /opt/moodcafe/caddy-data /opt/moodcafe/caddy-config
+
+%{ if backups_enabled ~}
+cat > /etc/systemd/system/moodcafe-backup.service <<'UNIT'
+[Unit]
+Description=Backup MoodCafe PostgreSQL to S3
+Requires=docker.service
+After=docker.service
+RequiresMountsFor=/opt/moodcafe
+
+[Service]
+Type=oneshot
+ExecStart=/opt/moodcafe/backup.sh
+UNIT
+cat > /etc/systemd/system/moodcafe-backup.timer <<'UNIT'
+[Unit]
+Description=Daily MoodCafe PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 19:00:00 UTC
+RandomizedDelaySec=300
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now moodcafe-backup.timer
+%{ endif ~}
+
+# Replacements preserve the data disk, .env and the last selected image.
+if [ -f /opt/moodcafe/.env ] && [ -f /opt/moodcafe/.image ]; then
+  /opt/moodcafe/deploy.sh
+fi
+echo 'Bootstrap complete. Install .env and publish an ARM64 ECR image, then run deploy.sh.'
+

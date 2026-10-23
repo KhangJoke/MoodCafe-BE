@@ -1,0 +1,12 @@
+# Demo HTTPS hostname: keep this IP aligned with the existing Elastic IP.
+47-130-228-240.sslip.io {
+    encode gzip
+    reverse_proxy backend:8080
+}
+
+# Keep the existing HTTP endpoint temporarily for mobile demo compatibility.
+# Production clients should migrate to HTTPS; do not use HTTP for real credentials.
+http://47.130.228.240 {
+    encode gzip
+    reverse_proxy backend:8080
+}

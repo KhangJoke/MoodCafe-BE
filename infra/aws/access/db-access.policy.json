@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "StartFixedPostgresTunnelOnMoodCafeInstance",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": [
+        "arn:aws:ec2:ap-southeast-1:255572711373:instance/i-03046026169ea6eb5",
+        "arn:aws:ssm:ap-southeast-1:255572711373:document/MoodCafe-PostgresTunnel"
+      ]
+    },
+    {
+      "Sid": "ReadOnlyTheFixedTunnelDocument",
+      "Effect": "Allow",
+      "Action": ["ssm:GetDocument", "ssm:DescribeDocument"],
+      "Resource": "arn:aws:ssm:ap-southeast-1:255572711373:document/MoodCafe-PostgresTunnel"
+    },
+    {
+      "Sid": "ManageOnlyOwnIamUserSessions",
+      "Effect": "Allow",
+      "Action": [
+        "ssmmessages:OpenDataChannel",
+        "ssm:ResumeSession",
+        "ssm:TerminateSession"
+      ],
+      "Resource": "arn:aws:ssm:ap-southeast-1:255572711373:session/${aws:username}-*"
+    }
+  ]
+}

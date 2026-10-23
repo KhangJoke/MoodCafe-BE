@@ -7,6 +7,8 @@ import com.moodcafe.booking.abstraction.repository.BookingRepository;
 import com.moodcafe.booking.abstraction.service.BookingService;
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.enums.BookingStatus;
+import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.wallet.dto.RefundPointCommand;
 import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
@@ -20,6 +22,11 @@ import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepos
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
 import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
+import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
+import com.moodcafe.reservation.entity.Reservation;
+import com.moodcafe.reservation.service.ReservationPaymentCaptureService;
+import com.moodcafe.shared.error.ErrorCode;
+import com.moodcafe.shared.exceptions.AppException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -37,6 +44,9 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.Collections;
+import java.util.Map;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,12 +54,17 @@ import java.util.UUID;
 @Service
 public class PayOSServiceImpl implements PayOSService {
 
+    private static final ObjectMapper WEBHOOK_MAPPER = new ObjectMapper();
+
     private final PayOS payOS;
     private final PayOSConfig payOSConfig;
     private final SubscriptionPaymentRepository subscriptionPaymentRepository;
     private final SubscriptionService subscriptionService;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
+    private final ReservationRepository reservationRepository;
+    private final ReservationPaymentCaptureService reservationPaymentCaptureService;
+    private final PaymentAttemptService paymentAttemptService;
 
     @Autowired(required = false)
     private SponsoredListingRepository sponsoredListingRepository;
@@ -65,13 +80,24 @@ public class PayOSServiceImpl implements PayOSService {
     @Lazy
     private BookingService bookingService;
 
+    @Autowired(required = false)
+    @Lazy
+    private CustomerWalletService customerWalletService;
+
+    public void setCustomerWalletService(CustomerWalletService customerWalletService) {
+        this.customerWalletService = customerWalletService;
+    }
+
     public PayOSServiceImpl(
             @Autowired(required = false) PayOS payOS,
             PayOSConfig payOSConfig,
             SubscriptionPaymentRepository subscriptionPaymentRepository,
             @Lazy SubscriptionService subscriptionService,
             UserRepository userRepository,
-            CurrentUserService currentUserService
+            CurrentUserService currentUserService,
+            ReservationRepository reservationRepository,
+            @Lazy ReservationPaymentCaptureService reservationPaymentCaptureService,
+            @Autowired(required = false) @Lazy PaymentAttemptService paymentAttemptService
     ) {
         this.payOS = payOS;
         this.payOSConfig = payOSConfig;
@@ -79,6 +105,80 @@ public class PayOSServiceImpl implements PayOSService {
         this.subscriptionService = subscriptionService;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
+        this.reservationRepository = reservationRepository;
+        this.reservationPaymentCaptureService = reservationPaymentCaptureService;
+        this.paymentAttemptService = paymentAttemptService;
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public PayOSResponse createBookingPaymentLink(
+            UUID reservationId,
+            long orderCode,
+            long amountVnd,
+            String description
+    ) {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Cổng thanh toán PayOS chưa được cấu hình.");
+        }
+
+        String itemName = "Dat ban MoodCafe #" + reservationId.toString().substring(0, Math.min(8, reservationId.toString().length()));
+        String sanitizedDesc = sanitizeDescription(description != null ? description : "DATBAN " + orderCode);
+
+        PaymentLinkItem item = PaymentLinkItem.builder()
+                .name(itemName.length() > 50 ? itemName.substring(0, 50) : itemName)
+                .quantity(1)
+                .price(amountVnd)
+                .build();
+
+        CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
+                .orderCode(orderCode)
+                .amount(amountVnd)
+                .description(sanitizedDesc)
+                .items(Collections.singletonList(item))
+                .returnUrl(payOSConfig.getReturnUrl())
+                .cancelUrl(payOSConfig.getCancelUrl())
+                .build();
+
+        try {
+            CreatePaymentLinkResponse checkoutData = payOS.paymentRequests().create(paymentData);
+
+            String officialQrImageUrl = "https://img.vietqr.io/image/" + checkoutData.getBin() + "-"
+                    + checkoutData.getAccountNumber() + "-compact2.png?amount=" + amountVnd
+                    + "&addInfo=" + URLEncoder.encode(sanitizedDesc, StandardCharsets.UTF_8)
+                    + "&accountName=" + URLEncoder.encode(checkoutData.getAccountName(), StandardCharsets.UTF_8);
+
+            return PayOSResponse.builder()
+                    .checkoutUrl(checkoutData.getCheckoutUrl())
+                    .qrCode(officialQrImageUrl)
+                    .accountNumber(checkoutData.getAccountNumber())
+                    .accountName(checkoutData.getAccountName())
+                    .bin(checkoutData.getBin())
+                    .orderCode(orderCode)
+                    .amount((double) amountVnd)
+                    .description(sanitizedDesc)
+                    .status("PENDING")
+                    .paymentLinkId(checkoutData.getPaymentLinkId())
+                    .build();
+        } catch (Exception e) {
+            // Gateway can accept create while its response is lost. Recover the SAME order,
+            // never generate a second payable link. Official API: GET.id == checkoutUrl suffix.
+            try {
+                PaymentLink existing = payOS.paymentRequests().get(orderCode);
+                if (existing != null && existing.getId() != null && existing.getId().matches("[a-fA-F0-9]{32}")
+                        && Long.valueOf(orderCode).equals(existing.getOrderCode())
+                        && Long.valueOf(amountVnd).equals(existing.getAmount())
+                        && (existing.getStatus() == PaymentLinkStatus.PENDING || existing.getStatus() == PaymentLinkStatus.PAID)) {
+                    return PayOSResponse.builder().orderCode(orderCode).amount((double) amountVnd)
+                            .paymentLinkId(existing.getId()).checkoutUrl("https://pay.payos.vn/web/" + existing.getId())
+                            .description(sanitizedDesc).status(existing.getStatus().name()).build();
+                }
+            } catch (Exception recoveryError) {
+                log.warn("Gateway create/recovery remains unknown for order {}", orderCode);
+            }
+            log.error("PayOS createBookingPaymentLink error: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi tạo link thanh toán PayOS cho đặt bàn: " + e.getMessage(), e);
+        }
     }
 
     public void setSponsoredListingRepository(SponsoredListingRepository sponsoredListingRepository) {
@@ -336,8 +436,12 @@ public class PayOSServiceImpl implements PayOSService {
         }
 
         try {
-            long amount = booking.getMinSpendAmount();
-            long orderCode = generateOrderCode();
+            long amount = (booking.getCustomerPaidAmount() != null)
+                    ? booking.getCustomerPaidAmount().longValue()
+                    : booking.getMinSpendAmount();
+            long orderCode = (booking.getPaymentOrderCode() != null && booking.getPaymentOrderCode() > 0)
+                    ? booking.getPaymentOrderCode()
+                    : generateOrderCode();
             String description = sanitizeDescription("DAT BAN " + booking.getBookingCode());
             String itemName = "Dat ban " + (booking.getTableCategory() != null ? booking.getTableCategory().getName() : "MoodCafe");
 
@@ -396,30 +500,63 @@ public class PayOSServiceImpl implements PayOSService {
             return;
         }
 
-        // Xác thực chữ ký webhook với PayOS SDK
-        if (isConfigured()) {
-            try {
-                payOS.webhooks().verify(request);
-                log.info("PayOS Webhook signature verified successfully");
-            } catch (Exception e) {
-                log.warn("PayOS Webhook signature verification warning: {}", e.getMessage());
-            }
-        }
-
+        // 1. PayOS ping test without data
         if (request.getData() == null) {
             log.info("PayOS Webhook ping / check without data received (webhook URL configuration test)");
             return;
         }
 
-        PayOSWebhookRequest.PayOSWebhookData data = request.getData();
-        Long orderCode = data.getOrderCode();
-        log.info("PayOS Webhook received: orderCode={}, amount={}, desc={}, code={}",
-                orderCode, data.getAmount(), data.getDescription(), request.getCode());
+        // 2. Gateway MUST be configured to verify and accept payment webhooks
+        if (!isConfigured() || payOS == null) {
+            log.error("PayOS gateway is not configured; rejecting webhook callback");
+            throw new AppException(ErrorCode.BAD_REQUEST, "Cổng thanh toán PayOS chưa được kích hoạt");
+        }
 
-        if (orderCode == null) {
-            log.warn("PayOS Webhook data missing orderCode");
+        // 3. Verify signature strictly (fail-closed)
+        try {
+            // SDK 2.x accepts Map/JSON/SDK Webhook, not an application DTO.
+            // Flatten @JsonAnyGetter fields so signed account metadata survives.
+            Map<String, Object> payload = WEBHOOK_MAPPER.convertValue(request, new TypeReference<>() {});
+            payOS.webhooks().verify(payload);
+            log.info("PayOS Webhook signature verified successfully");
+        } catch (Exception e) {
+            log.error("PayOS Webhook signature verification failed: {}", e.getMessage());
+            throw new AppException(ErrorCode.BAD_REQUEST, "Chữ ký webhook PayOS không hợp lệ: " + e.getMessage());
+        }
+
+        // 4. Validate success code: "00" is success
+        if (!"00".equals(request.getCode())) {
+            log.warn("PayOS Webhook indicates non-success code: {}", request.getCode());
             return;
         }
+
+        PayOSWebhookRequest.PayOSWebhookData data = request.getData();
+        if (data.getCode() != null && !"00".equals(data.getCode())) {
+            log.warn("PayOS Webhook data indicates non-success code: {}", data.getCode());
+            return;
+        }
+
+        // 5. Validate Currency: must be VND
+        if (data.getCurrency() != null && !data.getCurrency().trim().equalsIgnoreCase("VND")) {
+            log.error("PayOS Webhook currency mismatch: expected VND, received {}", data.getCurrency());
+            throw new AppException(ErrorCode.BAD_REQUEST, "Đơn vị tiền tệ không hợp lệ");
+        }
+
+        // 6. Validate Amount: must be present and positive
+        if (data.getAmount() == null || data.getAmount() <= 0) {
+            log.error("PayOS Webhook missing or non-positive amount: {}", data.getAmount());
+            throw new AppException(ErrorCode.BAD_REQUEST, "Số tiền thanh toán trong webhook không hợp lệ");
+        }
+
+        Long orderCode = data.getOrderCode();
+        if (orderCode == null) {
+            log.warn("PayOS Webhook data missing orderCode");
+            throw new AppException(ErrorCode.BAD_REQUEST, "Thiếu mã đơn hàng trong webhook");
+        }
+
+        long paidAmountVnd = data.getAmount().longValue();
+        log.info("PayOS Webhook received and validated: orderCode={}, amount={}, desc={}",
+                orderCode, paidAmountVnd, data.getDescription());
 
         // Tìm giao dịch theo transactionCode (orderCode)
         String txCode = String.valueOf(orderCode);
@@ -431,6 +568,9 @@ public class PayOSServiceImpl implements PayOSService {
 
         if (paymentOpt.isPresent()) {
             SubscriptionPayment payment = paymentOpt.get();
+            if (payment.getAmount() != null && BigDecimal.valueOf(paidAmountVnd).compareTo(payment.getAmount()) < 0) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Số tiền thanh toán không đủ cho gói dịch vụ");
+            }
             if (payment.getStatus() != SubscriptionPaymentStatus.SUCCESS) {
                 subscriptionService.confirmPayment(payment.getTransactionCode());
                 log.info("Subscription payment {} successfully confirmed via webhook for orderCode {}",
@@ -461,19 +601,33 @@ public class PayOSServiceImpl implements PayOSService {
             Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
             if (bookingOpt.isPresent()) {
                 Booking booking = bookingOpt.get();
-                if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-                    bookingService.confirmBookingPayment(orderCode);
-                    log.info("Booking {} successfully confirmed via webhook for orderCode {}",
-                            booking.getBookingCode(), orderCode);
-                } else {
-                    log.info("Booking {} already in status {} for orderCode {}",
-                            booking.getBookingCode(), booking.getStatus(), orderCode);
+                Long verifiedCumulative = paidAmountVnd;
+                var observation = paymentAttemptService != null ? paymentAttemptService.reconcile(orderCode) : null;
+                if (observation != null && observation.getAmount() != null
+                        && observation.getStatus() != com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.UNKNOWN) {
+                    verifiedCumulative = observation.getAmount().longValueExact();
+                } else if (booking.getActualPaidAmount() != null && booking.getActualPaidAmount().signum() > 0
+                        && (booking.getStatus() == BookingStatus.CANCELLED_REFUNDED || booking.getStatus() == BookingStatus.PAYMENT_FAILED)) {
+                    throw new AppException(ErrorCode.CONFLICT, "Chưa xác minh được tổng tiền nhận, cổng thanh toán cần gửi lại webhook");
+                }
+                bookingService.confirmBookingPayment(orderCode, verifiedCumulative);
+                if (paymentAttemptService != null) {
+                    paymentAttemptService.markStatus(orderCode, "PAID");
                 }
                 return;
             }
         }
 
-        log.warn("No SubscriptionPayment, SponsoredListing, or Booking found matching orderCode: {}", orderCode);
+        Optional<Reservation> reservationOpt = reservationRepository.findByPayosOrderCode(orderCode);
+        if (reservationOpt.isPresent()) {
+            reservationPaymentCaptureService.capturePaymentSuccess(
+                    reservationOpt.get().getReservationId(), orderCode, paidAmountVnd);
+            if (paymentAttemptService != null) {
+                paymentAttemptService.markStatus(orderCode, "PAID");
+            }
+            return;
+        }
+        throw new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy giao dịch tương ứng với mã orderCode: " + orderCode);
     }
 
     /**
@@ -522,17 +676,41 @@ public class PayOSServiceImpl implements PayOSService {
                     Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
                     if (bookingOpt.isPresent()) {
                         Booking booking = bookingOpt.get();
-                        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-                            bookingService.confirmBookingPayment(orderCode);
-                            log.info("Booking {} confirmed via checkPaymentStatus for orderCode {}",
-                                    booking.getBookingCode(), orderCode);
+                        Long paidAmount = paymentLink.getAmountPaid();
+                        bookingService.confirmBookingPayment(orderCode, paidAmount);
+                        if (paymentAttemptService != null) {
+                            paymentAttemptService.markStatus(orderCode, "PAID");
                         }
                         return true;
+                    }
+                }
+                Optional<Reservation> reservationOpt = reservationRepository.findByPayosOrderCode(orderCode);
+                if (reservationOpt.isPresent()) {
+                    Reservation reservation = reservationOpt.get();
+                    if ("PENDING_PAYMENT".equalsIgnoreCase(reservation.getStatus())) {
+                        Long paidAmount = paymentLink.getAmountPaid();
+                        reservationPaymentCaptureService.capturePaymentSuccess(
+                                reservation.getReservationId(), orderCode, paidAmount);
+                    }
+                    if (paymentAttemptService != null) {
+                        paymentAttemptService.markStatus(orderCode, "PAID");
                     }
                 }
                 return true;
             } else {
                 log.info("PayOS status for orderCode {}: {}", orderCode, paymentLink != null ? paymentLink.getStatus() : "null");
+                if (paymentLink != null && (paymentLink.getStatus() == PaymentLinkStatus.CANCELLED || paymentLink.getStatus() == PaymentLinkStatus.EXPIRED)) {
+                    if (bookingRepository != null && bookingService != null) {
+                        bookingRepository.findByPaymentOrderCode(orderCode).ifPresent(b -> {
+                            if (b.getStatus() == BookingStatus.PENDING_PAYMENT) {
+                                bookingService.timeoutPendingBooking(b.getBookingId());
+                            }
+                        });
+                    }
+                    if (paymentAttemptService != null) {
+                        paymentAttemptService.markStatus(orderCode, paymentLink.getStatus().name());
+                    }
+                }
             }
         } catch (Exception e) {
             log.warn("Check PayOS payment status failed for orderCode {}: {}", orderCode, e.getMessage());
@@ -669,9 +847,24 @@ public class PayOSServiceImpl implements PayOSService {
                         .amount(booking.getMinSpendAmount())
                         .title("Cọc giữ bàn tại " + storeName)
                         .referenceCode(booking.getBookingCode())
-                        .redirectUrl("/customer/bookings")
+                        .redirectUrl("/bookings/" + booking.getBookingId())
                         .build();
             }
+        }
+
+        Optional<Reservation> reservationOpt = reservationRepository.findByPayosOrderCode(orderCode);
+        if (reservationOpt.isPresent()) {
+            Reservation reservation = reservationOpt.get();
+            return PaymentOrderInfoResponse.builder()
+                    .orderCode(orderCode)
+                    .paymentType("BOOKING")
+                    .status(reservation.getStatus())
+                    .amount(reservation.getCustomerPaidAmount() != null
+                            ? reservation.getCustomerPaidAmount().longValue() : 0L)
+                    .title("Đặt bàn MoodCafe")
+                    .referenceCode(reservation.getReservationId().toString())
+                    .redirectUrl("/bookings")
+                    .build();
         }
 
         // 2. Kiểm tra Gói hội viên (Subscription)

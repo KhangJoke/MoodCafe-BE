@@ -42,6 +42,10 @@ public class CreateStoreReviewRequest {
 
     private UUID visitVerificationId;
 
+    private UUID reservationId;
+
+    private UUID bookingId;
+
     private java.util.List<ReviewTagRatingRequest> tagRatings;
 
     private String tagRatingsRaw;

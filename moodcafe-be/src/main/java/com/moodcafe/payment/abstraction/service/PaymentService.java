@@ -25,6 +25,8 @@ public interface PaymentService {
 
     PayOSResponse createPaymentLinkForBooking(Booking booking);
 
+    PayOSResponse createBookingPaymentLink(UUID reservationId, long orderCode, long amountVnd, String description);
+
     void handlePayOSWebhook(PayOSWebhookRequest request);
 
     boolean checkPaymentStatus(Long orderCode);

@@ -7,7 +7,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -28,6 +30,7 @@ public class BookingResponse {
     private String categoryName;
     private String categoryImageUrl;
     private Integer maxCapacity;
+    private Integer guestCount;
     private UUID userId;
     private String customerName;
     private String customerPhone;
@@ -36,6 +39,10 @@ public class BookingResponse {
     private Instant endTime;
     private BookingStatus status;
     private Long minSpendAmount;
+    private BigDecimal grossAmount;
+    private BigDecimal voucherDiscount;
+    private BigDecimal customerPaidAmount;
+    private BigDecimal actualPaidAmount;
     private Long paymentOrderCode;
     private String checkoutUrl;
     private String paymentQrCode;
@@ -50,9 +57,14 @@ public class BookingResponse {
     private Instant cancelledAt;
     private String cancelReason;
     private Boolean refundProcessed;
+    private RefundOutcomeResponse refundOutcome;
+    private List<String> allowedActions;
     private String note;
     private Integer gracePeriodMins;
     private Integer freeCancelHours;
     private Boolean isCancelable;
+    private Instant freeCancelDeadline;
+    private Instant graceDeadline;
+    private Instant serviceClosingDeadline;
     private Instant createdAt;
 }

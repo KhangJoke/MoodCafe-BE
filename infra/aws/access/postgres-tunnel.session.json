@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "description": "MoodCafe team tunnel to PostgreSQL only; no shell or arbitrary remote host",
+  "sessionType": "Port",
+  "parameters": {
+    "localPortNumber": {
+      "type": "String",
+      "description": "Local port on the developer computer",
+      "allowedPattern": "^(15432|15433)$",
+      "default": "15432"
+    }
+  },
+  "properties": {
+    "host": "172.18.0.3",
+    "portNumber": "5432",
+    "type": "LocalPortForwarding",
+    "localPortNumber": "{{ localPortNumber }}"
+  }
+}

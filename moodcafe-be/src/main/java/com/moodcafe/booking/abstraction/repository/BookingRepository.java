@@ -18,6 +18,17 @@ import java.util.UUID;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
+    Optional<Booking> findByIdForUpdate(@Param("id") UUID id);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.paymentOrderCode = :orderCode")
+    Optional<Booking> findByOrderCodeForUpdate(@Param("orderCode") Long orderCode);
+
+    boolean existsByQuoteQuoteId(UUID quoteId);
+
+
     Optional<Booking> findByBookingCode(String bookingCode);
 
     Optional<Booking> findByPaymentOrderCode(Long paymentOrderCode);
@@ -28,11 +39,17 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     Page<Booking> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
+    Page<Booking> findAllByUserUserIdAndStatusOrderByCreatedAtDesc(UUID userId, BookingStatus status, Pageable pageable);
+
+    Page<Booking> findAllByUserUserIdAndStatusInOrderByCreatedAtDesc(UUID userId, Collection<BookingStatus> statuses, Pageable pageable);
+
     List<Booking> findAllByStoreStoreIdOrderByStartTimeDesc(UUID storeId);
 
     List<Booking> findAllByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
 
     Page<Booking> findAllByStoreStoreIdOrderByCreatedAtDesc(UUID storeId, Pageable pageable);
+
+    Page<Booking> findAllByStoreStoreIdAndStatusOrderByCreatedAtDesc(UUID storeId, BookingStatus status, Pageable pageable);
 
     List<Booking> findAllByStoreStoreIdAndStartTimeBetweenOrderByStartTimeAsc(
             UUID storeId,

@@ -19,4 +19,5 @@ public class PayOSResponse {
     private Double amount;         // Số tiền
     private String description;    // Nội dung chuyển khoản
     private String status;         // PENDING
+    private String paymentLinkId;  // ID liên kết thanh toán từ PayOS
 }

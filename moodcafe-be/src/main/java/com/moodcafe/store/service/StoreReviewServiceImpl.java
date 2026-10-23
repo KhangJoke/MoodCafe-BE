@@ -12,6 +12,12 @@ import com.moodcafe.notification.abstraction.service.NotificationDispatcherServi
 import com.moodcafe.notification.entity.enums.NotificationType;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
+import com.moodcafe.loyalty.service.LoyaltyRewardService;
+import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
+import com.moodcafe.booking.abstraction.repository.BookingRepository;
+import com.moodcafe.booking.entity.Booking;
+import com.moodcafe.booking.entity.enums.BookingStatus;
+import com.moodcafe.reservation.entity.Reservation;
 import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.abstraction.service.StoreReviewService;
 import com.moodcafe.store.entity.StoreStaff;
@@ -90,6 +96,9 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     private final StoreStaffService storeStaffService;
     private final ObjectMapper objectMapper;
     private final NotificationDispatcherService notificationDispatcherService;
+    private final ReservationRepository reservationRepository;
+    private final BookingRepository bookingRepository;
+    private final LoyaltyRewardService loyaltyRewardService;
 
     @Override
     @Transactional
@@ -99,6 +108,10 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             MultipartFile image,
             List<MultipartFile> additionalImages
     ) {
+        if (request.getBookingId() != null && request.getReservationId() != null) {
+            throw new AppException(ErrorCode.BAD_REQUEST,
+                    "Đánh giá chỉ được gắn với một nguồn đặt bàn");
+        }
         User currentUser = currentUserService.getCurrentUser();
 
         Store store = storeRepository.findById(storeId)
@@ -139,6 +152,53 @@ public class StoreReviewServiceImpl implements StoreReviewService {
 
             if (visitVerification.isUsed()) {
                 throw new AppException(ErrorCode.VISIT_VERIFICATION_ALREADY_USED);
+            }
+        }
+
+        // 3b. Validate Reservation if provided (Verified Booking Review path)
+        Reservation reservation = null;
+        if (request.getReservationId() != null) {
+            reservation = reservationRepository.findById(request.getReservationId())
+                    .orElseThrow(() -> new AppException(ErrorCode.BAD_REQUEST, "Không tìm thấy thông tin đặt bàn"));
+
+            if (!reservation.getUserId().equals(currentUser.getUserId())) {
+                throw new AppException(ErrorCode.FORBIDDEN, "Bạn không phải người đặt bàn này");
+            }
+
+            if (!reservation.getStoreId().equals(storeId)) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Đơn đặt bàn không thuộc quán này");
+            }
+
+            String resStatus = reservation.getStatus();
+            boolean validStay = "CHECKED_IN".equalsIgnoreCase(resStatus)
+                    || "COMPLETED".equalsIgnoreCase(resStatus)
+                    || "CLAIMED_LATE".equalsIgnoreCase(resStatus);
+            if (!validStay) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Chỉ có thể đánh giá sau khi đã nhận bàn");
+            }
+        }
+
+
+        // 3c. Validate Booking if provided (Canonical Booking Review path)
+        Booking booking = null;
+        if (request.getBookingId() != null) {
+            booking = bookingRepository.findById(request.getBookingId())
+                    .orElseThrow(() -> new AppException(ErrorCode.BAD_REQUEST, "Không tìm thấy thông tin đặt bàn"));
+
+            if (!booking.getUser().getUserId().equals(currentUser.getUserId())) {
+                throw new AppException(ErrorCode.FORBIDDEN, "Bạn không phải người đặt bàn này");
+            }
+
+            if (!booking.getStore().getStoreId().equals(storeId)) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Đơn đặt bàn không thuộc quán này");
+            }
+
+            BookingStatus bStatus = booking.getStatus();
+            boolean validStay = bStatus == BookingStatus.CHECKED_IN
+                    || bStatus == BookingStatus.COMPLETED
+                    || bStatus == BookingStatus.CLAIMED_LATE;
+            if (!validStay) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Chỉ có thể đánh giá sau khi đã nhận bàn");
             }
         }
 
@@ -193,6 +253,8 @@ public class StoreReviewServiceImpl implements StoreReviewService {
                 .store(store)
                 .user(currentUser)
                 .visitVerificationId(visitVerification != null ? visitVerification.getVisitVerificationId() : null)
+                .reservationId(reservation != null ? reservation.getReservationId() : null)
+                .bookingId(booking != null ? booking.getBookingId() : null)
                 .overallRating(request.getOverallRating())
                 .quietnessRating(request.getQuietnessRating())
                 .lightingRating(request.getLightingRating())
@@ -215,6 +277,14 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             if (visitVerification != null) {
                 visitVerification.setUsed(true);
                 visitVerificationRepository.save(visitVerification);
+            }
+
+            if ((review.getReservationId() != null || review.getBookingId() != null) && !review.getImages().isEmpty()) {
+                try {
+                    loyaltyRewardService.awardVerifiedReview(review.getReviewId());
+                } catch (Exception rewardEx) {
+                    log.error("Failed to award verified review reward for review {}: {}", review.getReviewId(), rewardEx.getMessage());
+                }
             }
         } catch (Exception dbEx) {
             log.error("Failed to persist StoreReview. Cleaning up uploaded images: {}", dbEx.getMessage());
