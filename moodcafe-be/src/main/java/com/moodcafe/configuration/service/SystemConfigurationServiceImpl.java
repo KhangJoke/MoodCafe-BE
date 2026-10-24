@@ -89,7 +89,7 @@ public class SystemConfigurationServiceImpl implements SystemConfigurationServic
         SystemConfiguration config = configRepository.findByConfigKey(key)
                 .orElseThrow(() -> new AppException(ErrorCode.SYSTEM_CONFIG_NOT_FOUND));
 
-        validateConfigValue(config.getDataType(), value);
+        validateConfigValue(key, config.getDataType(), value);
         config.setConfigValue(value.trim());
         config.setUpdatedAt(Instant.now());
         setAuditUser(config);
@@ -128,7 +128,13 @@ public class SystemConfigurationServiceImpl implements SystemConfigurationServic
                 .orElse(defaultValue);
     }
 
-    private void validateConfigValue(String dataType, String value) {
+    private void validateConfigValue(String key, String dataType, String value) {
+        if ("MIN_WITHDRAWAL_AMOUNT_VND".equals(key)) {
+            if (value == null || !value.trim().matches("[1-9][0-9]{0,9}")) {
+                throw new AppException(ErrorCode.INVALID_CONFIG_VALUE);
+            }
+            return;
+        }
         if ("NUMBER".equalsIgnoreCase(dataType)) {
             try {
                 Double.parseDouble(value.trim());

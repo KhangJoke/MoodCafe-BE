@@ -2,6 +2,7 @@ package com.moodcafe.wallet.service;
 
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.configuration.abstraction.repository.SystemConfigurationRepository;
 import com.moodcafe.wallet.abstraction.repository.StoreBankAccountRepository;
 import com.moodcafe.wallet.abstraction.repository.WithdrawalRequestRepository;
 import com.moodcafe.wallet.entity.StoreBankAccount;
@@ -26,9 +27,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WithdrawalService {
 
-    public static final BigDecimal MIN_WITHDRAWAL_AMOUNT = new BigDecimal("100000");
+    public static final String MIN_WITHDRAWAL_CONFIG_KEY = "MIN_WITHDRAWAL_AMOUNT_VND";
+    public static final BigDecimal DEFAULT_MIN_WITHDRAWAL_AMOUNT = new BigDecimal("100000");
 
     private final WithdrawalRequestRepository withdrawalRequestRepository;
+    private final SystemConfigurationRepository configRepository;
     private final StoreBankAccountRepository bankAccountRepository;
     private final MerchantWalletService merchantWalletService;
     private final StoreFinancialSecurityService financialSecurityService;
@@ -38,7 +41,7 @@ public class WithdrawalService {
     /**
      * Store OWNER creates a payout request from available balance:
      * - Verifies active OWNER role.
-     * - Minimum 100.000 VND (Policy P8).
+     * - Minimum is controlled by Admin system configuration (default 100.000 VND).
      * - Enforces bank account belongs to this store and is not deleted.
      * - Idempotency support: identical key + payload returns existing request; different payload throws 409 CONFLICT.
      * - Atomically shifts funds from available_balance -> locked_balance.
@@ -49,11 +52,9 @@ public class WithdrawalService {
         // Enforce OWNER security boundary at service level
         financialSecurityService.requireActiveStoreOwner(storeId);
 
-        if (amount == null || amount.compareTo(MIN_WITHDRAWAL_AMOUNT) < 0) {
-            throw new AppException(ErrorCode.BAD_REQUEST,
-                    "Số tiền rút tối thiểu là " + MIN_WITHDRAWAL_AMOUNT.setScale(0, RoundingMode.HALF_UP) + "đ");
+        if (amount == null) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Số tiền rút không hợp lệ");
         }
-
         BigDecimal validAmount = amount.setScale(2, RoundingMode.HALF_UP);
         String payloadHash = calculatePayloadHash(storeId, validAmount, bankAccountId);
 
@@ -69,6 +70,12 @@ public class WithdrawalService {
                     throw new AppException(ErrorCode.CONFLICT, "Idempotency key đã được sử dụng với thông tin rút tiền khác");
                 }
             }
+        }
+
+        BigDecimal minimumAmount = getMinimumWithdrawalAmount();
+        if (validAmount.compareTo(minimumAmount) < 0) {
+            throw new AppException(ErrorCode.BAD_REQUEST,
+                    "Số tiền rút tối thiểu là " + minimumAmount.setScale(0, RoundingMode.UNNECESSARY) + "đ");
         }
 
         StoreBankAccount bankAccount;
@@ -106,6 +113,12 @@ public class WithdrawalService {
         request = withdrawalRequestRepository.saveAndFlush(request);
         breakdownService.snapshot(request);
         return request;
+    }
+
+    private BigDecimal getMinimumWithdrawalAmount() {
+        return configRepository.findByConfigKey(MIN_WITHDRAWAL_CONFIG_KEY)
+                .map(config -> new BigDecimal(config.getConfigValue()))
+                .orElse(DEFAULT_MIN_WITHDRAWAL_AMOUNT);
     }
 
     /**

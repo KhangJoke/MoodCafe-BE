@@ -43,7 +43,7 @@ public class MerchantWithdrawalController {
     private final StoreBankAccountRepository bankAccountRepository;
     private final StoreFinancialSecurityService financialSecurityService;
 
-    @Operation(summary = "1. Tạo yêu cầu rút tiền về tài khoản ngân hàng (Tối thiểu 100.000đ)")
+    @Operation(summary = "1. Tạo yêu cầu rút tiền về tài khoản ngân hàng (theo hạn mức Admin cấu hình)")
     @PostMapping("/withdrawals")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<WithdrawalRequest>> requestWithdrawal(
