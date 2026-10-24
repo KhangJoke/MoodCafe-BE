@@ -107,8 +107,8 @@ public class WithdrawalRequest {
 
     @Version
     @Column(name = "version", nullable = false)
-    @Builder.Default
-    private Long version = 0L;
+    // Keep null until first persist: the request UUID is assigned before save for wallet attribution.
+    private Long version;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
