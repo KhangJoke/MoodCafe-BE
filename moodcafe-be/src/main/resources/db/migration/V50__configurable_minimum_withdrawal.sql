@@ -5,4 +5,4 @@ VALUES
      'Số tiền rút tối thiểu (VNĐ)',
      'Hạn mức tối thiểu để chủ quán tạo lệnh rút tiền. Chỉ áp dụng cho lệnh tạo sau khi thay đổi.',
      true)
-ON CONFLICT (config_key) DO NOTHING;
+ON CONFLICT DO NOTHING;
