@@ -107,7 +107,7 @@ public class WithdrawalRequest {
 
     @Version
     @Column(name = "version", nullable = false)
-    // Keep null until first persist: the request UUID is assigned before save for wallet attribution.
+    // Hibernate initializes this when the new request is persisted with a generated UUID.
     private Long version;
 
     @CreationTimestamp

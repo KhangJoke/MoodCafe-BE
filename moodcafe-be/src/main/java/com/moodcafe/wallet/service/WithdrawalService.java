@@ -90,14 +90,9 @@ public class WithdrawalService {
                     .orElseThrow(() -> new AppException(ErrorCode.BAD_REQUEST, "Cơ sở chưa thiết lập tài khoản ngân hàng mặc định"));
         }
 
-        UUID withdrawalId = UUID.randomUUID();
-
-        // 1. Lock funds in merchant wallet
-        merchantWalletService.lockForWithdrawal(storeId, validAmount, withdrawalId.toString());
-
-        // 2. Create withdrawal request with snapshots
+        // Persist first so Hibernate generates the UUID and initializes the version.
+        // The wallet lock and attribution remain in this transaction and roll back together.
         WithdrawalRequest request = WithdrawalRequest.builder()
-                .withdrawalId(withdrawalId)
                 .storeId(storeId)
                 .ownerId(ownerId)
                 .amount(validAmount)
@@ -111,6 +106,7 @@ public class WithdrawalService {
                 .build();
 
         request = withdrawalRequestRepository.saveAndFlush(request);
+        merchantWalletService.lockForWithdrawal(storeId, validAmount, request.getWithdrawalId().toString());
         breakdownService.snapshot(request);
         return request;
     }
