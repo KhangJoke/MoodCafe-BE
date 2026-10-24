@@ -32,6 +32,8 @@ public class WithdrawalService {
     private final StoreBankAccountRepository bankAccountRepository;
     private final MerchantWalletService merchantWalletService;
     private final StoreFinancialSecurityService financialSecurityService;
+    private final PayoutBreakdownService breakdownService;
+    private final com.moodcafe.notification.abstraction.service.NotificationDispatcherService notifications;
 
     /**
      * Store OWNER creates a payout request from available balance:
@@ -101,7 +103,9 @@ public class WithdrawalService {
                 .status("REQUESTED")
                 .build();
 
-        return withdrawalRequestRepository.save(request);
+        request = withdrawalRequestRepository.saveAndFlush(request);
+        breakdownService.snapshot(request);
+        return request;
     }
 
     /**
@@ -128,6 +132,7 @@ public class WithdrawalService {
         request.setClaimedBy(adminId);
         request.setClaimedAt(Instant.now());
         request.setAdminId(adminId);
+        if ("PAID".equals(request.getStatus()) || "REJECTED".equals(request.getStatus())) notifyOwnerAfterCommit(request);
         return withdrawalRequestRepository.save(request);
     }
 
@@ -190,6 +195,7 @@ public class WithdrawalService {
         request.setEvidenceImageUrl(evidenceImageUrl);
         request.setProcessedAt(Instant.now());
 
+        if ("PAID".equals(request.getStatus()) || "REJECTED".equals(request.getStatus())) notifyOwnerAfterCommit(request);
         return withdrawalRequestRepository.save(request);
     }
 
@@ -230,6 +236,7 @@ public class WithdrawalService {
         request.setAdminNotes(reason);
         request.setProcessedAt(Instant.now());
 
+        if ("PAID".equals(request.getStatus()) || "REJECTED".equals(request.getStatus())) notifyOwnerAfterCommit(request);
         return withdrawalRequestRepository.save(request);
     }
 
@@ -258,6 +265,7 @@ public class WithdrawalService {
         request.setStatus("RECONCILIATION_REQUIRED");
         request.setAdminId(adminId);
         request.setAdminNotes(reason.trim());
+        if ("PAID".equals(request.getStatus()) || "REJECTED".equals(request.getStatus())) notifyOwnerAfterCommit(request);
         return withdrawalRequestRepository.save(request);
     }
 
@@ -342,7 +350,22 @@ public class WithdrawalService {
             throw new AppException(ErrorCode.BAD_REQUEST, "Hành động giải quyết đối soát không hợp lệ (chỉ chấp nhận PAID hoặc REJECTED)");
         }
 
+        if ("PAID".equals(request.getStatus()) || "REJECTED".equals(request.getStatus())) notifyOwnerAfterCommit(request);
         return withdrawalRequestRepository.save(request);
+    }
+
+    private void notifyOwnerAfterCommit(WithdrawalRequest request) {
+        UUID owner=request.getOwnerId(); String id=request.getWithdrawalId().toString();
+        String message="Yêu cầu rút " + request.getAmount().toPlainString() + "đ: " +
+                ("PAID".equals(request.getStatus()) ? "Đã chuyển khoản thành công" : "Đã từ chối, tiền đã trả về số dư khả dụng");
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override public void afterCommit() {
+                    try { notifications.dispatch(owner,"Kết quả yêu cầu rút tiền",message,
+                        com.moodcafe.notification.entity.enums.NotificationType.SYSTEM_ANNOUNCEMENT,id,"/merchant/wallet"); }
+                    catch(Exception e) { log.warn("Failed to notify payout {}",id,e); }
+                }
+            });
     }
 
     private String calculatePayloadHash(UUID storeId, BigDecimal amount, UUID bankAccountId) {

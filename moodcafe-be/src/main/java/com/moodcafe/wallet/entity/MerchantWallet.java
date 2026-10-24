@@ -60,6 +60,10 @@ public class MerchantWallet {
     @Builder.Default
     private BigDecimal lockedBalance = BigDecimal.ZERO;
 
+    @Column(name = "total_withdrawn", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal totalWithdrawn = BigDecimal.ZERO;
+
     @Version
     @Column(name = "version", nullable = false)
     @Builder.Default

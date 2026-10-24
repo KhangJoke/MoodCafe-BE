@@ -55,6 +55,14 @@ public class VoucherTemplate {
     @Builder.Default
     private Integer displayOrder = 0;
 
+    @Column(name = "min_gross_amount", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal minGrossAmount = BigDecimal.ZERO;
+
+    @Column(name = "valid_days", nullable = false)
+    @Builder.Default
+    private Integer validDays = 30;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

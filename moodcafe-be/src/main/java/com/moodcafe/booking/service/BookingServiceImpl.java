@@ -53,7 +53,6 @@ import com.moodcafe.store.entity.StoreImage;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
-import com.moodcafe.reservation.service.ReservationQrVerificationService;
 import com.moodcafe.voucher.service.VoucherLifecycleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -120,9 +119,9 @@ public class BookingServiceImpl implements BookingService {
     private final MerchantWalletService merchantWalletService;
     private final CustomerWalletService customerWalletService;
     private final LoyaltyRewardService loyaltyRewardService;
-    private final ReservationQrVerificationService qrVerificationService;
     private final VoucherLifecycleService voucherLifecycleService;
     private final PlatformTransactionManager transactionManager;
+    @Autowired private BookingCheckoutChallengeService checkoutChallenges;
 
     @Autowired
     public BookingServiceImpl(
@@ -146,7 +145,6 @@ public class BookingServiceImpl implements BookingService {
             MerchantWalletService merchantWalletService,
             CustomerWalletService customerWalletService,
             LoyaltyRewardService loyaltyRewardService,
-            ReservationQrVerificationService qrVerificationService,
             VoucherLifecycleService voucherLifecycleService,
             PlatformTransactionManager transactionManager
     ) {
@@ -170,7 +168,6 @@ public class BookingServiceImpl implements BookingService {
         this.merchantWalletService = merchantWalletService;
         this.customerWalletService = customerWalletService;
         this.loyaltyRewardService = loyaltyRewardService;
-        this.qrVerificationService = qrVerificationService;
         this.voucherLifecycleService = voucherLifecycleService;
         this.transactionManager = transactionManager;
     }
@@ -202,7 +199,7 @@ public class BookingServiceImpl implements BookingService {
              notificationDispatcherService, redisTemplate, objectMapper, bookingFinanceService,
              bookingQuoteRepository, customerVoucherRepository, orderCodeGeneratorService,
              paymentAttemptService, merchantWalletService, customerWalletService,
-             loyaltyRewardService, null, null, null);
+             loyaltyRewardService, null, null);
     }
 
     public BookingServiceImpl(
@@ -228,7 +225,7 @@ public class BookingServiceImpl implements BookingService {
              storeStaffService, currentUserService, payOSService, bookingMapper, storeImageRepository,
              notificationDispatcherService, redisTemplate, objectMapper, bookingFinanceService,
              bookingQuoteRepository, customerVoucherRepository, orderCodeGeneratorService,
-             paymentAttemptService, null, null, null, null, null, null);
+             paymentAttemptService, null, null, null, null, null);
     }
 
     @Override
@@ -294,44 +291,92 @@ public class BookingServiceImpl implements BookingService {
                             .occupiedCount(cat.getAppQuota())
                             .status(SlotStatus.FULL)
                             .availableDurationMins(0)
-                            .note("Quán đang tạm tắt tính năng đặt bàn")
+                            .note("Quán hiện đang tạm tắt nhận đặt bàn")
                             .build());
                 } else if (Boolean.TRUE.equals(config.getIsTimeLimitEnabled())) {
-                    Instant normalEnd = slotStart.plus(Duration.ofMinutes(config.getSittingDurationMins()));
-                    Instant closingInstant = targetDate.atTime(closingTime).atZone(VN_ZONE).toInstant();
-                    Instant effectiveEnd = normalEnd.isAfter(closingInstant) ? closingInstant : normalEnd;
-                    Instant bufferEnd = effectiveEnd.plus(Duration.ofMinutes(config.getCleanupBufferMins()));
+                    // Case 1: Quán BẬT giới hạn thời gian ngồi
+                    int standardMins = config.getSittingDurationMins();
+                    int bufferMins = config.getCleanupBufferMins();
+                    int totalOccupiedMins = standardMins + bufferMins;
+                    Instant standardEnd = slotStart.plus(Duration.ofMinutes(totalOccupiedMins));
 
-                    long occupied = catBookings.stream()
-                            .filter(b -> b.getStartTime().isBefore(bufferEnd) && b.getEndTime().isAfter(slotStart))
+                    Instant firstIntervalEnd = slotStart.plus(Duration.ofMinutes(30));
+                    long occupiedAtStart = catBookings.stream()
+                            .filter(b -> b.getStartTime().isBefore(firstIntervalEnd) && b.getEndTime().isAfter(slotStart))
                             .count();
 
-                    int available = Math.max(0, cat.getAppQuota() - (int) occupied);
-                    int availableDuration = (int) ChronoUnit.MINUTES.between(slotStart, effectiveEnd);
+                    int availableAtStart = Math.max(0, cat.getAppQuota() - (int) occupiedAtStart);
 
-                    if (available <= 0) {
+                    if (availableAtStart <= 0) {
                         timeSlots.add(TimeSlotDTO.builder()
                                 .time(timeStr)
                                 .startTime(slotStart)
-                                .endTime(effectiveEnd)
+                                .endTime(standardEnd)
                                 .availableCount(0)
                                 .occupiedCount(cat.getAppQuota())
                                 .status(SlotStatus.FULL)
                                 .availableDurationMins(0)
+                                .note("Đã kín chỗ trong khung giờ này")
                                 .build());
                     } else {
-                        SlotStatus status = (available == 1) ? SlotStatus.ALMOST_FULL : SlotStatus.AVAILABLE;
-                        timeSlots.add(TimeSlotDTO.builder()
-                                .time(timeStr)
-                                .startTime(slotStart)
-                                .endTime(effectiveEnd)
-                                .availableCount(available)
-                                .occupiedCount((int) occupied)
-                                .status(status)
-                                .availableDurationMins(availableDuration)
-                                .build());
+                        // Kiểm tra điểm nghẽn (blockage) trong khoảng [slotStart, standardEnd]
+                        Instant earliestBlockage = null;
+                        for (int m = 15; m < totalOccupiedMins; m += 15) {
+                            Instant checkPoint = slotStart.plus(Duration.ofMinutes(m));
+                            long occupiedAtPoint = catBookings.stream()
+                                    .filter(b -> b.getStartTime().isBefore(checkPoint.plusSeconds(1)) && b.getEndTime().isAfter(checkPoint))
+                                    .count();
+                            if (occupiedAtPoint >= cat.getAppQuota()) {
+                                earliestBlockage = checkPoint;
+                                break;
+                            }
+                        }
+
+                        if (earliestBlockage != null) {
+                            long rawDiffMins = ChronoUnit.MINUTES.between(slotStart, earliestBlockage);
+                            int availableMins = Math.max(0, (int) rawDiffMins - bufferMins);
+                            String nextBookingStr = earliestBlockage.atZone(VN_ZONE).toLocalTime().format(timeFormatter);
+
+                            if (availableMins < 45) {
+                                timeSlots.add(TimeSlotDTO.builder()
+                                        .time(timeStr)
+                                        .startTime(slotStart)
+                                        .endTime(earliestBlockage)
+                                        .availableCount(0)
+                                        .occupiedCount(cat.getAppQuota())
+                                        .status(SlotStatus.FULL)
+                                        .availableDurationMins(availableMins)
+                                        .nextBookingTime(nextBookingStr)
+                                        .note("Khoảng trống chỉ còn " + availableMins + " phút, không đủ thời gian phục vụ tối thiểu")
+                                        .build());
+                            } else {
+                                timeSlots.add(TimeSlotDTO.builder()
+                                        .time(timeStr)
+                                        .startTime(slotStart)
+                                        .endTime(earliestBlockage)
+                                        .availableCount(availableAtStart)
+                                        .occupiedCount((int) occupiedAtStart)
+                                        .status(SlotStatus.LIMITED_TIME)
+                                        .availableDurationMins(availableMins)
+                                        .nextBookingTime(nextBookingStr)
+                                        .note("Chỉ còn trống " + availableMins + " phút do ca sau có khách đặt lúc " + nextBookingStr)
+                                        .build());
+                            }
+                        } else {
+                            SlotStatus status = (availableAtStart == 1) ? SlotStatus.ALMOST_FULL : SlotStatus.AVAILABLE;
+                            timeSlots.add(TimeSlotDTO.builder()
+                                    .time(timeStr)
+                                    .startTime(slotStart)
+                                    .endTime(standardEnd)
+                                    .availableCount(availableAtStart)
+                                    .occupiedCount((int) occupiedAtStart)
+                                    .status(status)
+                                    .availableDurationMins(standardMins)
+                                    .build());
+                        }
                     }
                 } else {
+                    // Case 2: Quán TẮT giới hạn thời gian ngồi
                     Instant closingInstant = targetDate.atTime(closingTime).atZone(VN_ZONE).toInstant();
                     long occupied = catBookings.stream()
                             .filter(b -> b.getStartTime().isBefore(closingInstant) && b.getEndTime().isAfter(slotStart))
@@ -665,9 +710,13 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.NO_TABLE_AVAILABLE);
         }
 
-        // Validate Quote - MANDATORY for all bookings
+        // Preserve the existing booking API: clients without a quote receive a server-calculated snapshot.
+        // Clients displaying voucher pricing may still send an explicit quote to bind their selection.
         if (request.getQuoteId() == null) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Yêu cầu đặt bàn bắt buộc phải có quoteId hợp lệ từ hệ thống");
+            BookingQuoteResponse quoteResponse = getBookingQuote(BookingQuoteRequest.builder()
+                    .storeId(request.getStoreId()).categoryId(request.getCategoryId())
+                    .startTime(request.getStartTime()).guestCount(guestCount).voucherId(request.getVoucherId()).build());
+            request.setQuoteId(quoteResponse.getQuoteId());
         }
         BookingQuote quote = bookingQuoteRepository.findByQuoteIdAndUserUserId(request.getQuoteId(), currentUser.getUserId())
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Báo giá không tồn tại hoặc đã hết hạn"));
@@ -986,7 +1035,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public BookingStaffDetailResponse getStaffBookingDetail(UUID storeId, UUID bookingId) {
         User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId);
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
@@ -1421,7 +1470,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public List<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to) {
         User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId);
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         List<Booking> list;
         if (from != null && to != null) {
@@ -1447,7 +1496,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public PageResponse<BookingResponse> getStoreDeskBookings(UUID storeId, LocalDate date, Instant from, Instant to, Pageable pageable) {
         User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId);
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         Page<Booking> page;
         if (from != null && to != null) {
@@ -1482,7 +1531,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public BookingDeskSummaryResponse getStoreDeskSummary(UUID storeId, LocalDate date) {
         User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId);
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         LocalDate targetDate = date != null ? date : LocalDate.now(VN_ZONE);
         ZonedDateTime dayStart = targetDate.atTime(0, 0).atZone(VN_ZONE);
@@ -1526,7 +1575,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse deskCheckIn(UUID storeId, DeskCheckInRequest request) {
         User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId);
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         String codeOrToken = request.getCodeOrToken() != null ? request.getCodeOrToken().trim() : "";
         Booking booking = bookingRepository.findAllByStoreStoreIdOrderByCreatedAtDesc(storeId).stream()
@@ -1549,18 +1598,21 @@ public class BookingServiceImpl implements BookingService {
                     "Đơn đặt bàn không ở trạng thái sẵn sàng check-in (Hiện tại: " + booking.getStatus() + ")");
         }
 
+        booking = bookingRepository.findByIdForUpdate(booking.getBookingId()).orElseThrow();
+        if (booking.getStatus() != BookingStatus.PAID_CONFIRMED) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION);
+        }
+        Instant now = Instant.now();
+        Instant grace = booking.getGraceDeadline() != null ? booking.getGraceDeadline()
+                : booking.getStartTime().plus(Duration.ofMinutes(getOrCreateConfig(booking.getStore()).getGracePeriodMins()));
+        if (now.isBefore(booking.getStartTime().minus(Duration.ofMinutes(30))) || now.isAfter(grace)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Ngoài thời gian nhận bàn, vui lòng kiểm tra luồng nhận nước trễ");
+        }
         booking.setStatus(BookingStatus.CHECKED_IN);
         booking.setCheckedInAt(Instant.now());
         booking = bookingRepository.save(booking);
 
-        Instant graceDeadline = booking.getGraceDeadline();
-        if (graceDeadline == null || !Instant.now().isAfter(graceDeadline)) {
-            try {
-                if (loyaltyRewardService != null) loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
-            } catch (Exception ex) {
-                log.warn("Failed to award on-time check-in reward: {}", ex.getMessage());
-            }
-        }
+        settleNoShowRevenue(booking);
 
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
         BookingResponse res = enrichBookingResponse(booking, config);
@@ -1577,7 +1629,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse deskClaimLate(UUID storeId, UUID bookingId) {
         User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId);
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
@@ -1626,7 +1678,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public BookingResponse deskComplete(UUID storeId, UUID bookingId) {
         User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId);
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
 
         Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
@@ -1656,6 +1708,7 @@ public class BookingServiceImpl implements BookingService {
 
         try {
             if (loyaltyRewardService != null) loyaltyRewardService.awardBookingSpendReward(booking);
+            if (loyaltyRewardService != null) loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
         } catch (Exception ex) {
             log.warn("Failed to award spend reward: {}", ex.getMessage());
         }
@@ -1730,7 +1783,7 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.BAD_REQUEST, "Đơn không ở trạng thái đang sử dụng");
         }
 
-        requireTrustedPhysicalChallenge();
+        checkoutChallenges.verify(bookingId, qrToken);
 
         Instant now = Instant.now();
         Instant checkedInMoment = booking.getCheckedInAt() != null ? booking.getCheckedInAt() : booking.getStartTime();
@@ -1752,6 +1805,7 @@ public class BookingServiceImpl implements BookingService {
 
         try {
             if (loyaltyRewardService != null) loyaltyRewardService.awardBookingSpendReward(booking);
+            if (loyaltyRewardService != null) loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
         } catch (Exception ex) {
             log.warn("Failed to award spend reward: {}", ex.getMessage());
         }
@@ -1776,16 +1830,43 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private Instant calculateEndTime(Instant startTime, StoreBookingConfig config, Store store, TableCategory category) {
-        LocalTime closingTime = store.getClosingTime() != null ? store.getClosingTime() : LocalTime.of(22, 0);
-        ZonedDateTime startVn = startTime.atZone(VN_ZONE);
-        Instant closingInstant = startVn.toLocalDate().atTime(closingTime).atZone(VN_ZONE).toInstant();
-
         if (Boolean.TRUE.equals(config.getIsTimeLimitEnabled())) {
-            Instant calculated = startTime.plus(Duration.ofMinutes(config.getSittingDurationMins()));
-            return calculated.isAfter(closingInstant) ? closingInstant : calculated;
-        } else {
-            return closingInstant;
+            int totalMins = config.getSittingDurationMins() + config.getCleanupBufferMins();
+            Instant standardEnd = startTime.plus(Duration.ofMinutes(totalMins));
+
+            if (category != null) {
+                // Kiểm tra xem có đơn nào phía sau làm kín bàn trước standardEnd không
+                for (int m = 15; m < totalMins; m += 15) {
+                    Instant checkPoint = startTime.plus(Duration.ofMinutes(m));
+                    long count = bookingRepository.countOverlappingBookings(
+                            category.getCategoryId(),
+                            OCCUPIED_STATUSES,
+                            checkPoint,
+                            checkPoint.plusSeconds(1)
+                    );
+                    if (count >= category.getAppQuota()) {
+                        long availableMins = ChronoUnit.MINUTES.between(startTime, checkPoint) - config.getCleanupBufferMins();
+                        if (availableMins < 45) {
+                            throw new AppException(ErrorCode.NO_TABLE_AVAILABLE, "Khoảng trống chỉ còn " + availableMins + " phút, không đủ thời gian phục vụ tối thiểu");
+                        }
+                        return checkPoint;
+                    }
+                }
+            }
+
+            return standardEnd;
         }
+
+        // Nếu quán tắt giới hạn thời gian: chiếm slot đến giờ đóng cửa của quán trong ngày đó
+        LocalTime closingTime = store.getClosingTime() != null ? store.getClosingTime() : LocalTime.of(23, 0);
+        ZonedDateTime startZoned = startTime.atZone(VN_ZONE);
+        ZonedDateTime closingZoned = startZoned.with(closingTime);
+
+        if (closingZoned.isBefore(startZoned)) {
+            closingZoned = closingZoned.plusDays(1);
+        }
+
+        return closingZoned.toInstant();
     }
 
     private StoreBookingConfig getOrCreateConfig(Store store) {
@@ -1853,7 +1934,7 @@ public class BookingServiceImpl implements BookingService {
         res.setServiceClosingDeadline(booking.getServiceClosingDeadline());
         var actions = bookingFinanceService.calculateCustomerAllowedActions(booking);
         res.setAllowedActions(actions == null ? List.of() : actions.stream()
-                .filter(action -> !action.startsWith("SELF_CHECK_")).toList());
+                .filter(action -> !action.equals("SELF_CHECK_IN")).toList());
 
         boolean cancelable = (booking.getStatus() == BookingStatus.PAID_CONFIRMED || booking.getStatus() == BookingStatus.PENDING_PAYMENT)
                 && (booking.getFreeCancelDeadline() == null || Instant.now().isBefore(booking.getFreeCancelDeadline()));

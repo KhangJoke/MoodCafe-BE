@@ -58,7 +58,7 @@ public class VoucherLifecycleService {
      */
     @Transactional
     public void captureVoucher(UUID reservationId) {
-        Optional<CustomerVoucher> opt = customerVoucherRepository.findByLockedReservationIdWithLock(reservationId);
+        Optional<CustomerVoucher> opt = customerVoucherRepository.findByLockedBookingIdWithLock(reservationId);
         if (opt.isPresent()) {
             CustomerVoucher voucher = opt.get();
             if ("USED".equalsIgnoreCase(voucher.getStatus())) {
@@ -83,7 +83,7 @@ public class VoucherLifecycleService {
      */
     @Transactional
     public void releaseVoucher(UUID reservationId) {
-        Optional<CustomerVoucher> opt = customerVoucherRepository.findByLockedReservationIdWithLock(reservationId);
+        Optional<CustomerVoucher> opt = customerVoucherRepository.findByLockedBookingIdWithLock(reservationId);
         if (opt.isPresent()) {
             CustomerVoucher voucher = opt.get();
             // Strict invariant check: a USED voucher must NEVER be released to AVAILABLE

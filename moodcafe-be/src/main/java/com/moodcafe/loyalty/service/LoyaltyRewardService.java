@@ -4,8 +4,6 @@ import com.moodcafe.booking.abstraction.repository.BookingRepository;
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.loyalty.abstraction.repository.ReservationLoyaltyRewardRepository;
 import com.moodcafe.loyalty.entity.ReservationLoyaltyReward;
-import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
-import com.moodcafe.reservation.entity.Reservation;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
 import com.moodcafe.store.entity.StoreReview;
 import com.moodcafe.wallet.dto.RewardPointCommand;
@@ -24,14 +22,12 @@ import java.util.UUID;
 public class LoyaltyRewardService {
 
     private static final BigDecimal SPEND_REWARD_RATE = new BigDecimal("0.01"); // 1%
-    private static final long MAX_SPEND_REWARD_POINTS = 50000L;
-    private static final long ON_TIME_CHECK_IN_POINTS = 1000L;
-    private static final long SELF_CHECK_OUT_POINTS = 1000L;
-    private static final long VERIFIED_REVIEW_POINTS = 2000L;
+    private static final long ON_TIME_CHECK_IN_POINTS = 20L;
+    private static final long SELF_CHECK_OUT_POINTS = 30L;
+    private static final long VERIFIED_REVIEW_POINTS = 50L;
 
     private final ReservationLoyaltyRewardRepository rewardRepository;
     private final CustomerWalletService customerWalletService;
-    private final ReservationRepository reservationRepository;
     private final StoreReviewRepository storeReviewRepository;
     private final BookingRepository bookingRepository;
 
@@ -39,24 +35,13 @@ public class LoyaltyRewardService {
     public LoyaltyRewardService(
             ReservationLoyaltyRewardRepository rewardRepository,
             CustomerWalletService customerWalletService,
-            ReservationRepository reservationRepository,
             StoreReviewRepository storeReviewRepository,
             BookingRepository bookingRepository
     ) {
         this.rewardRepository = rewardRepository;
         this.customerWalletService = customerWalletService;
-        this.reservationRepository = reservationRepository;
         this.storeReviewRepository = storeReviewRepository;
         this.bookingRepository = bookingRepository;
-    }
-
-    public LoyaltyRewardService(
-            ReservationLoyaltyRewardRepository rewardRepository,
-            CustomerWalletService customerWalletService,
-            ReservationRepository reservationRepository,
-            StoreReviewRepository storeReviewRepository
-    ) {
-        this(rewardRepository, customerWalletService, reservationRepository, storeReviewRepository, null);
     }
 
     /**
@@ -64,7 +49,10 @@ public class LoyaltyRewardService {
      */
     @Transactional
     public void awardBookingSpendReward(Booking booking) {
-        if (booking == null || booking.getGrossAmount() == null) return;
+        if (booking == null || booking.getGrossAmount() == null ||
+                !(booking.getStatus() == com.moodcafe.booking.entity.enums.BookingStatus.COMPLETED ||
+                  booking.getStatus() == com.moodcafe.booking.entity.enums.BookingStatus.CLAIMED_LATE)) return;
+        bookingRepository.findByIdForUpdate(booking.getBookingId()).orElseThrow();
         if (rewardRepository.findByBookingIdAndRewardType(booking.getBookingId(), "SPEND").isPresent()) {
             return;
         }
@@ -74,7 +62,7 @@ public class LoyaltyRewardService {
                 .setScale(0, RoundingMode.FLOOR)
                 .longValue();
 
-        long pointsToAward = Math.min(calculatedPoints, MAX_SPEND_REWARD_POINTS);
+        long pointsToAward = calculatedPoints;
         if (pointsToAward <= 0) return;
 
         ReservationLoyaltyReward reward = ReservationLoyaltyReward.builder()
@@ -98,11 +86,13 @@ public class LoyaltyRewardService {
     }
 
     /**
-     * Awards 1,000 ON_TIME_CHECK_IN points if customer checks in before grace deadline for canonical Booking.
+     * Awards configured ON_TIME_CHECK_IN points if customer checks in before grace deadline for canonical Booking.
      */
     @Transactional
     public void awardBookingOnTimeCheckIn(Booking booking) {
-        if (booking == null) return;
+        if (booking == null || booking.getStatus() != com.moodcafe.booking.entity.enums.BookingStatus.COMPLETED
+                || booking.getCheckedInAt() == null || booking.getGraceDeadline() == null
+                || booking.getCheckedInAt().isAfter(booking.getGraceDeadline())) return;
         if (rewardRepository.findByBookingIdAndRewardType(booking.getBookingId(), "ON_TIME_CHECK_IN").isPresent()) {
             return;
         }
@@ -128,7 +118,7 @@ public class LoyaltyRewardService {
     }
 
     /**
-     * Awards 1,000 SELF_CHECK_OUT points if customer performs self-service check-out (sitting >= 30m) for canonical Booking.
+     * Awards configured SELF_CHECK_OUT points if customer performs self-service check-out (sitting >= 30m) for canonical Booking.
      */
     @Transactional
     public void awardBookingSelfCheckOut(Booking booking) {
@@ -137,7 +127,9 @@ public class LoyaltyRewardService {
 
     @Transactional
     public void awardBookingSelfCheckOut(Booking booking, long durationMinutes) {
-        if (booking == null) return;
+        if (booking == null || durationMinutes < 30 || booking.getCheckedInAt() == null
+                || booking.getCompletedAt() == null
+                || java.time.Duration.between(booking.getCheckedInAt(), booking.getCompletedAt()).toMinutes() < 30) return;
         if (rewardRepository.findByBookingIdAndRewardType(booking.getBookingId(), "SELF_CHECK_OUT").isPresent()) {
             return;
         }
@@ -163,112 +155,7 @@ public class LoyaltyRewardService {
     }
 
     /**
-     * Awards SPEND points (1% gross_amount) upon COMPLETED or CLAIMED_LATE for legacy Reservation.
-     */
-    @Transactional
-    public void awardSpendReward(Reservation reservation) {
-        if (reservation.getGrossAmount() == null) return;
-
-        if (rewardRepository.findByReservationIdAndRewardType(
-                reservation.getReservationId(), "SPEND").isPresent()) {
-            return;
-        }
-
-        long calculatedPoints = reservation.getGrossAmount()
-                .multiply(SPEND_REWARD_RATE)
-                .setScale(0, RoundingMode.FLOOR)
-                .longValue();
-
-        long pointsToAward = Math.min(calculatedPoints, MAX_SPEND_REWARD_POINTS);
-        if (pointsToAward <= 0) return;
-
-        ReservationLoyaltyReward reward = ReservationLoyaltyReward.builder()
-                .reservationId(reservation.getReservationId())
-                .userId(reservation.getUserId())
-                .rewardType("SPEND")
-                .pointsAwarded(pointsToAward)
-                .build();
-        rewardRepository.save(reward);
-
-        customerWalletService.creditRewardPoints(RewardPointCommand.builder()
-                .userId(reservation.getUserId())
-                .points(pointsToAward)
-                .rewardType("SPEND")
-                .sourceId(reservation.getReservationId().toString())
-                .businessKey("RESERVATION_SPEND_" + reservation.getReservationId())
-                .description("Thưởng chi tiêu đặt bàn " + reservation.getReservationId())
-                .build());
-        log.info("Awarded {} SPEND points to user {} for reservation {}",
-                pointsToAward, reservation.getUserId(), reservation.getReservationId());
-    }
-
-    /**
-     * Awards 1,000 ON_TIME_CHECK_IN points if customer checks in before grace deadline for legacy Reservation.
-     */
-    @Transactional
-    public void awardOnTimeCheckIn(Reservation reservation) {
-        if (rewardRepository.findByReservationIdAndRewardType(
-                reservation.getReservationId(), "ON_TIME_CHECK_IN").isPresent()) {
-            return;
-        }
-
-        ReservationLoyaltyReward reward = ReservationLoyaltyReward.builder()
-                .reservationId(reservation.getReservationId())
-                .userId(reservation.getUserId())
-                .rewardType("ON_TIME_CHECK_IN")
-                .pointsAwarded(ON_TIME_CHECK_IN_POINTS)
-                .build();
-        rewardRepository.save(reward);
-
-        customerWalletService.creditRewardPoints(RewardPointCommand.builder()
-                .userId(reservation.getUserId())
-                .points(ON_TIME_CHECK_IN_POINTS)
-                .rewardType("ON_TIME_CHECK_IN")
-                .sourceId(reservation.getReservationId().toString())
-                .businessKey("RESERVATION_ON_TIME_" + reservation.getReservationId())
-                .description("Thưởng nhận bàn đúng giờ cho đơn " + reservation.getReservationId())
-                .build());
-        log.info("Awarded {} ON_TIME_CHECK_IN points to user {} for reservation {}",
-                ON_TIME_CHECK_IN_POINTS, reservation.getUserId(), reservation.getReservationId());
-    }
-
-    /**
-     * Awards 1,000 SELF_CHECK_OUT points if customer performs self-service check-out (sitting >= 30m) for legacy Reservation.
-     */
-    @Transactional
-    public void awardSelfCheckOut(Reservation reservation) {
-        awardSelfCheckOut(reservation, 30L);
-    }
-
-    @Transactional
-    public void awardSelfCheckOut(Reservation reservation, long durationMinutes) {
-        if (rewardRepository.findByReservationIdAndRewardType(
-                reservation.getReservationId(), "SELF_CHECK_OUT").isPresent()) {
-            return;
-        }
-
-        ReservationLoyaltyReward reward = ReservationLoyaltyReward.builder()
-                .reservationId(reservation.getReservationId())
-                .userId(reservation.getUserId())
-                .rewardType("SELF_CHECK_OUT")
-                .pointsAwarded(SELF_CHECK_OUT_POINTS)
-                .build();
-        rewardRepository.save(reward);
-
-        customerWalletService.creditRewardPoints(RewardPointCommand.builder()
-                .userId(reservation.getUserId())
-                .points(SELF_CHECK_OUT_POINTS)
-                .rewardType("SELF_CHECK_OUT")
-                .sourceId(reservation.getReservationId().toString())
-                .businessKey("RESERVATION_SELF_CHECKOUT_" + reservation.getReservationId())
-                .description("Thưởng tự trả bàn (Self Check-out) cho đơn " + reservation.getReservationId())
-                .build());
-        log.info("Awarded {} SELF_CHECK_OUT points to user {} for reservation {}",
-                SELF_CHECK_OUT_POINTS, reservation.getUserId(), reservation.getReservationId());
-    }
-
-    /**
-     * Awards 2,000 VERIFIED_REVIEW points when customer reviews a store after COMPLETED or CLAIMED_LATE.
+     * Awards configured VERIFIED_REVIEW points when customer reviews a store after COMPLETED or CLAIMED_LATE.
      */
     @Transactional
     public void awardVerifiedReview(UUID reviewId) {
@@ -284,67 +171,15 @@ public class LoyaltyRewardService {
         }
         UUID reviewUserId = review.getUser().getUserId();
 
-        if (review.getReservationId() != null) {
-            Reservation reservation = reservationRepository.findById(review.getReservationId()).orElse(null);
-            if (reservation == null) {
-                log.warn("Cannot award review points: reservation {} not found", review.getReservationId());
-                return;
-            }
-
-            boolean validStay = "CHECKED_IN".equals(reservation.getStatus())
-                    || "COMPLETED".equals(reservation.getStatus())
-                    || "CLAIMED_LATE".equals(reservation.getStatus());
-            if (!validStay) {
-                log.warn("Cannot award review points: reservation {} status is {}",
-                        reservation.getReservationId(), reservation.getStatus());
-                return;
-            }
-
-            if (review.getStore() == null || !reservation.getStoreId().equals(review.getStore().getStoreId())) {
-                log.warn("Cannot award review points: store mismatch");
-                return;
-            }
-
-            if (!reservation.getUserId().equals(reviewUserId)) {
-                log.warn("Cannot award review points: user mismatch");
-                return;
-            }
-
-            if (rewardRepository.findByReservationIdAndRewardType(
-                    reservation.getReservationId(), "VERIFIED_REVIEW").isPresent()) {
-                return;
-            }
-
-            ReservationLoyaltyReward reward = ReservationLoyaltyReward.builder()
-                    .reservationId(reservation.getReservationId())
-                    .userId(reviewUserId)
-                    .rewardType("VERIFIED_REVIEW")
-                    .pointsAwarded(VERIFIED_REVIEW_POINTS)
-                    .build();
-            rewardRepository.save(reward);
-
-            customerWalletService.creditRewardPoints(RewardPointCommand.builder()
-                    .userId(reviewUserId)
-                    .points(VERIFIED_REVIEW_POINTS)
-                    .rewardType("VERIFIED_REVIEW")
-                    .sourceId(review.getReviewId().toString())
-                    .businessKey("RESERVATION_REVIEW_" + review.getReviewId())
-                    .description("Thưởng đánh giá có ảnh sau khi trải nghiệm tại " + reservation.getStoreId())
-                    .build());
-            log.info("Awarded {} VERIFIED_REVIEW points to user {} for review {}",
-                    VERIFIED_REVIEW_POINTS, reviewUserId, review.getReviewId());
-            return;
-        }
-
         if (review.getBookingId() != null && bookingRepository != null) {
-            Booking booking = bookingRepository.findById(review.getBookingId()).orElse(null);
+            Booking booking = bookingRepository.findByIdForUpdate(review.getBookingId()).orElse(null);
             if (booking == null) {
                 log.warn("Cannot award review points: booking {} not found", review.getBookingId());
                 return;
             }
 
             String bStatus = booking.getStatus() != null ? booking.getStatus().name() : "";
-            boolean validStay = "CHECKED_IN".equals(bStatus) || "COMPLETED".equals(bStatus) || "CLAIMED_LATE".equals(bStatus);
+            boolean validStay = "COMPLETED".equals(bStatus) || "CLAIMED_LATE".equals(bStatus);
             if (!validStay) {
                 log.warn("Cannot award review points: booking {} status is {}",
                         booking.getBookingId(), bStatus);

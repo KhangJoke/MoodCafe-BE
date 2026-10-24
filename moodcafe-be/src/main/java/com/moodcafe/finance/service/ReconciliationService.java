@@ -1,6 +1,5 @@
 package com.moodcafe.finance.service;
 
-import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.wallet.abstraction.repository.CustomerWalletRepository;
 import com.moodcafe.wallet.abstraction.repository.MerchantWalletRepository;
@@ -23,7 +22,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReconciliationService {
 
-    private final ReservationRepository reservationRepository;
     private final CustomerWalletRepository customerWalletRepository;
     private final MerchantWalletRepository merchantWalletRepository;
     private final WithdrawalRequestRepository withdrawalRequestRepository;

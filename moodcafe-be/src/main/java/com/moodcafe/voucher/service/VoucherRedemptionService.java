@@ -60,6 +60,9 @@ public class VoucherRedemptionService {
             Optional<VoucherRedemption> existingOpt = voucherRedemptionRepository.findByUserIdAndIdempotencyKey(userId, cleanKey);
             if (existingOpt.isPresent()) {
                 VoucherRedemption existing = existingOpt.get();
+                if (!templateId.equals(existing.getTemplateId())) {
+                    throw new AppException(ErrorCode.CONFLICT, "Idempotency-Key đã được dùng cho mẫu voucher khác");
+                }
                 log.info("Idempotent redeemVoucher replay for user {} with key {}, returning voucher {}",
                         userId, cleanKey, existing.getVoucherId());
                 return customerVoucherRepository.findById(existing.getVoucherId())
@@ -72,6 +75,11 @@ public class VoucherRedemptionService {
 
         if (!Boolean.TRUE.equals(template.getIsActive())) {
             throw new AppException(ErrorCode.BAD_REQUEST, "Mẫu voucher này hiện không còn áp dụng");
+        }
+
+        if (template.getPointCost() == null || template.getPointCost() <= 0
+                || template.getFaceValueVnd().compareTo(java.math.BigDecimal.valueOf(template.getPointCost())) != 0) {
+            throw new AppException(ErrorCode.BAD_REQUEST,"Mẫu voucher chưa đúng quy đổi 1 MoodPoint = 1đ, vui lòng liên hệ Admin");
         }
 
         // 1. Atomically deduct and allocate points
@@ -91,7 +99,7 @@ public class VoucherRedemptionService {
 
         // 3. Save voucher
         Instant now = Instant.now();
-        Instant expiresAt = now.plus(60, ChronoUnit.DAYS); // 60 days validity
+        Instant expiresAt = now.plus(template.getValidDays(), ChronoUnit.DAYS); // 60 days validity
 
         CustomerVoucher voucher = CustomerVoucher.builder()
                 .userId(userId)
@@ -99,6 +107,7 @@ public class VoucherRedemptionService {
                 .code(code)
                 .faceValueVnd(template.getFaceValueVnd())
                 .pointCost(template.getPointCost())
+                .minGrossAmount(template.getMinGrossAmount())
                 .status("AVAILABLE")
                 .expiresAt(expiresAt)
                 .build();

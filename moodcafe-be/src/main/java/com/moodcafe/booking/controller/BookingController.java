@@ -42,6 +42,15 @@ import java.util.UUID;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final com.moodcafe.booking.service.BookingCheckoutChallengeService checkoutChallenges;
+
+    @PostMapping("/stores/{storeId}/bookings/{bookingId}/checkout-challenge")
+    @PreAuthorize("isAuthenticated()")
+    public ApiResponse<com.moodcafe.booking.service.BookingCheckoutChallengeService.Challenge> checkoutChallenge(
+            @PathVariable UUID storeId,@PathVariable UUID bookingId) {
+        return ApiResponse.success(checkoutChallenges.issue(storeId,bookingId));
+    }
+
 
     // ==================== Customer Booking Flow ====================
 

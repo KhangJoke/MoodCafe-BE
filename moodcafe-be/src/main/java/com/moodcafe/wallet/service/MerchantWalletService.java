@@ -201,6 +201,7 @@ public class MerchantWalletService {
                     "Không thể hoàn tất rút tiền: Số dư đang khóa (" + wallet.getLockedBalance() + "đ) nhỏ hơn số tiền rút (" + validAmount + "đ)");
         }
         wallet.setLockedBalance(wallet.getLockedBalance().subtract(validAmount));
+        wallet.setTotalWithdrawn(wallet.getTotalWithdrawn().add(validAmount));
         merchantWalletRepository.save(wallet);
 
         MerchantWalletTransaction tx = MerchantWalletTransaction.builder()

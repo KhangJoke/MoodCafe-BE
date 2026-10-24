@@ -39,6 +39,14 @@ public class AdminWithdrawalController {
     private final WithdrawalService withdrawalService;
     private final WithdrawalRequestRepository withdrawalRequestRepository;
     private final CurrentUserService currentUserService;
+    private final com.moodcafe.wallet.service.PayoutBreakdownService breakdown;
+
+    @GetMapping("/{id}/breakdown")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<java.util.List<java.util.Map<String,Object>>> breakdown(@PathVariable UUID id) {
+        return ApiResponse.success(breakdown.get(id));
+    }
+
 
     @Operation(summary = "1. Xem danh sách tất cả yêu cầu rút tiền")
     @GetMapping

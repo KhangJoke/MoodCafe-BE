@@ -75,6 +75,10 @@ public class CustomerVoucher {
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
 
+    @Column(name = "min_gross_amount", nullable = false, precision = 12, scale = 2)
+    @Builder.Default
+    private BigDecimal minGrossAmount = BigDecimal.ZERO;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

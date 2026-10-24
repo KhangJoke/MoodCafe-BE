@@ -23,9 +23,6 @@ import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepos
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
 import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
-import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
-import com.moodcafe.reservation.entity.Reservation;
-import com.moodcafe.reservation.service.ReservationPaymentCaptureService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import lombok.extern.slf4j.Slf4j;
@@ -63,8 +60,6 @@ public class PayOSServiceImpl implements PayOSService {
     private final SubscriptionService subscriptionService;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
-    private final ReservationRepository reservationRepository;
-    private final ReservationPaymentCaptureService reservationPaymentCaptureService;
     private final PaymentAttemptService paymentAttemptService;
 
     @Autowired(required = false)
@@ -96,8 +91,6 @@ public class PayOSServiceImpl implements PayOSService {
             @Lazy SubscriptionService subscriptionService,
             UserRepository userRepository,
             CurrentUserService currentUserService,
-            ReservationRepository reservationRepository,
-            @Lazy ReservationPaymentCaptureService reservationPaymentCaptureService,
             @Autowired(required = false) @Lazy PaymentAttemptService paymentAttemptService
     ) {
         this.payOS = payOS;
@@ -106,8 +99,6 @@ public class PayOSServiceImpl implements PayOSService {
         this.subscriptionService = subscriptionService;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
-        this.reservationRepository = reservationRepository;
-        this.reservationPaymentCaptureService = reservationPaymentCaptureService;
         this.paymentAttemptService = paymentAttemptService;
     }
 
@@ -636,15 +627,7 @@ public class PayOSServiceImpl implements PayOSService {
             }
         }
 
-        Optional<Reservation> reservationOpt = reservationRepository.findByPayosOrderCode(orderCode);
-        if (reservationOpt.isPresent()) {
-            reservationPaymentCaptureService.capturePaymentSuccess(
-                    reservationOpt.get().getReservationId(), orderCode, paidAmountVnd);
-            if (paymentAttemptService != null) {
-                paymentAttemptService.markStatus(orderCode, "PAID");
-            }
-            return;
-        }
+
         throw new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy giao dịch tương ứng với mã orderCode: " + orderCode);
     }
 
@@ -705,18 +688,7 @@ public class PayOSServiceImpl implements PayOSService {
                         return true;
                     }
                 }
-                Optional<Reservation> reservationOpt = reservationRepository.findByPayosOrderCode(orderCode);
-                if (reservationOpt.isPresent()) {
-                    Reservation reservation = reservationOpt.get();
-                    if ("PENDING_PAYMENT".equalsIgnoreCase(reservation.getStatus())) {
-                        Long paidAmount = paymentLink.getAmountPaid();
-                        reservationPaymentCaptureService.capturePaymentSuccess(
-                                reservation.getReservationId(), orderCode, paidAmount);
-                    }
-                    if (paymentAttemptService != null) {
-                        paymentAttemptService.markStatus(orderCode, "PAID");
-                    }
-                }
+
                 return true;
             } else {
                 log.info("PayOS status for orderCode {}: {}", orderCode, paymentLink != null ? paymentLink.getStatus() : "null");
@@ -898,20 +870,7 @@ public class PayOSServiceImpl implements PayOSService {
             }
         }
 
-        Optional<Reservation> reservationOpt = reservationRepository.findByPayosOrderCode(orderCode);
-        if (reservationOpt.isPresent()) {
-            Reservation reservation = reservationOpt.get();
-            return PaymentOrderInfoResponse.builder()
-                    .orderCode(orderCode)
-                    .paymentType("BOOKING")
-                    .status(reservation.getStatus())
-                    .amount(reservation.getCustomerPaidAmount() != null
-                            ? reservation.getCustomerPaidAmount().longValue() : 0L)
-                    .title("Đặt bàn MoodCafe")
-                    .referenceCode(reservation.getReservationId().toString())
-                    .redirectUrl("/bookings")
-                    .build();
-        }
+
 
         // 2. Kiểm tra Gói hội viên (Subscription)
         Optional<SubscriptionPayment> paymentOpt = subscriptionPaymentRepository.findByTransactionCode(txCode);

@@ -140,6 +140,7 @@ public class BookingScheduledJobs {
 
                 try {
                     loyaltyRewardService.awardBookingSpendReward(booking);
+                    loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
                 } catch (Exception ex) {
                     log.warn("Failed to award spend reward: {}", ex.getMessage());
                 }

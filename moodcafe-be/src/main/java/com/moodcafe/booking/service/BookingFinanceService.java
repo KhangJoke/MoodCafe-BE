@@ -86,6 +86,9 @@ public class BookingFinanceService {
         BigDecimal rewardFunded = BigDecimal.ZERO;
 
         if (voucher != null) {
+            if (voucher.getMinGrossAmount() != null && grossAmount.compareTo(voucher.getMinGrossAmount()) < 0) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Đơn chưa đạt giá trị tối thiểu của voucher");
+            }
             voucherDiscount = voucher.getFaceValueVnd() != null ? voucher.getFaceValueVnd() : BigDecimal.ZERO;
             List<VoucherPointAllocation> allocations = voucherPointAllocationRepository.findByVoucherId(voucher.getVoucherId());
             for (VoucherPointAllocation alloc : allocations) {
@@ -161,9 +164,9 @@ public class BookingFinanceService {
                 }
             }
             case CHECKED_IN -> {
-
+                actions.add("SELF_CHECK_OUT");
             }
-            case COMPLETED -> {
+            case COMPLETED, CLAIMED_LATE -> {
                 actions.add("REVIEW");
             }
             default -> {}
