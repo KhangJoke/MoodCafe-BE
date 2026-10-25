@@ -1,8 +1,10 @@
 package com.moodcafe.wallet.service;
 
+import com.moodcafe.configuration.abstraction.repository.SystemConfigurationRepository;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
+import com.moodcafe.notification.entity.enums.NotificationType;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
-import com.moodcafe.configuration.abstraction.repository.SystemConfigurationRepository;
 import com.moodcafe.wallet.abstraction.repository.StoreBankAccountRepository;
 import com.moodcafe.wallet.abstraction.repository.WithdrawalRequestRepository;
 import com.moodcafe.wallet.entity.StoreBankAccount;
@@ -11,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,7 +40,7 @@ public class WithdrawalService {
     private final MerchantWalletService merchantWalletService;
     private final StoreFinancialSecurityService financialSecurityService;
     private final PayoutBreakdownService breakdownService;
-    private final com.moodcafe.notification.abstraction.service.NotificationDispatcherService notifications;
+    private final NotificationDispatcherService notifications;
 
     /**
      * Store OWNER creates a payout request from available balance:
@@ -364,17 +368,32 @@ public class WithdrawalService {
     }
 
     private void notifyOwnerAfterCommit(WithdrawalRequest request) {
-        UUID owner=request.getOwnerId(); String id=request.getWithdrawalId().toString();
-        String message="Yêu cầu rút " + request.getAmount().toPlainString() + "đ: " +
+        UUID owner = request.getOwnerId();
+        String id = request.getWithdrawalId().toString();
+        String message = "Yêu cầu rút " + request.getAmount().toPlainString() + "đ: " +
                 ("PAID".equals(request.getStatus()) ? "Đã chuyển khoản thành công" : "Đã từ chối, tiền đã trả về số dư khả dụng");
-        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-            new org.springframework.transaction.support.TransactionSynchronization() {
-                @Override public void afterCommit() {
-                    try { notifications.dispatch(owner,"Kết quả yêu cầu rút tiền",message,
-                        com.moodcafe.notification.entity.enums.NotificationType.SYSTEM_ANNOUNCEMENT,id,"/merchant/wallet"); }
-                    catch(Exception e) { log.warn("Failed to notify payout {}",id,e); }
-                }
-            });
+
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        try {
+                            notifications.dispatch(owner, "Kết quả yêu cầu rút tiền", message,
+                                    NotificationType.SYSTEM_ANNOUNCEMENT, id, "/merchant/wallet");
+                        } catch (Exception e) {
+                            log.warn("Failed to notify payout {}", id, e);
+                        }
+                    }
+                });
+        } else {
+            try {
+                notifications.dispatch(owner, "Kết quả yêu cầu rút tiền", message,
+                        NotificationType.SYSTEM_ANNOUNCEMENT, id, "/merchant/wallet");
+            } catch (Exception e) {
+                log.warn("Failed to notify payout {}", id, e);
+            }
+        }
     }
 
     private String calculatePayloadHash(UUID storeId, BigDecimal amount, UUID bankAccountId) {

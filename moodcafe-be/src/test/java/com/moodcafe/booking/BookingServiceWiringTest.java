@@ -14,18 +14,21 @@ import com.moodcafe.booking.entity.StoreBookingConfig;
 import com.moodcafe.booking.entity.TableCategory;
 import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.booking.mapper.BookingMapper;
+import com.moodcafe.booking.service.BookingCheckoutChallengeService;
 import com.moodcafe.booking.service.BookingFinanceService;
 import com.moodcafe.booking.service.BookingServiceImpl;
+import com.moodcafe.finance.service.BookingCommissionService;
+import com.moodcafe.loyalty.abstraction.repository.ReservationLoyaltyRewardRepository;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.payment.service.OrderCodeGeneratorService;
 import com.moodcafe.payment.service.PaymentAttemptService;
-import com.moodcafe.reservation.service.ReservationQrVerificationService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
+import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
@@ -42,6 +45,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
@@ -79,9 +83,10 @@ class BookingServiceWiringTest {
     @Mock private MerchantWalletService merchantWalletService;
     @Mock private CustomerWalletService customerWalletService;
     @Mock private LoyaltyRewardService loyaltyRewardService;
-    @Mock private ReservationQrVerificationService qrVerificationService;
     @Mock private VoucherLifecycleService voucherLifecycleService;
     @Mock private PlatformTransactionManager transactionManager;
+    @Mock private BookingCommissionService commissionService;
+    @Mock private BookingCheckoutChallengeService checkoutChallenges;
 
     private BookingServiceImpl bookingService;
 
@@ -99,9 +104,11 @@ class BookingServiceWiringTest {
                 storeImageRepository, notificationDispatcherService, redisTemplate, objectMapper,
                 bookingFinanceService, bookingQuoteRepository, customerVoucherRepository,
                 orderCodeGeneratorService, paymentAttemptService, merchantWalletService,
-                customerWalletService, loyaltyRewardService, qrVerificationService,
+                customerWalletService, loyaltyRewardService,
                 voucherLifecycleService, transactionManager
         );
+        ReflectionTestUtils.setField(bookingService, "commissionService", commissionService);
+        ReflectionTestUtils.setField(bookingService, "checkoutChallenges", checkoutChallenges);
 
         userId = UUID.randomUUID();
         storeId = UUID.randomUUID();
@@ -138,15 +145,14 @@ class BookingServiceWiringTest {
             ctx.registerBean(PaymentAttemptService.class, () -> paymentAttemptService);
             ctx.registerBean(MerchantWalletService.class, () -> merchantWalletService);
             ctx.registerBean(CustomerWalletService.class, () -> customerWalletService);
-            ctx.registerBean(ReservationQrVerificationService.class, () -> qrVerificationService);
             ctx.registerBean(VoucherLifecycleService.class, () -> voucherLifecycleService);
             ctx.registerBean(PlatformTransactionManager.class, () -> transactionManager);
-            ctx.registerBean(com.moodcafe.loyalty.abstraction.repository.ReservationLoyaltyRewardRepository.class,
-                    () -> mock(com.moodcafe.loyalty.abstraction.repository.ReservationLoyaltyRewardRepository.class));
-            ctx.registerBean(com.moodcafe.reservation.abstraction.repository.ReservationRepository.class,
-                    () -> mock(com.moodcafe.reservation.abstraction.repository.ReservationRepository.class));
-            ctx.registerBean(com.moodcafe.store.abstraction.repository.StoreReviewRepository.class,
-                    () -> mock(com.moodcafe.store.abstraction.repository.StoreReviewRepository.class));
+            ctx.registerBean(BookingCommissionService.class, () -> commissionService);
+            ctx.registerBean(BookingCheckoutChallengeService.class, () -> checkoutChallenges);
+            ctx.registerBean(ReservationLoyaltyRewardRepository.class,
+                    () -> mock(ReservationLoyaltyRewardRepository.class));
+            ctx.registerBean(StoreReviewRepository.class,
+                    () -> mock(StoreReviewRepository.class));
 
             ctx.register(LoyaltyRewardService.class);
             ctx.register(BookingServiceImpl.class);
@@ -191,6 +197,7 @@ class BookingServiceWiringTest {
         when(configRepository.findByStoreStoreId(storeId)).thenReturn(Optional.of(testConfig));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
         when(bookingMapper.toBookingResponse(any())).thenReturn(new BookingResponse());
+        when(commissionService.record(any(), eq("REVERSE"))).thenReturn(true);
 
         CancelBookingRequest request = new CancelBookingRequest();
         request.setReason("Changed mind");
@@ -224,7 +231,7 @@ class BookingServiceWiringTest {
                 .graceDeadline(Instant.now().plus(Duration.ofMinutes(40)))
                 .build();
 
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByIdForUpdate(bookingId)).thenReturn(Optional.of(booking));
         assertThatThrownBy(() -> bookingService.selfCheckIn(bookingId, "FORGED_TOKEN"))
                 .isInstanceOf(AppException.class)
                 .hasMessageContaining("nhân viên");
@@ -247,7 +254,7 @@ class BookingServiceWiringTest {
                 .graceDeadline(Instant.now().plus(Duration.ofHours(2).plus(Duration.ofMinutes(30))))
                 .build();
 
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(futureBooking));
+        when(bookingRepository.findByIdForUpdate(bookingId)).thenReturn(Optional.of(futureBooking));
 
         assertThatThrownBy(() -> bookingService.selfCheckIn(bookingId, "VALID_TOKEN"))
                 .isInstanceOf(AppException.class)

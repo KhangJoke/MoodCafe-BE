@@ -1,11 +1,14 @@
 package com.moodcafe.wallet;
 
+import com.moodcafe.configuration.abstraction.repository.SystemConfigurationRepository;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.wallet.abstraction.repository.StoreBankAccountRepository;
 import com.moodcafe.wallet.abstraction.repository.WithdrawalRequestRepository;
 import com.moodcafe.wallet.entity.WithdrawalRequest;
 import com.moodcafe.wallet.service.MerchantWalletService;
+import com.moodcafe.wallet.service.PayoutBreakdownService;
 import com.moodcafe.wallet.service.StoreFinancialSecurityService;
 import com.moodcafe.wallet.service.WithdrawalService;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,11 +36,17 @@ class WithdrawalResolutionIT {
     @Mock
     private WithdrawalRequestRepository withdrawalRequestRepository;
     @Mock
+    private SystemConfigurationRepository configRepository;
+    @Mock
     private StoreBankAccountRepository bankAccountRepository;
     @Mock
     private MerchantWalletService merchantWalletService;
     @Mock
     private StoreFinancialSecurityService financialSecurityService;
+    @Mock
+    private PayoutBreakdownService breakdownService;
+    @Mock
+    private NotificationDispatcherService notifications;
 
     private WithdrawalService withdrawalService;
 
@@ -53,9 +62,12 @@ class WithdrawalResolutionIT {
 
         withdrawalService = new WithdrawalService(
                 withdrawalRequestRepository,
+                configRepository,
                 bankAccountRepository,
                 merchantWalletService,
-                financialSecurityService
+                financialSecurityService,
+                breakdownService,
+                notifications
         );
     }
 

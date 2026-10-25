@@ -3,6 +3,8 @@ package com.moodcafe.wallet;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.Role;
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.configuration.abstraction.repository.SystemConfigurationRepository;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreStaffRepository;
@@ -17,6 +19,7 @@ import com.moodcafe.wallet.controller.MerchantWithdrawalController;
 import com.moodcafe.wallet.entity.MerchantWallet;
 import com.moodcafe.wallet.entity.StoreBankAccount;
 import com.moodcafe.wallet.service.MerchantWalletService;
+import com.moodcafe.wallet.service.PayoutBreakdownService;
 import com.moodcafe.wallet.service.StoreFinancialSecurityService;
 import com.moodcafe.wallet.service.WithdrawalService;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,7 +57,16 @@ class MerchantWalletAuthorizationIT {
     private WithdrawalRequestRepository withdrawalRequestRepository;
 
     @Mock
+    private SystemConfigurationRepository configRepository;
+
+    @Mock
     private StoreBankAccountRepository bankAccountRepository;
+
+    @Mock
+    private PayoutBreakdownService breakdownService;
+
+    @Mock
+    private NotificationDispatcherService notifications;
 
     private StoreFinancialSecurityService financialSecurityService;
     private WithdrawalService withdrawalService;
@@ -72,7 +84,15 @@ class MerchantWalletAuthorizationIT {
     @BeforeEach
     void setUp() {
         financialSecurityService = new StoreFinancialSecurityService(currentUserService, storeStaffRepository);
-        withdrawalService = new WithdrawalService(withdrawalRequestRepository, bankAccountRepository, merchantWalletService, financialSecurityService);
+        withdrawalService = new WithdrawalService(
+                withdrawalRequestRepository,
+                configRepository,
+                bankAccountRepository,
+                merchantWalletService,
+                financialSecurityService,
+                breakdownService,
+                notifications
+        );
         walletController = new MerchantWalletController(merchantWalletService, null, financialSecurityService);
         withdrawalController = new MerchantWithdrawalController(withdrawalService, withdrawalRequestRepository, bankAccountRepository, financialSecurityService);
 

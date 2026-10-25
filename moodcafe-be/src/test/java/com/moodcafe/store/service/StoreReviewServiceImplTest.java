@@ -8,7 +8,7 @@ import com.moodcafe.shared.abstraction.service.FileStorageService;
 import com.moodcafe.shared.dto.UploadImageResponse;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
-import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
+import com.moodcafe.booking.abstraction.repository.BookingRepository;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
@@ -89,7 +89,7 @@ class StoreReviewServiceImplTest {
     @Mock
     private ObjectMapper objectMapper;
     @Mock
-    private ReservationRepository reservationRepository;
+    private BookingRepository bookingRepository;
     @Mock
     private LoyaltyRewardService loyaltyRewardService;
 

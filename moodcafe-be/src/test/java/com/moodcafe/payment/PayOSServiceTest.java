@@ -10,8 +10,6 @@ import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepos
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
 import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
-import com.moodcafe.reservation.abstraction.repository.ReservationRepository;
-import com.moodcafe.reservation.service.ReservationPaymentCaptureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,10 +46,6 @@ class PayOSServiceTest {
     @Mock
     private CurrentUserService currentUserService;
     @Mock
-    private ReservationRepository reservationRepository;
-    @Mock
-    private ReservationPaymentCaptureService reservationPaymentCaptureService;
-    @Mock
     private PaymentAttemptService paymentAttemptService;
 
     @Mock
@@ -71,8 +65,6 @@ class PayOSServiceTest {
                 subscriptionService,
                 userRepository,
                 currentUserService,
-                reservationRepository,
-                reservationPaymentCaptureService,
                 paymentAttemptService
         );
         payOSService.setSponsoredListingRepository(sponsoredListingRepository);
@@ -182,45 +174,6 @@ class PayOSServiceTest {
         payOSService.handlePayOSWebhook(successWebhook(orderCode));
 
         verify(bookingService).confirmBookingPayment(orderCode, 100000L);
-        verifyNoInteractions(reservationPaymentCaptureService);
-    }
-
-    @Test
-    void verifiedWebhookCapturesNewReservationAndMarksAttemptPaid() {
-        long orderCode = 1800000002L;
-        UUID reservationId = UUID.randomUUID();
-        var reservation = com.moodcafe.reservation.entity.Reservation.builder()
-                .reservationId(reservationId).status("PENDING_PAYMENT").build();
-        when(reservationRepository.findByPayosOrderCode(orderCode)).thenReturn(Optional.of(reservation));
-        when(payOSConfig.isConfigured()).thenReturn(true);
-        when(payOS.webhooks()).thenReturn(mock(vn.payos.service.blocking.webhooks.WebhooksService.class));
-
-        payOSService.handlePayOSWebhook(successWebhook(orderCode));
-
-        verify(reservationPaymentCaptureService).capturePaymentSuccess(reservationId, orderCode, 100000L);
-        verify(paymentAttemptService).markStatus(orderCode, "PAID");
-    }
-
-    @Test
-    void pollingCapturesNewReservationWithoutLosingLegacyDispatch() {
-        long orderCode = 1800000003L;
-        UUID reservationId = UUID.randomUUID();
-        var reservation = com.moodcafe.reservation.entity.Reservation.builder()
-                .reservationId(reservationId).status("PENDING_PAYMENT").build();
-        when(reservationRepository.findByPayosOrderCode(orderCode)).thenReturn(Optional.of(reservation));
-        when(payOSConfig.isConfigured()).thenReturn(true);
-        var requests = mock(vn.payos.service.blocking.v2.paymentRequests.PaymentRequestsService.class);
-        when(payOS.paymentRequests()).thenReturn(requests);
-        var link = mock(vn.payos.model.v2.paymentRequests.PaymentLink.class);
-        when(link.getStatus()).thenReturn(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PAID);
-        lenient().when(link.getAmount()).thenReturn(150000L);
-        when(link.getAmountPaid()).thenReturn(100000L);
-        when(requests.get(orderCode)).thenReturn(link);
-
-        assertTrue(payOSService.checkPaymentStatus(orderCode));
-
-        verify(reservationPaymentCaptureService).capturePaymentSuccess(reservationId, orderCode, 100000L);
-        verify(paymentAttemptService).markStatus(orderCode, "PAID");
     }
 
     @Test
