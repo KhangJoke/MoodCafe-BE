@@ -3,7 +3,7 @@ package com.moodcafe.payment.controller;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
 import com.moodcafe.payment.dto.response.PaymentOrderInfoResponse;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,36 +21,36 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PaymentController {
 
-    private final PayOSService payOSService;
+    private final PaymentService paymentService;
 
     @Operation(summary = "1. Tạo link thanh toán PayOS & mã VietQR")
     @PostMapping("/create-link/{orderId}")
     public ResponseEntity<PayOSResponse> createPaymentLink(@PathVariable String orderId) {
-        return ResponseEntity.ok(payOSService.createPaymentLink(orderId));
+        return ResponseEntity.ok(paymentService.createPaymentLink(orderId));
     }
 
     @Operation(summary = "2. Webhook PayOS gọi sang khi thanh toán thành công (Server-to-Server)")
     @PostMapping("/webhook")
     public ResponseEntity<String> handleWebhook(@RequestBody PayOSWebhookRequest request) {
-        payOSService.handlePayOSWebhook(request);
+        paymentService.handlePayOSWebhook(request);
         return ResponseEntity.ok("OK");
     }
 
     @Operation(summary = "3. Khách ấn 'Xác nhận đã thanh toán' hoặc FE Polling kiểm tra trạng thái đơn")
     @GetMapping("/check/{orderCode}")
     public ResponseEntity<Boolean> checkPaymentStatusGet(@PathVariable Long orderCode) {
-        return ResponseEntity.ok(payOSService.checkPaymentStatus(orderCode));
+        return ResponseEntity.ok(paymentService.checkPaymentStatus(orderCode));
     }
 
     @Operation(summary = "3. Khách ấn 'Xác nhận đã thanh toán' (Hỗ trợ phương thức POST)")
     @PostMapping("/check/{orderCode}")
     public ResponseEntity<Boolean> checkPaymentStatusPost(@PathVariable Long orderCode) {
-        return ResponseEntity.ok(payOSService.checkPaymentStatus(orderCode));
+        return ResponseEntity.ok(paymentService.checkPaymentStatus(orderCode));
     }
 
     @Operation(summary = "4. Lấy thông tin loại đơn hàng PayOS theo orderCode (Booking, Subscription, Sponsored)")
     @GetMapping("/info/{orderCode}")
     public ResponseEntity<PaymentOrderInfoResponse> getPaymentOrderInfo(@PathVariable Long orderCode) {
-        return ResponseEntity.ok(payOSService.getOrderInfo(orderCode));
+        return ResponseEntity.ok(paymentService.getOrderInfo(orderCode));
     }
 }

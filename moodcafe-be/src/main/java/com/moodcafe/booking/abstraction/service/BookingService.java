@@ -37,6 +37,8 @@ public interface BookingService {
 
     BookingResponse getBookingPaymentLink(UUID bookingId);
 
+    void evictBookingPaymentCache(UUID bookingId);
+
     void timeoutPendingBooking(UUID bookingId);
 
     List<BookingResponse> getMyBookings();

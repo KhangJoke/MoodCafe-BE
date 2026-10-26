@@ -208,7 +208,7 @@ class PayOSServiceTest {
         lenient().when(link.getAmountPaid()).thenReturn(0L);
         lenient().when(link.getStatus()).thenReturn(vn.payos.model.v2.paymentRequests.PaymentLinkStatus.PENDING);
         when(requests.get(123L)).thenReturn(link);
-        var response = payOSService.createBookingPaymentLink(UUID.randomUUID(), 123L, 100000L, "DATBAN 123");
+        var response = payOSService.createBookingPaymentLink(UUID.randomUUID(), 123L, 100000L, "DATBAN 123", null);
         assertEquals("https://pay.payos.vn/web/" + link.getId(), response.getCheckoutUrl());
         assertEquals(link.getId(), response.getPaymentLinkId());
         assertEquals(123L, response.getOrderCode());

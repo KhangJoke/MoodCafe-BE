@@ -18,7 +18,7 @@ import com.moodcafe.finance.service.ReservationPricingService;
 import com.moodcafe.loyalty.abstraction.repository.ReservationLoyaltyRewardRepository;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
@@ -61,7 +61,7 @@ class BookingServiceWiringTest {
     @Mock private StoreRepository storeRepository;
     @Mock private StoreStaffService storeStaffService;
     @Mock private CurrentUserService currentUserService;
-    @Mock private PayOSService payOSService;
+    @Mock private PaymentService paymentService;
     @Mock private BookingMapper bookingMapper;
     @Mock private StoreImageRepository storeImageRepository;
     @Mock private NotificationDispatcherService notificationDispatcherService;
@@ -89,7 +89,7 @@ class BookingServiceWiringTest {
         bookingService = new BookingServiceImpl(
                 commissionService,
                 bookingRepository, tableCategoryRepository, configRepository, storeRepository,
-                storeStaffService, currentUserService, payOSService, bookingMapper,
+                storeStaffService, currentUserService, paymentService, bookingMapper,
                 storeImageRepository, notificationDispatcherService, redisTemplate, objectMapper,
                 customerVoucherRepository, voucherPointAllocationRepository, reservationPricingService,
                 merchantWalletService, customerWalletService, loyaltyRewardService,
@@ -119,7 +119,7 @@ class BookingServiceWiringTest {
             ctx.registerBean(StoreRepository.class, () -> storeRepository);
             ctx.registerBean(StoreStaffService.class, () -> storeStaffService);
             ctx.registerBean(CurrentUserService.class, () -> currentUserService);
-            ctx.registerBean(PayOSService.class, () -> payOSService);
+            ctx.registerBean(PaymentService.class, () -> paymentService);
             ctx.registerBean(BookingMapper.class, () -> bookingMapper);
             ctx.registerBean(StoreImageRepository.class, () -> storeImageRepository);
             ctx.registerBean(NotificationDispatcherService.class, () -> notificationDispatcherService);

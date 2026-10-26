@@ -31,8 +31,10 @@ import com.moodcafe.finance.service.ReservationPricingService;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.notification.entity.enums.NotificationType;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
 import com.moodcafe.payment.dto.response.PayOSResponse;
+import vn.payos.model.v2.paymentRequests.PaymentLink;
+import vn.payos.model.v2.paymentRequests.PaymentLinkStatus;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.shared.response.PageResponse;
@@ -102,7 +104,7 @@ public class BookingServiceImpl implements BookingService {
     private final StoreRepository storeRepository;
     private final StoreStaffService storeStaffService;
     private final CurrentUserService currentUserService;
-    private final PayOSService payOSService;
+    private final PaymentService paymentService;
     private final BookingMapper bookingMapper;
     private final StoreImageRepository storeImageRepository;
     private final NotificationDispatcherService notificationDispatcherService;
@@ -404,11 +406,15 @@ public class BookingServiceImpl implements BookingService {
         PayOSResponse payResponse = null;
         if (savedBooking.getStatus() == BookingStatus.PENDING_PAYMENT) {
             try {
-                payResponse = payOSService.createBookingPaymentLink(
+                Long expiredAtEpoch = savedBooking.getPaymentExpiresAt() != null
+                        ? savedBooking.getPaymentExpiresAt().getEpochSecond()
+                        : (Instant.now().getEpochSecond() + 900);
+                payResponse = paymentService.createBookingPaymentLink(
                         savedBooking.getBookingId(),
                         savedBooking.getPaymentOrderCode(),
                         savedBooking.getCustomerPaidAmount().longValueExact(),
-                        "DATBAN " + savedBooking.getPaymentOrderCode()
+                        "DATBAN " + savedBooking.getPaymentOrderCode(),
+                        expiredAtEpoch
                 );
                 if (payResponse != null) {
                     cachePayOSResponse(savedBooking.getBookingId(), payResponse);
@@ -516,7 +522,7 @@ public class BookingServiceImpl implements BookingService {
 
         String bookingCode = "MC" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         String qrToken = UUID.randomUUID().toString();
-        long paymentOrderCode = payOSService.generateOrderCode();
+        long paymentOrderCode = paymentService.generateOrderCode();
 
         boolean requiresDeposit = snapshot.getCustomerPaidAmount().compareTo(BigDecimal.ZERO) > 0;
 
@@ -845,22 +851,78 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION, "Đơn đặt bàn này không ở trạng thái chờ thanh toán");
         }
 
+        if (booking.getPaymentExpiresAt() != null && Instant.now().isAfter(booking.getPaymentExpiresAt())) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION, "Đơn đặt bàn đã hết hạn thanh toán (quá 15 phút). Vui lòng tạo đơn mới.");
+        }
+
+        long remainingSeconds = booking.getPaymentExpiresAt() != null
+                ? Duration.between(Instant.now(), booking.getPaymentExpiresAt()).getSeconds()
+                : 900;
+        if (remainingSeconds <= 15) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION, "Thời gian giữ bàn sắp hết hạn. Vui lòng tạo đơn mới.");
+        }
+
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
 
-        PayOSResponse payResponse = getCachedPayOSResponse(booking.getBookingId());
-        if (payResponse == null) {
+        Long currentOrderCode = booking.getPaymentOrderCode();
+        PaymentLink linkInfo = null;
+        if (currentOrderCode != null && currentOrderCode > 0) {
             try {
-                payResponse = payOSService.createBookingPaymentLink(
+                linkInfo = paymentService.getPaymentLink(currentOrderCode);
+            } catch (Exception e) {
+                log.warn("Could not retrieve payment link status for orderCode {}: {}", currentOrderCode, e.getMessage());
+            }
+        }
+
+        PayOSResponse payResponse = null;
+
+        if (linkInfo != null && linkInfo.getStatus() == PaymentLinkStatus.PAID) {
+            confirmBookingPayment(currentOrderCode, linkInfo.getAmountPaid());
+            return enrichBookingResponse(booking, config);
+        }
+
+        boolean sessionIsAlive = linkInfo != null && linkInfo.getStatus() == PaymentLinkStatus.PENDING;
+
+        if (sessionIsAlive) {
+            payResponse = getCachedPayOSResponse(booking.getBookingId());
+            if (payResponse == null) {
+                String sanitizedDesc = "DATBAN " + currentOrderCode;
+                payResponse = PayOSResponse.builder()
+                        .checkoutUrl("https://pay.payos.vn/web/" + linkInfo.getId())
+                        .orderCode(currentOrderCode)
+                        .amount((double) (booking.getCustomerPaidAmount() != null ? booking.getCustomerPaidAmount().longValue() : booking.getMinSpendAmount()))
+                        .description(sanitizedDesc)
+                        .status("PENDING")
+                        .paymentLinkId(linkInfo.getId())
+                        .build();
+                cachePayOSResponse(booking.getBookingId(), payResponse);
+            }
+        } else {
+            // Phiên cũ đã CANCELLED hoặc EXPIRED hoặc linkInfo == null -> Khởi tạo phiên thanh toán mới
+            evictCachedPayOSResponse(booking.getBookingId());
+
+            long newOrderCode = paymentService.generateOrderCode();
+            booking.setPaymentOrderCode(newOrderCode);
+            booking = bookingRepository.save(booking);
+
+            Long expiredAtEpoch = booking.getPaymentExpiresAt() != null
+                    ? booking.getPaymentExpiresAt().getEpochSecond()
+                    : (Instant.now().getEpochSecond() + 900);
+
+            try {
+                payResponse = paymentService.createBookingPaymentLink(
                         booking.getBookingId(),
-                        booking.getPaymentOrderCode(),
+                        newOrderCode,
                         booking.getCustomerPaidAmount().longValueExact(),
-                        "DATBAN " + booking.getPaymentOrderCode()
+                        "DATBAN " + newOrderCode,
+                        expiredAtEpoch
                 );
                 if (payResponse != null) {
                     cachePayOSResponse(booking.getBookingId(), payResponse);
                 }
             } catch (Exception e) {
                 log.error("Failed to generate payment link for booking {}: {}", booking.getBookingCode(), e.getMessage());
+                throw new AppException(ErrorCode.INTERNAL_ERROR, "Không thể tạo liên kết thanh toán PayOS: " + e.getMessage());
             }
         }
 
@@ -1713,7 +1775,7 @@ public class BookingServiceImpl implements BookingService {
                         customerMsg,
                         notifType,
                         referenceId,
-                        referenceId != null ? "/bookings/" + referenceId : "/bookings"
+                        "/bookings"
                 );
                 log.info("Dispatched booking notification to customer: userId={}, type={}, bookingCode={}",
                         customerUserId, notifType, bookingCode);
@@ -1770,6 +1832,11 @@ public class BookingServiceImpl implements BookingService {
             log.warn("Failed to read cached PayOS info from Redis for booking {}: {}", bookingId, e.getMessage());
         }
         return null;
+    }
+
+    @Override
+    public void evictBookingPaymentCache(UUID bookingId) {
+        evictCachedPayOSResponse(bookingId);
     }
 
     private void evictCachedPayOSResponse(UUID bookingId) {

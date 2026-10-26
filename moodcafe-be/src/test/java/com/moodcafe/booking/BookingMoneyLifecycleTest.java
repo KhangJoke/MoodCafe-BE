@@ -18,7 +18,7 @@ import com.moodcafe.finance.service.BookingCommissionService;
 import com.moodcafe.finance.service.ReservationPricingService;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -74,7 +74,7 @@ class BookingMoneyLifecycleTest {
     @Mock
     private CurrentUserService currentUserService;
     @Mock
-    private PayOSService payOSService;
+    private PaymentService paymentService;
     @Spy
     private BookingMapper bookingMapper = Mappers.getMapper(BookingMapper.class);
     @Mock
@@ -150,7 +150,7 @@ class BookingMoneyLifecycleTest {
                 storeRepository,
                 storeStaffService,
                 currentUserService,
-                payOSService,
+                paymentService,
                 bookingMapper,
                 storeImageRepository,
                 notificationDispatcherService,

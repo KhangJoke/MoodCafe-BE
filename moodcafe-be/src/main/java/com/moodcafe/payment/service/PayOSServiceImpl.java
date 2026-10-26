@@ -8,8 +8,7 @@ import com.moodcafe.booking.abstraction.service.BookingService;
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.wallet.service.CustomerWalletService;
-import com.moodcafe.wallet.dto.RefundPointCommand;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
@@ -50,7 +49,7 @@ import java.util.UUID;
 
 @Slf4j
 @Service
-public class PayOSServiceImpl implements PayOSService {
+public class PayOSServiceImpl implements PaymentService {
 
     private static final ObjectMapper WEBHOOK_MAPPER = new ObjectMapper();
 
@@ -99,13 +98,15 @@ public class PayOSServiceImpl implements PayOSService {
         this.currentUserService = currentUserService;
     }
 
+
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public PayOSResponse createBookingPaymentLink(
             UUID reservationId,
             long orderCode,
             long amountVnd,
-            String description
+            String description,
+            Long expiredAt
     ) {
         if (!isConfigured()) {
             throw new IllegalStateException("Cổng thanh toán PayOS chưa được cấu hình.");
@@ -120,14 +121,19 @@ public class PayOSServiceImpl implements PayOSService {
                 .price(amountVnd)
                 .build();
 
-        CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
+        CreatePaymentLinkRequest.CreatePaymentLinkRequestBuilder paymentDataBuilder = CreatePaymentLinkRequest.builder()
                 .orderCode(orderCode)
                 .amount(amountVnd)
                 .description(sanitizedDesc)
                 .items(Collections.singletonList(item))
-                .returnUrl(payOSConfig.getReturnUrl())
-                .cancelUrl(payOSConfig.getCancelUrl())
-                .build();
+                .returnUrl(appendQueryParam(payOSConfig.getReturnUrl(), "type=BOOKING"))
+                .cancelUrl(appendQueryParam(payOSConfig.getCancelUrl(), "type=BOOKING"));
+
+        if (expiredAt != null && expiredAt > 0) {
+            paymentDataBuilder.expiredAt(expiredAt);
+        }
+
+        CreatePaymentLinkRequest paymentData = paymentDataBuilder.build();
 
         try {
             CreatePaymentLinkResponse checkoutData = payOS.paymentRequests().create(paymentData);
@@ -167,6 +173,20 @@ public class PayOSServiceImpl implements PayOSService {
             }
             log.error("PayOS createBookingPaymentLink error: {}", e.getMessage(), e);
             throw new RuntimeException("Lỗi tạo link thanh toán PayOS cho đặt bàn: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PaymentLink getPaymentLink(Long orderCode) {
+        if (orderCode == null || !isConfigured() || payOS == null) {
+            return null;
+        }
+        try {
+            return payOS.paymentRequests().get(orderCode);
+        } catch (Exception e) {
+            log.warn("PayOS getPaymentLink error for orderCode {}: {}", orderCode, e.getMessage());
+            return null;
         }
     }
 
@@ -651,6 +671,12 @@ public class PayOSServiceImpl implements PayOSService {
                 return true;
             } else {
                 log.info("PayOS status for orderCode {}: {}", orderCode, paymentLink != null ? paymentLink.getStatus() : "null");
+                if (paymentLink != null && (paymentLink.getStatus() == PaymentLinkStatus.CANCELLED || paymentLink.getStatus() == PaymentLinkStatus.EXPIRED)) {
+                    if (bookingRepository != null && bookingService != null) {
+                        Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
+                        bookingOpt.ifPresent(b -> bookingService.evictBookingPaymentCache(b.getBookingId()));
+                    }
+                }
             }
         } catch (Exception e) {
             log.warn("Check PayOS payment status failed for orderCode {}: {}", orderCode, e.getMessage());
@@ -789,7 +815,7 @@ public class PayOSServiceImpl implements PayOSService {
                         .amount(booking.getMinSpendAmount())
                         .title("Gói đồ uống trả trước tại " + storeName)
                         .referenceCode(booking.getBookingCode())
-                        .redirectUrl("/bookings/" + booking.getBookingId())
+                        .redirectUrl("/bookings")
                         .build();
             }
         }

@@ -18,7 +18,7 @@ import com.moodcafe.finance.service.BookingCommissionService;
 import com.moodcafe.finance.service.ReservationPricingService;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -69,7 +69,7 @@ class BookingCreationConcurrencyTest {
     @Mock
     private CurrentUserService currentUserService;
     @Mock
-    private PayOSService payOSService;
+    private PaymentService paymentService;
     @Spy
     private BookingMapper bookingMapper = Mappers.getMapper(BookingMapper.class);
     @Mock
@@ -145,7 +145,7 @@ class BookingCreationConcurrencyTest {
                 storeRepository,
                 storeStaffService,
                 currentUserService,
-                payOSService,
+                paymentService,
                 bookingMapper,
                 storeImageRepository,
                 notificationDispatcherService,
@@ -180,7 +180,7 @@ class BookingCreationConcurrencyTest {
                 .build();
         when(reservationPricingService.quote(any())).thenReturn(snapshot);
 
-        when(payOSService.generateOrderCode()).thenReturn(2000000001L);
+        when(paymentService.generateOrderCode()).thenReturn(2000000001L);
 
         // Atomic occupied counter simulates DB lock serialization
         AtomicInteger occupiedCounter = new AtomicInteger(0);

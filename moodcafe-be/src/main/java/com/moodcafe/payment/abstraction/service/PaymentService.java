@@ -7,6 +7,8 @@ import com.moodcafe.payment.dto.response.PaymentOrderInfoResponse;
 import com.moodcafe.sponsored.entity.SponsoredListing;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
 
+import vn.payos.model.v2.paymentRequests.PaymentLink;
+
 import java.util.UUID;
 
 public interface PaymentService {
@@ -25,7 +27,9 @@ public interface PaymentService {
 
     PayOSResponse createPaymentLinkForBooking(Booking booking);
 
-    PayOSResponse createBookingPaymentLink(UUID reservationId, long orderCode, long amountVnd, String description);
+    PayOSResponse createBookingPaymentLink(UUID reservationId, long orderCode, long amountVnd, String description, Long expiredAt);
+
+    PaymentLink getPaymentLink(Long orderCode);
 
     void handlePayOSWebhook(PayOSWebhookRequest request);
 

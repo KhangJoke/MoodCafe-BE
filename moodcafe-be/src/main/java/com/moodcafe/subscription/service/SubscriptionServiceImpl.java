@@ -10,6 +10,7 @@ import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepos
 import com.moodcafe.subscription.abstraction.repository.SubscriptionPlanRepository;
 import com.moodcafe.subscription.abstraction.repository.UserSubscriptionRepository;
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
+import com.moodcafe.subscription.mapper.SubscriptionMapper;
 import com.moodcafe.subscription.dto.request.CreateSubscriptionPlanRequest;
 import com.moodcafe.subscription.dto.request.SubscribePlanRequest;
 import com.moodcafe.subscription.dto.request.UpdateSubscriptionPlanRequest;
@@ -26,10 +27,11 @@ import com.moodcafe.subscription.entity.UserSubscription;
 import com.moodcafe.subscription.entity.enums.SubscriptionPaymentStatus;
 import com.moodcafe.subscription.entity.enums.SubscriptionPlanCode;
 import com.moodcafe.subscription.entity.enums.SubscriptionStatus;
-import com.moodcafe.subscription.mapper.SubscriptionMapper;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
+import com.moodcafe.payment.dto.response.PayOSResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -63,8 +65,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final UserRepository userRepository;
     private final StoreStaffRepository storeStaffRepository;
     private final SubscriptionMapper subscriptionMapper;
-    @org.springframework.context.annotation.Lazy
-    private final PayOSService payOSService;
+    @Lazy
+    private final PaymentService paymentService;
 
     @Override
     @Transactional(readOnly = true)
@@ -203,11 +205,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         String qrCodeUrl;
         String message = "Tạo đơn đăng ký gói thành công, vui lòng tiến hành thanh toán";
 
-        if ("PAYOS".equalsIgnoreCase(paymentMethod) && payOSService != null && payOSService.isConfigured()) {
+        if ("PAYOS".equalsIgnoreCase(paymentMethod) && paymentService != null && paymentService.isConfigured()) {
             payment = subscriptionPaymentRepository.save(payment);
             try {
-                com.moodcafe.payment.dto.response.PayOSResponse payOSResponse =
-                        payOSService.createPaymentLinkForSubscriptionPayment(payment);
+                PayOSResponse payOSResponse =
+                        paymentService.createPaymentLinkForSubscriptionPayment(payment);
                 paymentUrl = payOSResponse.getCheckoutUrl();
                 qrCodeUrl = payOSResponse.getQrCode();
                 transactionCode = String.valueOf(payOSResponse.getOrderCode());

@@ -18,7 +18,7 @@ import com.moodcafe.finance.service.BookingCommissionService;
 import com.moodcafe.finance.service.ReservationPricingService;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
-import com.moodcafe.payment.abstraction.service.PayOSService;
+import com.moodcafe.payment.abstraction.service.PaymentService;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -70,7 +70,7 @@ class BookingPaymentLifecycleTest {
     @Mock
     private CurrentUserService currentUserService;
     @Mock
-    private PayOSService payOSService;
+    private PaymentService paymentService;
     @Spy
     private BookingMapper bookingMapper = Mappers.getMapper(BookingMapper.class);
     @Mock
@@ -146,7 +146,7 @@ class BookingPaymentLifecycleTest {
                 storeRepository,
                 storeStaffService,
                 currentUserService,
-                payOSService,
+                paymentService,
                 bookingMapper,
                 storeImageRepository,
                 notificationDispatcherService,
@@ -267,7 +267,7 @@ class BookingPaymentLifecycleTest {
         when(configRepository.findByStoreStoreId(storeId)).thenReturn(Optional.of(config));
         when(tableCategoryRepository.findByIdWithLock(categoryId)).thenReturn(Optional.of(category));
         when(bookingRepository.countOverlappingBookings(any(), any(), any(), any())).thenReturn(0L);
-        when(payOSService.generateOrderCode()).thenReturn(999111L);
+        when(paymentService.generateOrderCode()).thenReturn(999111L);
 
         UUID voucherId = UUID.randomUUID();
         CustomerVoucher voucher = CustomerVoucher.builder()
@@ -315,7 +315,7 @@ class BookingPaymentLifecycleTest {
         assertEquals(BookingStatus.PAID_CONFIRMED, response.getStatus());
         assertNull(response.getCheckoutUrl());
         assertEquals("USED", voucher.getStatus());
-        verify(payOSService, never()).createPaymentLinkForBooking(any());
+        verify(paymentService, never()).createBookingPaymentLink(any(), anyLong(), anyLong(), any(), any());
         verify(merchantWalletService).holdPending(
                 eq(storeId),
                 eq(new BigDecimal("170000.00")),
