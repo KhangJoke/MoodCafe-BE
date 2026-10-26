@@ -53,8 +53,11 @@ public class BookingResponse {
     private String paymentBin;
     private String paymentDescription;
     private String qrCodeToken;
+    private String physicalTableNumber;
     private Instant checkedInAt;
+    private Instant checkOutRequestedAt;
     private Instant completedAt;
+    private Boolean isEarlyCheckIn;
     private Instant claimedLateAt;
     private Instant cancelledAt;
     private String cancelReason;

@@ -34,4 +34,6 @@ public interface PaymentService {
     String sanitizeDescription(String input);
 
     PaymentOrderInfoResponse getOrderInfo(Long orderCode);
+
+    long generateOrderCode();
 }

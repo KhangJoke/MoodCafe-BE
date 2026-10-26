@@ -13,7 +13,6 @@ import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.dto.response.PayOSResponse;
-import com.moodcafe.payment.entity.PaymentAttempt;
 import com.moodcafe.payment.dto.response.PaymentOrderInfoResponse;
 import com.moodcafe.sponsored.abstraction.repository.SponsoredListingRepository;
 import com.moodcafe.sponsored.abstraction.service.SponsoredListingService;
@@ -29,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import vn.payos.PayOS;
 import vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest;
@@ -60,7 +60,6 @@ public class PayOSServiceImpl implements PayOSService {
     private final SubscriptionService subscriptionService;
     private final UserRepository userRepository;
     private final CurrentUserService currentUserService;
-    private final PaymentAttemptService paymentAttemptService;
 
     @Autowired(required = false)
     private SponsoredListingRepository sponsoredListingRepository;
@@ -90,8 +89,7 @@ public class PayOSServiceImpl implements PayOSService {
             SubscriptionPaymentRepository subscriptionPaymentRepository,
             @Lazy SubscriptionService subscriptionService,
             UserRepository userRepository,
-            CurrentUserService currentUserService,
-            @Autowired(required = false) @Lazy PaymentAttemptService paymentAttemptService
+            CurrentUserService currentUserService
     ) {
         this.payOS = payOS;
         this.payOSConfig = payOSConfig;
@@ -99,11 +97,10 @@ public class PayOSServiceImpl implements PayOSService {
         this.subscriptionService = subscriptionService;
         this.userRepository = userRepository;
         this.currentUserService = currentUserService;
-        this.paymentAttemptService = paymentAttemptService;
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public PayOSResponse createBookingPaymentLink(
             UUID reservationId,
             long orderCode,
@@ -589,40 +586,10 @@ public class PayOSServiceImpl implements PayOSService {
             }
         }
 
-        // paymentOrderCode on Booking is only the current session pointer.
-        // Resolve attempts first so a delayed webhook for an older session is
-        // still reconciled against the same booking.
-        if (bookingService != null && paymentAttemptService != null
-                && paymentAttemptService.findByOrderCode(orderCode)
-                .map(a -> "BOOKING".equalsIgnoreCase(a.getBusinessType())).orElse(false)) {
-            Long verifiedCumulative = paidAmountVnd;
-            var observation = paymentAttemptService.reconcile(orderCode);
-            if (observation != null && observation.getAmount() != null
-                    && observation.getStatus() != com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.UNKNOWN) {
-                verifiedCumulative = observation.getAmount().longValueExact();
-            }
-            bookingService.confirmBookingPayment(orderCode, verifiedCumulative);
-            paymentAttemptService.markStatus(orderCode, "PAID");
-            return;
-        }
-
         if (bookingRepository != null && bookingService != null) {
             Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
             if (bookingOpt.isPresent()) {
-                Booking booking = bookingOpt.get();
-                Long verifiedCumulative = paidAmountVnd;
-                var observation = paymentAttemptService != null ? paymentAttemptService.reconcile(orderCode) : null;
-                if (observation != null && observation.getAmount() != null
-                        && observation.getStatus() != com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.UNKNOWN) {
-                    verifiedCumulative = observation.getAmount().longValueExact();
-                } else if (booking.getActualPaidAmount() != null && booking.getActualPaidAmount().signum() > 0
-                        && (booking.getStatus() == BookingStatus.CANCELLED_REFUNDED || booking.getStatus() == BookingStatus.PAYMENT_FAILED)) {
-                    throw new AppException(ErrorCode.CONFLICT, "Chưa xác minh được tổng tiền nhận, cổng thanh toán cần gửi lại webhook");
-                }
-                bookingService.confirmBookingPayment(orderCode, verifiedCumulative);
-                if (paymentAttemptService != null) {
-                    paymentAttemptService.markStatus(orderCode, "PAID");
-                }
+                bookingService.confirmBookingPayment(orderCode, paidAmountVnd);
                 return;
             }
         }
@@ -673,18 +640,10 @@ public class PayOSServiceImpl implements PayOSService {
                     }
                 }
 
-                if (bookingService != null && paymentAttemptService != null
-                        && paymentAttemptService.findByOrderCode(orderCode)
-                        .map(a -> "BOOKING".equalsIgnoreCase(a.getBusinessType())).orElse(false)) {
-                    bookingService.confirmBookingPayment(orderCode, paymentLink.getAmountPaid());
-                    paymentAttemptService.markStatus(orderCode, "PAID");
-                    return true;
-                }
                 if (bookingRepository != null && bookingService != null) {
                     Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
                     if (bookingOpt.isPresent()) {
                         bookingService.confirmBookingPayment(orderCode, paymentLink.getAmountPaid());
-                        if (paymentAttemptService != null) paymentAttemptService.markStatus(orderCode, "PAID");
                         return true;
                     }
                 }
@@ -692,15 +651,6 @@ public class PayOSServiceImpl implements PayOSService {
                 return true;
             } else {
                 log.info("PayOS status for orderCode {}: {}", orderCode, paymentLink != null ? paymentLink.getStatus() : "null");
-                if (paymentLink != null && (paymentLink.getStatus() == PaymentLinkStatus.CANCELLED || paymentLink.getStatus() == PaymentLinkStatus.EXPIRED)) {
-                    // A PayOS session ending is not a booking cancellation. The
-                    // customer can create another session until the server-side
-                    // booking deadline; only the scheduler/explicit cancellation
-                    // may release the booking and voucher.
-                    if (paymentAttemptService != null) {
-                        paymentAttemptService.markStatus(orderCode, paymentLink.getStatus().name());
-                    }
-                }
             }
         } catch (Exception e) {
             log.warn("Check PayOS payment status failed for orderCode {}: {}", orderCode, e.getMessage());
@@ -749,10 +699,12 @@ public class PayOSServiceImpl implements PayOSService {
     /**
      * Tạo orderCode kiểu Long là số nguyên duy nhất
      */
-    private synchronized long generateOrderCode() {
+    @Override
+    public synchronized long generateOrderCode() {
         long code = System.currentTimeMillis() / 1000;
         while (subscriptionPaymentRepository.findByTransactionCode(String.valueOf(code)).isPresent()
-                || (sponsoredListingRepository != null && sponsoredListingRepository.findByTransactionCode(String.valueOf(code)).isPresent())) {
+                || (sponsoredListingRepository != null && sponsoredListingRepository.findByTransactionCode(String.valueOf(code)).isPresent())
+                || (bookingRepository != null && bookingRepository.findByPaymentOrderCode(code).isPresent())) {
             code++;
         }
         return code;
@@ -824,35 +776,7 @@ public class PayOSServiceImpl implements PayOSService {
 
         String txCode = String.valueOf(orderCode);
 
-        // 1. Resolve canonical booking attempts first. Booking.paymentOrderCode
-        // points only at the newest session, while callback/info requests may
-        // refer to an older cancelled session.
-        if (paymentAttemptService != null && bookingRepository != null) {
-            Optional<PaymentAttempt> attempt = paymentAttemptService.findByOrderCode(orderCode);
-            if (attempt.isPresent() && "BOOKING".equalsIgnoreCase(attempt.get().getBusinessType())) {
-                try {
-                    Optional<Booking> bookingByAttempt = bookingRepository.findById(UUID.fromString(attempt.get().getBusinessId()));
-                    if (bookingByAttempt.isPresent()) {
-                        Booking booking = bookingByAttempt.get();
-                        String storeName = booking.getStore() != null ? booking.getStore().getName() : "quán";
-                        String sessionStatus = attempt.get().getStatus();
-                        return PaymentOrderInfoResponse.builder()
-                                .orderCode(orderCode)
-                                .paymentType("BOOKING")
-                                .status(sessionStatus != null ? sessionStatus : booking.getStatus().name())
-                                .amount(booking.getCustomerPaidAmount() != null ? booking.getCustomerPaidAmount().longValue() : 0L)
-                                .title("Cọc giữ bàn tại " + storeName)
-                                .referenceCode(booking.getBookingCode())
-                                .redirectUrl("/bookings/" + booking.getBookingId())
-                                .build();
-                    }
-                } catch (IllegalArgumentException ignored) {
-                    log.warn("Invalid booking id on payment attempt for orderCode {}", orderCode);
-                }
-            }
-        }
-
-        // Legacy booking rows without a durable attempt.
+        // Booking query by paymentOrderCode
         if (bookingRepository != null) {
             Optional<Booking> bookingOpt = bookingRepository.findByPaymentOrderCode(orderCode);
             if (bookingOpt.isPresent()) {
@@ -863,7 +787,7 @@ public class PayOSServiceImpl implements PayOSService {
                         .paymentType("BOOKING")
                         .status(booking.getStatus() != null ? booking.getStatus().name() : "PENDING")
                         .amount(booking.getMinSpendAmount())
-                        .title("Cọc giữ bàn tại " + storeName)
+                        .title("Gói đồ uống trả trước tại " + storeName)
                         .referenceCode(booking.getBookingCode())
                         .redirectUrl("/bookings/" + booking.getBookingId())
                         .build();

@@ -16,4 +16,6 @@ public class DeskCheckInRequest {
 
     @NotBlank(message = "Mã đặt chỗ hoặc token QR không được để trống")
     private String codeOrToken;
+
+    private String physicalTableNumber;
 }

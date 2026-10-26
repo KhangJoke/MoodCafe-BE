@@ -2,7 +2,6 @@ package com.moodcafe.booking;
 
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
-import com.moodcafe.booking.abstraction.repository.BookingQuoteRepository;
 import com.moodcafe.booking.abstraction.repository.BookingRepository;
 import com.moodcafe.booking.abstraction.repository.StoreBookingConfigRepository;
 import com.moodcafe.booking.abstraction.repository.TableCategoryRepository;
@@ -14,13 +13,12 @@ import com.moodcafe.booking.entity.StoreBookingConfig;
 import com.moodcafe.booking.entity.TableCategory;
 import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.booking.mapper.BookingMapper;
-import com.moodcafe.booking.service.BookingFinanceService;
 import com.moodcafe.booking.service.BookingServiceImpl;
+import com.moodcafe.finance.service.BookingCommissionService;
+import com.moodcafe.finance.service.ReservationPricingService;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.payment.abstraction.service.PayOSService;
-import com.moodcafe.payment.service.OrderCodeGeneratorService;
-import com.moodcafe.payment.service.PaymentAttemptService;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -28,7 +26,9 @@ import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
+import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
+import com.moodcafe.voucher.service.VoucherLifecycleService;
 import com.moodcafe.wallet.dto.RefundPointCommand;
 import com.moodcafe.wallet.service.CustomerWalletService;
 import com.moodcafe.wallet.service.MerchantWalletService;
@@ -41,6 +41,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -56,8 +57,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class BookingMoneyLifecycleIT {
+class BookingMoneyLifecycleTest {
 
+    @Mock
+    private BookingCommissionService commissionService;
     @Mock
     private BookingRepository bookingRepository;
     @Mock
@@ -79,21 +82,21 @@ class BookingMoneyLifecycleIT {
     @Mock
     private NotificationDispatcherService notificationDispatcherService;
     @Mock
-    private BookingFinanceService bookingFinanceService;
-    @Mock
-    private BookingQuoteRepository bookingQuoteRepository;
-    @Mock
     private CustomerVoucherRepository customerVoucherRepository;
     @Mock
-    private OrderCodeGeneratorService orderCodeGeneratorService;
+    private VoucherPointAllocationRepository voucherPointAllocationRepository;
     @Mock
-    private PaymentAttemptService paymentAttemptService;
+    private ReservationPricingService reservationPricingService;
     @Mock
     private MerchantWalletService merchantWalletService;
     @Mock
     private CustomerWalletService customerWalletService;
     @Mock
     private LoyaltyRewardService loyaltyRewardService;
+    @Mock
+    private VoucherLifecycleService voucherLifecycleService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private BookingServiceImpl bookingService;
 
@@ -140,6 +143,7 @@ class BookingMoneyLifecycleIT {
                 .build();
 
         bookingService = new BookingServiceImpl(
+                commissionService,
                 bookingRepository,
                 tableCategoryRepository,
                 configRepository,
@@ -152,22 +156,24 @@ class BookingMoneyLifecycleIT {
                 notificationDispatcherService,
                 null,
                 null,
-                bookingFinanceService,
-                bookingQuoteRepository,
                 customerVoucherRepository,
-                orderCodeGeneratorService,
-                paymentAttemptService,
+                voucherPointAllocationRepository,
+                reservationPricingService,
                 merchantWalletService,
                 customerWalletService,
-                loyaltyRewardService
+                loyaltyRewardService,
+                voucherLifecycleService,
+                transactionManager
         );
+
+        lenient().when(commissionService.record(any(), any())).thenReturn(true);
+        lenient().when(storeStaffService.requireStoreAccess(any(), any())).thenReturn(null);
     }
 
     @Test
-    @DisplayName("Check-In: On-time awards 1,000 MoodPoints, funds remain in Pending (no settle)")
-    void testDeskCheckIn_OnTimeAwardsPoints_NoSettle() {
+    @DisplayName("Check-In: On-time awards 1,000 MoodPoints and settles pending revenue to available")
+    void testDeskCheckIn_OnTimeAwardsPoints_SettlesToAvailable() {
         when(currentUserService.getCurrentUser()).thenReturn(customer);
-        when(storeStaffService.requireStoreAccess(storeId)).thenReturn(null);
 
         UUID bookingId = UUID.randomUUID();
         Booking booking = Booking.builder()
@@ -178,6 +184,8 @@ class BookingMoneyLifecycleIT {
                 .user(customer)
                 .status(BookingStatus.PAID_CONFIRMED)
                 .qrCodeToken("QR_TOKEN_101")
+                .startTime(Instant.now().minus(Duration.ofMinutes(5)))
+                .endTime(Instant.now().plus(Duration.ofHours(2)))
                 .customerPaidAmount(new BigDecimal("150000.00"))
                 .merchantNetAmount(new BigDecimal("170000.00"))
                 .graceDeadline(Instant.now().plus(Duration.ofMinutes(15))) // On time
@@ -185,6 +193,7 @@ class BookingMoneyLifecycleIT {
 
         when(bookingRepository.findAllByStoreStoreIdOrderByCreatedAtDesc(storeId))
                 .thenReturn(Collections.singletonList(booking));
+        when(bookingRepository.findByIdForUpdate(bookingId)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DeskCheckInRequest req = DeskCheckInRequest.builder()
@@ -197,14 +206,19 @@ class BookingMoneyLifecycleIT {
         // Assert
         assertEquals(BookingStatus.CHECKED_IN, res.getStatus());
         verify(loyaltyRewardService).awardBookingOnTimeCheckIn(booking);
-        verify(merchantWalletService, never()).settleToAvailable(any(), any(), any(), any(), any());
+        verify(merchantWalletService).settleToAvailable(
+                eq(storeId),
+                eq(new BigDecimal("170000.00")),
+                eq("BOOKING"),
+                eq(bookingId.toString()),
+                contains("MC-NT-101")
+        );
     }
 
     @Test
-    @DisplayName("Complete: Settles pending -> available, awards 1% spend loyalty points")
-    void testDeskComplete_SettlesPendingAndAwardsSpend() {
+    @DisplayName("Complete: Staff completes checkout, transitions status to COMPLETED")
+    void testDeskComplete_CompletesBooking() {
         when(currentUserService.getCurrentUser()).thenReturn(customer);
-        when(storeStaffService.requireStoreAccess(storeId)).thenReturn(null);
 
         UUID bookingId = UUID.randomUUID();
         Booking booking = Booking.builder()
@@ -228,43 +242,22 @@ class BookingMoneyLifecycleIT {
 
         // Assert
         assertEquals(BookingStatus.COMPLETED, res.getStatus());
-        verify(merchantWalletService).settleToAvailable(
-                eq(storeId),
-                eq(new BigDecimal("170000.00")),
-                eq("BOOKING"),
-                eq(bookingId.toString()),
-                contains("MC-NT-102")
-        );
-        verify(loyaltyRewardService).awardBookingSpendReward(booking);
     }
 
     @Test
-    void selfCheckoutWithoutTrustedStoreChallengeFailsClosed() {
+    @DisplayName("Request Checkout: Customer transitions CHECKED_IN booking to CHECK_OUT_PENDING")
+    void testRequestCheckout_Success() {
         when(currentUserService.getCurrentUser()).thenReturn(customer);
         UUID id = UUID.randomUUID();
         Booking booking = Booking.builder().bookingId(id).user(customer).store(store)
                 .status(BookingStatus.CHECKED_IN).checkedInAt(Instant.now().minusSeconds(2700)).build();
         lenient().when(bookingRepository.findById(id)).thenReturn(Optional.of(booking));
         lenient().when(bookingRepository.findByIdForUpdate(id)).thenReturn(Optional.of(booking));
-        lenient().when(bookingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        assertThrows(AppException.class, () -> bookingService.selfCheckOut(id, "QR_TOKEN"));
-        assertEquals(BookingStatus.CHECKED_IN, booking.getStatus());
-        verifyNoInteractions(merchantWalletService, loyaltyRewardService);
-    }
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
-    @Test
-    void cancellingPendingPaymentCannotReleaseLiveOrUnknownGatewayLink() {
-        when(currentUserService.getCurrentUser()).thenReturn(customer);
-        UUID id = UUID.randomUUID();
-        Booking booking = Booking.builder().bookingId(id).user(customer).store(store)
-                .status(BookingStatus.PENDING_PAYMENT).paymentOrderCode(123L)
-                .startTime(Instant.now().plusSeconds(18000)).freeCancelDeadline(Instant.now().plusSeconds(10000)).build();
-        lenient().when(bookingRepository.findById(id)).thenReturn(Optional.of(booking));
-        lenient().when(bookingRepository.findByIdForUpdate(id)).thenReturn(Optional.of(booking));
-        lenient().when(bookingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        assertThrows(AppException.class, () -> bookingService.cancelBooking(id, CancelBookingRequest.builder().build()));
-        assertEquals(BookingStatus.PENDING_PAYMENT, booking.getStatus());
-        verifyNoInteractions(customerVoucherRepository, customerWalletService);
+        BookingResponse res = bookingService.requestCheckout(id);
+
+        assertEquals(BookingStatus.CHECK_OUT_PENDING, res.getStatus());
     }
 
     @Test
@@ -297,7 +290,6 @@ class BookingMoneyLifecycleIT {
 
         lenient().when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking));
         lenient().when(bookingRepository.findByIdForUpdate(bookingId)).thenReturn(Optional.of(booking));
-        when(customerVoucherRepository.findByIdWithLock(voucherId)).thenReturn(Optional.of(voucher));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CancelBookingRequest req = CancelBookingRequest.builder().reason("Change of plans").build();
@@ -307,9 +299,7 @@ class BookingMoneyLifecycleIT {
 
         // Assert
         assertEquals(BookingStatus.CANCELLED_REFUNDED, res.getStatus());
-        assertEquals("AVAILABLE", voucher.getStatus());
-        assertNull(voucher.getLockedBookingId());
-        assertNull(voucher.getUsedAt());
+        verify(voucherLifecycleService).restoreVoucherForRefund(bookingId, voucherId);
 
         // Revert merchant pending
         verify(merchantWalletService).revertPending(

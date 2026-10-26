@@ -1,32 +1,23 @@
 package com.moodcafe.booking.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
-import com.moodcafe.booking.abstraction.repository.BookingQuoteRepository;
 import com.moodcafe.booking.abstraction.repository.BookingRepository;
-import com.moodcafe.loyalty.service.LoyaltyRewardService;
-import com.moodcafe.wallet.dto.RefundPointCommand;
-import com.moodcafe.wallet.service.CustomerWalletService;
-import com.moodcafe.wallet.service.MerchantWalletService;
 import com.moodcafe.booking.abstraction.repository.StoreBookingConfigRepository;
 import com.moodcafe.booking.abstraction.repository.TableCategoryRepository;
 import com.moodcafe.booking.abstraction.service.BookingService;
-import com.moodcafe.booking.dto.request.BookingQuoteRequest;
 import com.moodcafe.booking.dto.request.CancelBookingRequest;
 import com.moodcafe.booking.dto.request.CreateBookingRequest;
 import com.moodcafe.booking.dto.request.DeskCheckInRequest;
-import com.moodcafe.booking.dto.response.BookingCustomerDetailResponse;
 import com.moodcafe.booking.dto.response.BookingDeskSummaryResponse;
-import com.moodcafe.booking.dto.response.BookingQuoteResponse;
 import com.moodcafe.booking.dto.response.BookingResponse;
-import com.moodcafe.booking.dto.response.BookingStaffDetailResponse;
 import com.moodcafe.booking.dto.response.CategoryScheduleDTO;
 import com.moodcafe.booking.dto.response.RefundOutcomeResponse;
 import com.moodcafe.booking.dto.response.SlotAvailabilityResponse;
 import com.moodcafe.booking.dto.response.StoreDailyScheduleResponse;
 import com.moodcafe.booking.dto.response.TimeSlotDTO;
 import com.moodcafe.booking.entity.Booking;
-import com.moodcafe.booking.entity.BookingQuote;
 import com.moodcafe.booking.entity.StoreBookingConfig;
 import com.moodcafe.booking.entity.TableCategory;
 import com.moodcafe.booking.entity.enums.BookingEventType;
@@ -34,15 +25,15 @@ import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.booking.entity.enums.SlotStatus;
 import com.moodcafe.booking.mapper.BookingMapper;
 import com.moodcafe.finance.dto.ReservationFinancialSnapshot;
+import com.moodcafe.finance.dto.ReservationPricingInput;
+import com.moodcafe.finance.service.BookingCommissionService;
+import com.moodcafe.finance.service.ReservationPricingService;
+import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.notification.entity.enums.NotificationType;
 import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.payment.dto.response.PayOSResponse;
-import com.moodcafe.payment.entity.PaymentAttempt;
-import com.moodcafe.payment.service.OrderCodeGeneratorService;
-import com.moodcafe.payment.service.PaymentAttemptService;
 import com.moodcafe.shared.error.ErrorCode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.shared.response.PageResponse;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
@@ -52,21 +43,28 @@ import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.StoreImage;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
+import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
+import com.moodcafe.voucher.entity.VoucherPointAllocation;
 import com.moodcafe.voucher.service.VoucherLifecycleService;
+import com.moodcafe.wallet.dto.RefundPointCommand;
+import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.wallet.service.MerchantWalletService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
-import java.util.function.Supplier;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -74,9 +72,6 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -84,21 +79,23 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class BookingServiceImpl implements BookingService {
 
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final Set<BookingStatus> OCCUPIED_STATUSES = EnumSet.of(
             BookingStatus.PENDING_PAYMENT,
             BookingStatus.PAID_CONFIRMED,
-            BookingStatus.CHECKED_IN
+            BookingStatus.CHECKED_IN,
+            BookingStatus.CHECK_OUT_PENDING,
+            BookingStatus.WALK_IN_HOLD
     );
 
-    @Autowired
-    private com.moodcafe.finance.service.BookingCommissionService commissionService;
-
+    private final BookingCommissionService commissionService;
     private final BookingRepository bookingRepository;
     private final TableCategoryRepository tableCategoryRepository;
     private final StoreBookingConfigRepository configRepository;
@@ -111,122 +108,14 @@ public class BookingServiceImpl implements BookingService {
     private final NotificationDispatcherService notificationDispatcherService;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
-    private final BookingFinanceService bookingFinanceService;
-    private final BookingQuoteRepository bookingQuoteRepository;
     private final CustomerVoucherRepository customerVoucherRepository;
-    private final OrderCodeGeneratorService orderCodeGeneratorService;
-    private final PaymentAttemptService paymentAttemptService;
+    private final VoucherPointAllocationRepository voucherPointAllocationRepository;
+    private final ReservationPricingService reservationPricingService;
     private final MerchantWalletService merchantWalletService;
     private final CustomerWalletService customerWalletService;
     private final LoyaltyRewardService loyaltyRewardService;
     private final VoucherLifecycleService voucherLifecycleService;
     private final PlatformTransactionManager transactionManager;
-    @Autowired private BookingCheckoutChallengeService checkoutChallenges;
-
-    @Autowired
-    public BookingServiceImpl(
-            BookingRepository bookingRepository,
-            TableCategoryRepository tableCategoryRepository,
-            StoreBookingConfigRepository configRepository,
-            StoreRepository storeRepository,
-            StoreStaffService storeStaffService,
-            CurrentUserService currentUserService,
-            PayOSService payOSService,
-            BookingMapper bookingMapper,
-            StoreImageRepository storeImageRepository,
-            NotificationDispatcherService notificationDispatcherService,
-            RedisTemplate<String, String> redisTemplate,
-            ObjectMapper objectMapper,
-            BookingFinanceService bookingFinanceService,
-            BookingQuoteRepository bookingQuoteRepository,
-            CustomerVoucherRepository customerVoucherRepository,
-            OrderCodeGeneratorService orderCodeGeneratorService,
-            PaymentAttemptService paymentAttemptService,
-            MerchantWalletService merchantWalletService,
-            CustomerWalletService customerWalletService,
-            LoyaltyRewardService loyaltyRewardService,
-            VoucherLifecycleService voucherLifecycleService,
-            PlatformTransactionManager transactionManager
-    ) {
-        this.bookingRepository = bookingRepository;
-        this.tableCategoryRepository = tableCategoryRepository;
-        this.configRepository = configRepository;
-        this.storeRepository = storeRepository;
-        this.storeStaffService = storeStaffService;
-        this.currentUserService = currentUserService;
-        this.payOSService = payOSService;
-        this.bookingMapper = bookingMapper;
-        this.storeImageRepository = storeImageRepository;
-        this.notificationDispatcherService = notificationDispatcherService;
-        this.redisTemplate = redisTemplate;
-        this.objectMapper = objectMapper;
-        this.bookingFinanceService = bookingFinanceService;
-        this.bookingQuoteRepository = bookingQuoteRepository;
-        this.customerVoucherRepository = customerVoucherRepository;
-        this.orderCodeGeneratorService = orderCodeGeneratorService;
-        this.paymentAttemptService = paymentAttemptService;
-        this.merchantWalletService = merchantWalletService;
-        this.customerWalletService = customerWalletService;
-        this.loyaltyRewardService = loyaltyRewardService;
-        this.voucherLifecycleService = voucherLifecycleService;
-        this.transactionManager = transactionManager;
-    }
-
-    public BookingServiceImpl(
-            BookingRepository bookingRepository,
-            TableCategoryRepository tableCategoryRepository,
-            StoreBookingConfigRepository configRepository,
-            StoreRepository storeRepository,
-            StoreStaffService storeStaffService,
-            CurrentUserService currentUserService,
-            PayOSService payOSService,
-            BookingMapper bookingMapper,
-            StoreImageRepository storeImageRepository,
-            NotificationDispatcherService notificationDispatcherService,
-            RedisTemplate<String, String> redisTemplate,
-            ObjectMapper objectMapper,
-            BookingFinanceService bookingFinanceService,
-            BookingQuoteRepository bookingQuoteRepository,
-            CustomerVoucherRepository customerVoucherRepository,
-            OrderCodeGeneratorService orderCodeGeneratorService,
-            PaymentAttemptService paymentAttemptService,
-            MerchantWalletService merchantWalletService,
-            CustomerWalletService customerWalletService,
-            LoyaltyRewardService loyaltyRewardService
-    ) {
-        this(bookingRepository, tableCategoryRepository, configRepository, storeRepository,
-             storeStaffService, currentUserService, payOSService, bookingMapper, storeImageRepository,
-             notificationDispatcherService, redisTemplate, objectMapper, bookingFinanceService,
-             bookingQuoteRepository, customerVoucherRepository, orderCodeGeneratorService,
-             paymentAttemptService, merchantWalletService, customerWalletService,
-             loyaltyRewardService, null, null);
-    }
-
-    public BookingServiceImpl(
-            BookingRepository bookingRepository,
-            TableCategoryRepository tableCategoryRepository,
-            StoreBookingConfigRepository configRepository,
-            StoreRepository storeRepository,
-            StoreStaffService storeStaffService,
-            CurrentUserService currentUserService,
-            PayOSService payOSService,
-            BookingMapper bookingMapper,
-            StoreImageRepository storeImageRepository,
-            NotificationDispatcherService notificationDispatcherService,
-            RedisTemplate<String, String> redisTemplate,
-            ObjectMapper objectMapper,
-            BookingFinanceService bookingFinanceService,
-            BookingQuoteRepository bookingQuoteRepository,
-            CustomerVoucherRepository customerVoucherRepository,
-            OrderCodeGeneratorService orderCodeGeneratorService,
-            PaymentAttemptService paymentAttemptService
-    ) {
-        this(bookingRepository, tableCategoryRepository, configRepository, storeRepository,
-             storeStaffService, currentUserService, payOSService, bookingMapper, storeImageRepository,
-             notificationDispatcherService, redisTemplate, objectMapper, bookingFinanceService,
-             bookingQuoteRepository, customerVoucherRepository, orderCodeGeneratorService,
-             paymentAttemptService, null, null, null, null, null);
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -487,108 +376,6 @@ public class BookingServiceImpl implements BookingService {
                 .build();
     }
 
-    @Override
-    @Transactional
-    public BookingQuoteResponse getBookingQuote(BookingQuoteRequest request) {
-        User currentUser = currentUserService.getCurrentUser();
-
-        Store store = storeRepository.findById(request.getStoreId())
-                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
-
-        if (store.getStatus() == StoreStatus.SUSPENDED) {
-            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Cơ sở đang bị tạm đình chỉ hoạt động");
-        }
-
-        StoreBookingConfig config = getOrCreateConfig(store);
-        if (!Boolean.TRUE.equals(config.getIsBookingEnabled())) {
-            throw new AppException(ErrorCode.BOOKING_DISABLED_BY_STORE);
-        }
-
-        TableCategory category = tableCategoryRepository.findByCategoryIdAndStoreStoreId(request.getCategoryId(), request.getStoreId())
-                .orElseThrow(() -> new AppException(ErrorCode.TABLE_CATEGORY_NOT_FOUND));
-
-        if (!category.getStore().getStoreId().equals(store.getStoreId())) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Loại bàn không thuộc cơ sở đã chọn");
-        }
-        if (!Boolean.TRUE.equals(category.getIsActive())) {
-            throw new AppException(ErrorCode.TABLE_CATEGORY_NOT_FOUND, "Loại bàn này đang tạm ngừng nhận khách");
-        }
-
-        int guestCount = request.getGuestCount() != null ? request.getGuestCount() : 2;
-        if (category.getMaxCapacity() != null && guestCount > category.getMaxCapacity()) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Số lượng khách (" + guestCount + ") vượt quá sức chứa tối đa của loại bàn (" + category.getMaxCapacity() + " người)");
-        }
-
-        CustomerVoucher voucher = null;
-        if (request.getVoucherId() != null) {
-            voucher = customerVoucherRepository.findById(request.getVoucherId())
-                    .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Voucher không tồn tại"));
-
-            if (!voucher.getUserId().equals(currentUser.getUserId())) {
-                throw new AppException(ErrorCode.FORBIDDEN_ACTION, "Voucher không thuộc quyền sở hữu của bạn");
-            }
-            if (!"AVAILABLE".equalsIgnoreCase(voucher.getStatus())) {
-                throw new AppException(ErrorCode.BAD_REQUEST, "Voucher không ở trạng thái khả dụng");
-            }
-            if (voucher.getExpiresAt().isBefore(Instant.now())) {
-                throw new AppException(ErrorCode.BAD_REQUEST, "Voucher đã hết hạn sử dụng");
-            }
-        }
-
-        ReservationFinancialSnapshot snapshot = bookingFinanceService.resolveFinancialSnapshot(store, category, voucher);
-        BookingFinanceService.Deadlines deadlines = bookingFinanceService.calculateDeadlines(store, config, request.getStartTime());
-        String fingerprint = bookingFinanceService.calculateFingerprint(
-                request.getStoreId(),
-                request.getCategoryId(),
-                request.getStartTime(),
-                guestCount,
-                request.getVoucherId()
-        );
-
-        Instant expiresAt = Instant.now().plus(Duration.ofMinutes(15));
-        BookingQuote quote = BookingQuote.builder()
-                .user(currentUser)
-                .store(store)
-                .tableCategory(category)
-                .startTime(request.getStartTime())
-                .guestCount(guestCount)
-                .voucher(voucher)
-                .selectionFingerprint(fingerprint)
-                .pricingVersion(1)
-                .grossAmount(snapshot.getGrossAmount())
-                .voucherDiscount(snapshot.getVoucherDiscount())
-                .customerPaidAmount(snapshot.getCustomerPaidAmount())
-                .commissionRate(snapshot.getCommissionRate())
-                .commissionPolicyId(snapshot.getCommissionPolicyId())
-                .commissionAmount(snapshot.getCommissionAmount())
-                .merchantNetAmount(snapshot.getMerchantNetAmount())
-                .voucherRefundFundedAmount(snapshot.getVoucherRefundFundedAmount())
-                .voucherRewardFundedAmount(snapshot.getVoucherRewardFundedAmount())
-                .isEligible(true)
-                .freeCancelDeadline(deadlines.freeCancelDeadline())
-                .graceDeadline(deadlines.graceDeadline())
-                .serviceClosingDeadline(deadlines.serviceClosingDeadline())
-                .expiresAt(expiresAt)
-                .build();
-
-        quote = bookingQuoteRepository.save(quote);
-
-        return BookingQuoteResponse.builder()
-                .quoteId(quote.getQuoteId())
-                .expiresAt(expiresAt)
-                .selectionFingerprint(fingerprint)
-                .pricingVersion(quote.getPricingVersion())
-                .grossAmount(snapshot.getGrossAmount())
-                .voucherDiscount(snapshot.getVoucherDiscount())
-                .customerPaidAmount(snapshot.getCustomerPaidAmount())
-                .currency("VND")
-                .isEligible(true)
-                .freeCancelDeadline(deadlines.freeCancelDeadline())
-                .graceDeadline(deadlines.graceDeadline())
-                .serviceClosingDeadline(deadlines.serviceClosingDeadline())
-                .build();
-    }
-
     public static String computeBookingPayloadHash(CreateBookingRequest request) {
         String raw = (request.getStoreId() != null ? request.getStoreId().toString() : "") + "|"
                 + (request.getCategoryId() != null ? request.getCategoryId().toString() : "") + "|"
@@ -611,53 +398,54 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public BookingResponse createBooking(CreateBookingRequest request) {
-        BookingResponse prepared;
-        try {
-            prepared = inTransaction(() -> prepareBooking(request));
-        } catch (org.springframework.dao.DataIntegrityViolationException conflict) {
-            // A competing request may have committed the same scoped intent while we prepared.
-            prepared = inTransaction(() -> findExistingIntent(request));
-            if (prepared == null) throw new AppException(ErrorCode.CONFLICT, "Báo giá hoặc yêu cầu đã được sử dụng");
+        Booking savedBooking = inTransaction(() -> doCreateBooking(request));
+
+        PayOSResponse payResponse = null;
+        if (savedBooking.getStatus() == BookingStatus.PENDING_PAYMENT) {
+            try {
+                payResponse = payOSService.createBookingPaymentLink(
+                        savedBooking.getBookingId(),
+                        savedBooking.getPaymentOrderCode(),
+                        savedBooking.getCustomerPaidAmount().longValueExact(),
+                        "DATBAN " + savedBooking.getPaymentOrderCode()
+                );
+                if (payResponse != null) {
+                    cachePayOSResponse(savedBooking.getBookingId(), payResponse);
+                }
+            } catch (Exception e) {
+                log.error("Failed to create PayOS payment link for booking {}: {}", savedBooking.getBookingCode(), e.getMessage());
+            }
         }
-        if (prepared.getStatus() == BookingStatus.PENDING_PAYMENT && prepared.getCheckoutUrl() == null) {
-            return resumePayment(prepared);
+
+        StoreBookingConfig config = getOrCreateConfig(savedBooking.getStore());
+        BookingResponse response = enrichBookingResponse(savedBooking, config);
+        if (payResponse != null) {
+            response.setCheckoutUrl(payResponse.getCheckoutUrl());
+            response.setPaymentQrCode(payResponse.getQrCode());
+            response.setPaymentAccountNumber(payResponse.getAccountNumber());
+            response.setPaymentAccountName(payResponse.getAccountName());
+            response.setPaymentBin(payResponse.getBin());
+            response.setPaymentDescription(payResponse.getDescription());
         }
-        return prepared;
+
+        boolean requiresDeposit = savedBooking.getStatus() == BookingStatus.PENDING_PAYMENT;
+        BookingEventType eventType = requiresDeposit ? BookingEventType.CREATED : BookingEventType.PAID_CONFIRMED;
+        String eventMsg = requiresDeposit
+                ? "Đơn đặt bàn mới (" + savedBooking.getBookingCode() + ") đang chờ thanh toán gói đồ uống trả trước."
+                : "Đơn đặt bàn mới (" + savedBooking.getBookingCode() + ") đã được xác nhận tự động (Zero-Pay).";
+        dispatchBookingNotification(savedBooking, eventType, eventMsg);
+
+        return response;
     }
 
     private <T> T inTransaction(Supplier<T> action) {
-        if (transactionManager == null) return action.get(); // compatibility for existing isolated unit fixtures
+        if (transactionManager == null) return action.get();
         return new TransactionTemplate(transactionManager).execute(status -> action.get());
     }
 
-    private BookingResponse findExistingIntent(CreateBookingRequest request) {
-        if (request.getIntentKey() == null || request.getIntentKey().isBlank()) return null;
-        UUID actor = currentUserService.getCurrentUser().getUserId();
-        Optional<PaymentAttempt> existing = paymentAttemptService.findByActorIdAndPurposeAndIntentKey(
-                actor, "BOOKING", request.getIntentKey().trim());
-        if (existing.isEmpty()) return null;
-        PaymentAttempt attempt = existing.get();
-        if (attempt.getPayloadHash() == null || !attempt.getPayloadHash().equals(computeBookingPayloadHash(request))) {
-            throw new AppException(ErrorCode.CONFLICT, "Idempotency-Key đã được sử dụng với thông tin đặt bàn khác");
-        }
-        Booking booking = bookingRepository.findById(UUID.fromString(attempt.getBusinessId()))
-                .orElseThrow(() -> new AppException(ErrorCode.CONFLICT, "Yêu cầu đang được phục hồi"));
-        if (!booking.getUser().getUserId().equals(actor)) throw new AppException(ErrorCode.FORBIDDEN_ACTION);
-        return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
-    }
-
-    private BookingResponse prepareBooking(CreateBookingRequest request) {
+    private Booking doCreateBooking(CreateBookingRequest request) {
         User currentUser = currentUserService.getCurrentUser();
-
-        String effectiveIntentKey = (request.getIntentKey() != null && !request.getIntentKey().isBlank())
-                ? request.getIntentKey().trim()
-                : null;
-        String incomingHash = computeBookingPayloadHash(request);
-
-        BookingResponse replay = findExistingIntent(request);
-        if (replay != null) return replay;
 
         Store store = storeRepository.findById(request.getStoreId())
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
@@ -681,10 +469,6 @@ public class BookingServiceImpl implements BookingService {
         TableCategory category = tableCategoryRepository.findByIdWithLock(request.getCategoryId())
                 .orElseThrow(() -> new AppException(ErrorCode.TABLE_CATEGORY_NOT_FOUND));
 
-        // Recheck after obtaining the category lock: a concurrent identical draft may
-        // have committed while this request waited for the last table.
-        replay = findExistingIntent(request);
-        if (replay != null) return replay;
         if (!category.getStore().getStoreId().equals(store.getStoreId())) {
             throw new AppException(ErrorCode.BAD_REQUEST, "Loại bàn không thuộc cơ sở đã chọn");
         }
@@ -710,35 +494,6 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.NO_TABLE_AVAILABLE);
         }
 
-        // Preserve the existing booking API: clients without a quote receive a server-calculated snapshot.
-        // Clients displaying voucher pricing may still send an explicit quote to bind their selection.
-        if (request.getQuoteId() == null) {
-            BookingQuoteResponse quoteResponse = getBookingQuote(BookingQuoteRequest.builder()
-                    .storeId(request.getStoreId()).categoryId(request.getCategoryId())
-                    .startTime(request.getStartTime()).guestCount(guestCount).voucherId(request.getVoucherId()).build());
-            request.setQuoteId(quoteResponse.getQuoteId());
-        }
-        BookingQuote quote = bookingQuoteRepository.findByQuoteIdAndUserUserId(request.getQuoteId(), currentUser.getUserId())
-                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Báo giá không tồn tại hoặc đã hết hạn"));
-
-        if (bookingRepository.existsByQuoteQuoteId(quote.getQuoteId())) {
-            throw new AppException(ErrorCode.CONFLICT, "Báo giá đã được dùng cho một đơn đặt bàn khác");
-        }
-        if (quote.getExpiresAt().isBefore(now)) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Báo giá đã hết hạn, vui lòng lấy báo giá mới");
-        }
-
-        String currentFingerprint = bookingFinanceService.calculateFingerprint(
-                request.getStoreId(),
-                request.getCategoryId(),
-                request.getStartTime(),
-                guestCount,
-                request.getVoucherId()
-        );
-        if (!quote.getSelectionFingerprint().equals(currentFingerprint)) {
-            throw new AppException(ErrorCode.CONFLICT, "QUOTE_CHANGED: Thông tin lựa chọn đã thay đổi so với báo giá");
-        }
-
         // Validate Voucher if provided
         CustomerVoucher voucher = null;
         if (request.getVoucherId() != null) {
@@ -756,22 +511,12 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        ReservationFinancialSnapshot snapshot = ReservationFinancialSnapshot.builder()
-                .grossAmount(quote.getGrossAmount())
-                .voucherDiscount(quote.getVoucherDiscount())
-                .customerPaidAmount(quote.getCustomerPaidAmount())
-                .commissionRate(quote.getCommissionRate())
-                .commissionPolicyId(quote.getCommissionPolicyId())
-                .commissionAmount(quote.getCommissionAmount())
-                .merchantNetAmount(quote.getMerchantNetAmount())
-                .voucherRefundFundedAmount(quote.getVoucherRefundFundedAmount())
-                .voucherRewardFundedAmount(quote.getVoucherRewardFundedAmount())
-                .build();
-        BookingFinanceService.Deadlines deadlines = bookingFinanceService.calculateDeadlines(store, config, request.getStartTime());
+        ReservationFinancialSnapshot snapshot = resolveFinancialSnapshot(store, category, voucher);
+        Deadlines deadlines = calculateDeadlines(store, config, request.getStartTime());
 
         String bookingCode = "MC" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         String qrToken = UUID.randomUUID().toString();
-        long orderCode = orderCodeGeneratorService.nextOrderCode();
+        long paymentOrderCode = payOSService.generateOrderCode();
 
         boolean requiresDeposit = snapshot.getCustomerPaidAmount().compareTo(BigDecimal.ZERO) > 0;
 
@@ -784,7 +529,6 @@ public class BookingServiceImpl implements BookingService {
                 .customerPhone(request.getCustomerPhone().trim())
                 .customerEmail(request.getCustomerEmail() != null ? request.getCustomerEmail().trim() : currentUser.getEmail())
                 .guestCount(guestCount)
-                .quote(quote)
                 .startTime(request.getStartTime())
                 .endTime(endTime)
                 .status(requiresDeposit ? BookingStatus.PENDING_PAYMENT : BookingStatus.PAID_CONFIRMED)
@@ -801,7 +545,7 @@ public class BookingServiceImpl implements BookingService {
                 .commissionRateSnapshot(snapshot.getCommissionRate())
                 .actualPaidAmount(BigDecimal.ZERO)
                 .paidAt(requiresDeposit ? null : Instant.now())
-                .paymentOrderCode(orderCode)
+                .paymentOrderCode(paymentOrderCode)
                 .paymentExpiresAt(Instant.now().plus(Duration.ofMinutes(15)))
                 .freeCancelDeadline(deadlines.freeCancelDeadline())
                 .graceDeadline(deadlines.graceDeadline())
@@ -813,54 +557,34 @@ public class BookingServiceImpl implements BookingService {
 
         booking = bookingRepository.save(booking);
 
-        // Persist durable payment attempt
-        paymentAttemptService.createAttempt(
-                "BOOKING",
-                booking.getBookingId().toString(),
-                orderCode,
-                snapshot.getCustomerPaidAmount(),
-                "VND",
-                effectiveIntentKey,
-                currentUser.getUserId(),
-                incomingHash
-        );
-
         if (voucher != null) {
             if (requiresDeposit) {
                 voucher.setStatus("LOCKED");
                 voucher.setLockedBookingId(booking.getBookingId());
                 voucher.setHoldUntil(Instant.now().plus(Duration.ofMinutes(15)));
             } else {
-                // 100% Zero-pay voucher: mark USED immediately
                 voucher.setStatus("USED");
                 voucher.setLockedBookingId(booking.getBookingId());
                 voucher.setUsedAt(Instant.now());
-                paymentAttemptService.markStatus(orderCode, "PAID");
             }
             customerVoucherRepository.save(voucher);
         }
 
         if (!requiresDeposit) {
             if (commissionService.record(booking, "HOLD") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
-                if (merchantWalletService != null) merchantWalletService.holdPending(
-                        booking.getStore().getStoreId(),
-                        booking.getMerchantNetAmount(),
-                        "BOOKING",
-                        booking.getBookingId().toString(),
-                        "Tạm giữ doanh thu đơn cọc 100% voucher #" + booking.getBookingCode()
-                );
+                if (merchantWalletService != null) {
+                    merchantWalletService.holdPending(
+                            booking.getStore().getStoreId(),
+                            booking.getMerchantNetAmount(),
+                            "BOOKING",
+                            booking.getBookingId().toString(),
+                            "Tạm giữ doanh thu gói đồ uống đặt bàn 100% voucher #" + booking.getBookingCode()
+                    );
+                }
             }
         }
 
-        BookingResponse response = enrichBookingResponse(booking, config);
-
-        BookingEventType eventType = requiresDeposit ? BookingEventType.CREATED : BookingEventType.PAID_CONFIRMED;
-        String eventMsg = requiresDeposit
-                ? "Đơn đặt bàn mới (" + booking.getBookingCode() + ") đang chờ thanh toán cọc."
-                : "Đơn đặt bàn mới (" + booking.getBookingCode() + ") đã được xác nhận tự động (Zero-Pay).";
-        dispatchBookingNotification(booking, eventType, eventMsg);
-
-        return response;
+        return booking;
     }
 
     @Override
@@ -872,16 +596,8 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public void confirmBookingPayment(Long paymentOrderCode, Long paidAmountVnd) {
-        Booking booking = paymentAttemptService.findByOrderCode(paymentOrderCode)
-                .filter(a -> "BOOKING".equalsIgnoreCase(a.getBusinessType()))
-                .flatMap(a -> {
-                    try {
-                        return bookingRepository.findByIdForUpdate(UUID.fromString(a.getBusinessId()));
-                    } catch (IllegalArgumentException ignored) {
-                        return Optional.empty();
-                    }
-                })
-                .or(() -> bookingRepository.findByOrderCodeForUpdate(paymentOrderCode))
+        Booking booking = bookingRepository.findByPaymentOrderCodeForUpdate(paymentOrderCode)
+                .or(() -> bookingRepository.findByPaymentOrderCode(paymentOrderCode))
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         if (paidAmountVnd == null || paidAmountVnd < 0) {
@@ -903,7 +619,6 @@ public class BookingServiceImpl implements BookingService {
                 booking.setRefundProcessed(true);
                 bookingRepository.save(booking);
             }
-            paymentAttemptService.markStatus(paymentOrderCode, "PAID");
             return;
         }
         if (booking.getStatus() == BookingStatus.PAID_CONFIRMED) {
@@ -945,12 +660,8 @@ public class BookingServiceImpl implements BookingService {
                         booking.getMerchantNetAmount(),
                         "BOOKING",
                         booking.getBookingId().toString(),
-                        "Doanh thu cọc đặt bàn #" + booking.getBookingCode()
+                        "Doanh thu gói đồ uống đặt bàn #" + booking.getBookingCode()
                 );
-            }
-
-            if (paymentAttemptService != null) {
-                paymentAttemptService.markStatus(paymentOrderCode, "PAID");
             }
 
             log.info("Booking {} confirmed payment successfully", booking.getBookingCode());
@@ -960,7 +671,7 @@ public class BookingServiceImpl implements BookingService {
             dispatchBookingNotification(
                     booking,
                     BookingEventType.PAID_CONFIRMED,
-                    "Khách " + booking.getCustomerName() + " đã thanh toán cọc thành công cho đơn " + booking.getBookingCode()
+                    "Khách " + booking.getCustomerName() + " đã thanh toán gói đồ uống thành công cho đơn " + booking.getBookingCode()
             );
         }
     }
@@ -992,144 +703,18 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public BookingCustomerDetailResponse getCustomerBookingDetail(UUID bookingId) {
-        User currentUser = currentUserService.getCurrentUser();
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-
-        if (!booking.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new AppException(ErrorCode.FORBIDDEN_ACTION, "Bạn không thể xem đơn đặt của người khác");
-        }
-
-        booking = reconcileBookingStatus(booking);
-        BookingCustomerDetailResponse response = bookingMapper.toCustomerDetail(booking);
-        response.setAllowedActions(bookingFinanceService.calculateCustomerAllowedActions(booking));
-
-        if (booking.getStatus() == BookingStatus.PAID_CONFIRMED || booking.getStatus() == BookingStatus.CHECKED_IN
-                || booking.getStatus() == BookingStatus.COMPLETED) {
-            response.setPaymentStatus("PAID");
-        } else if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            response.setPaymentStatus("PENDING");
-            PayOSResponse cached = getCachedPayOSResponse(booking.getBookingId());
-            if (cached != null) {
-                response.setCheckoutUrl(cached.getCheckoutUrl());
-                response.setPaymentQrCode(cached.getQrCode());
-            }
-        } else {
-            response.setPaymentStatus("CANCELLED");
-        }
-
-        if (Boolean.TRUE.equals(booking.getRefundProcessed())) {
-            response.setRefundOutcome(RefundOutcomeResponse.builder()
-                    .actualPaidRefundPoints(booking.getActualPaidAmount() != null ? booking.getActualPaidAmount().longValue() : 0L)
-                    .voucherRestorationStatus(booking.getVoucher() != null ? "RESTORED" : "NO_VOUCHER")
-                    .processedAt(booking.getCancelledAt())
-                    .eventId("EVT-" + booking.getBookingCode())
-                    .build());
-        }
-
-        return response;
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public BookingStaffDetailResponse getStaffBookingDetail(UUID storeId, UUID bookingId) {
-        User currentUser = currentUserService.getCurrentUser();
-        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
-
-        Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-
-        if (!booking.getStore().getStoreId().equals(storeId)) {
-            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Đơn đặt bàn không thuộc cơ sở này");
-        }
-
-        booking = reconcileBookingStatus(booking);
-        BookingStaffDetailResponse response = bookingMapper.toStaffDetail(booking);
-        response.setAllowedActions(bookingFinanceService.calculateStaffAllowedActions(booking));
-        return response;
-    }
-
-    @Override
-    @Transactional
     public BookingResponse getBookingByCode(String bookingCode) {
         Booking booking = bookingRepository.findByBookingCode(bookingCode.trim().toUpperCase())
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
         booking = reconcileBookingStatus(booking);
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
-        BookingResponse res = enrichBookingResponse(booking, config);
-
-        // Sanitize sensitive PII if caller is not the owner or store staff
-        User currentUser = null;
-        try {
-            currentUser = currentUserService.getCurrentUser();
-        } catch (Exception ignored) {}
-
-        boolean isAuthorized = currentUser != null && (
-                booking.getUser().getUserId().equals(currentUser.getUserId())
-                        || currentUserService.isSystemAdmin()
-        );
-
-        if (!isAuthorized && currentUser != null) {
-            try {
-                storeStaffService.requireStoreAccess(booking.getStore().getStoreId());
-                isAuthorized = true;
-            } catch (Exception ignored) {}
-        }
-
-        if (!isAuthorized) {
-            res.setQrCodeToken(null);
-            res.setCustomerPhone(maskPhone(res.getCustomerPhone()));
-            res.setCustomerEmail(maskEmail(res.getCustomerEmail()));
-        }
-
-        return res;
-    }
-
-    private String maskPhone(String phone) {
-        if (phone == null || phone.length() < 6) return phone;
-        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 3);
-    }
-
-    private String maskEmail(String email) {
-        if (email == null || !email.contains("@")) return email;
-        int atIdx = email.indexOf("@");
-        String name = email.substring(0, atIdx);
-        String domain = email.substring(atIdx);
-        if (name.length() <= 2) return name.charAt(0) + "*" + domain;
-        return name.substring(0, 2) + "***" + domain;
+        return enrichBookingResponse(booking, config);
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @Transactional
     public BookingResponse cancelBooking(UUID bookingId, CancelBookingRequest request) {
-        BookingResponse snapshot = inTransaction(() -> {
-            Booking booking = bookingRepository.findById(bookingId)
-                    .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-            if (!booking.getUser().getUserId().equals(currentUserService.getCurrentUser().getUserId())) {
-                throw new AppException(ErrorCode.FORBIDDEN_ACTION);
-            }
-            StoreBookingConfig config = getOrCreateConfig(booking.getStore());
-            Instant deadline = booking.getFreeCancelDeadline() != null ? booking.getFreeCancelDeadline()
-                    : booking.getStartTime().minus(Duration.ofHours(config.getFreeCancelHours()));
-            if (booking.getStatus() == BookingStatus.PAID_CONFIRMED && Instant.now().isAfter(deadline)) {
-                throw new AppException(ErrorCode.CANNOT_CANCEL_BOOKING,
-                        "Đã quá thời hạn hủy đơn miễn phí (trước giờ hẹn " + config.getFreeCancelHours() + " tiếng)");
-            }
-            return enrichBookingResponse(booking, config);
-        });
-        var observation = snapshot.getStatus() == BookingStatus.PENDING_PAYMENT
-                ? paymentAttemptService.cancelAndReconcile(snapshot.getPaymentOrderCode()) : null;
-        if (observation != null && observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
-            inTransaction(() -> { confirmBookingPayment(snapshot.getPaymentOrderCode(),
-                    observation.getAmount() != null ? observation.getAmount().longValueExact() : null); return null; });
-        }
-        return inTransaction(() -> cancelBookingLocked(bookingId, request, observation));
-    }
-
-    private BookingResponse cancelBookingLocked(UUID bookingId, CancelBookingRequest request,
-            com.moodcafe.payment.dto.GatewayPaymentObservation observation) {
         User currentUser = currentUserService.getCurrentUser();
         Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
@@ -1141,6 +726,7 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() == BookingStatus.CANCELLED_REFUNDED) {
             return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
         }
+
         if (booking.getStatus() != BookingStatus.PAID_CONFIRMED && booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
             throw new AppException(ErrorCode.CANNOT_CANCEL_BOOKING, "Trạng thái đơn hiện tại không thể hủy");
         }
@@ -1153,20 +739,6 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() == BookingStatus.PAID_CONFIRMED && Instant.now().isAfter(cancelDeadline)) {
             throw new AppException(ErrorCode.CANNOT_CANCEL_BOOKING,
                     "Đã quá thời hạn hủy đơn miễn phí (trước giờ hẹn " + config.getFreeCancelHours() + " tiếng)");
-        }
-
-        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            if (observation == null || (observation.getStatus() != com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.CANCELLED
-                    && observation.getStatus() != com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.EXPIRED)) {
-                throw new AppException(ErrorCode.CONFLICT, "Thanh toán đang được xác minh, vui lòng thử lại sau");
-            }
-        }
-
-        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT && observation != null
-                && observation.getAmount() != null && observation.getAmount().signum() > 0) {
-            booking.setActualPaidAmount(observation.getAmount());
-            booking.setPaidAt(Instant.now());
-            refundActualCash(booking);
         }
 
         // Voucher restoration / unlock logic via canonical lifecycle service
@@ -1186,41 +758,45 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        // Revert merchant pending balance if booking was PAID_CONFIRMED
+        // Revert merchant pending balance and refund customer if booking was PAID_CONFIRMED
         if (booking.getStatus() == BookingStatus.PAID_CONFIRMED) {
             if (commissionService.record(booking, "REVERSE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
-                if (merchantWalletService != null) merchantWalletService.revertPending(
-                        booking.getStore().getStoreId(),
-                        booking.getMerchantNetAmount(),
-                        "BOOKING",
-                        booking.getBookingId().toString(),
-                        "Đảo hoàn doanh thu tạm giữ do khách hủy đơn #" + booking.getBookingCode()
-                );
+                if (merchantWalletService != null) {
+                    merchantWalletService.revertPending(
+                            booking.getStore().getStoreId(),
+                            booking.getMerchantNetAmount(),
+                            "BOOKING",
+                            booking.getBookingId().toString(),
+                            "Đảo hoàn doanh thu tạm giữ do khách hủy đơn #" + booking.getBookingCode()
+                    );
+                }
             }
 
-            // Refund customer paid amount back to MoodPoints (1 MoodPoint = 1 VND)
-            // STRICT RULE: Only refund actual money paid. Zero-pay has actualPaidAmount = 0, so 0 points are refunded!
             BigDecimal paid = booking.getActualPaidAmount() != null ? booking.getActualPaidAmount() : BigDecimal.ZERO;
             if (paid.compareTo(BigDecimal.ZERO) > 0) {
-                if (customerWalletService != null) customerWalletService.creditRefundPoints(RefundPointCommand.builder()
-                        .userId(booking.getUser().getUserId())
-                        .points(paid.longValue())
-                        .refundId(booking.getBookingId().toString())
-                        .businessKey("REFUND_BOOKING_" + booking.getBookingId())
-                        .description("Hoàn cọc đơn đặt bàn " + booking.getBookingCode() + " thành MoodPoints (1:1)")
-                        .build());
+                if (customerWalletService != null) {
+                    customerWalletService.creditRefundPoints(RefundPointCommand.builder()
+                            .userId(booking.getUser().getUserId())
+                            .points(paid.longValue())
+                            .refundId(booking.getBookingId().toString())
+                            .businessKey("REFUND_BOOKING_" + booking.getBookingId())
+                            .description("Hoàn gói đồ uống đơn đặt bàn " + booking.getBookingCode() + " thành MoodPoints (1:1)")
+                            .build());
+                }
+                booking.setRefundProcessed(true);
             }
         }
 
         booking.setStatus(BookingStatus.CANCELLED_REFUNDED);
         booking.setCancelledAt(Instant.now());
-        booking.setCancelReason(request.getReason() != null ? request.getReason().trim() : null);
-        booking.setRefundProcessed(true);
+        if (request != null && request.getReason() != null) {
+            booking.setCancelReason(request.getReason().trim());
+        }
 
         booking = bookingRepository.save(booking);
         evictCachedPayOSResponse(booking.getBookingId());
-        BookingResponse response = enrichBookingResponse(booking, config);
 
+        BookingResponse response = enrichBookingResponse(booking, config);
         dispatchBookingNotification(
                 booking,
                 BookingEventType.CANCELLED,
@@ -1229,177 +805,75 @@ public class BookingServiceImpl implements BookingService {
         return response;
     }
 
-    private void refundActualCash(Booking booking) {
-        BigDecimal paid = booking.getActualPaidAmount() != null ? booking.getActualPaidAmount() : BigDecimal.ZERO;
-        if (paid.signum() > 0) customerWalletService.creditRefundPoints(RefundPointCommand.builder()
-                .userId(booking.getUser().getUserId()).points(paid.longValueExact())
-                .refundId(booking.getBookingId().toString()).businessKey("REFUND_BOOKING_" + booking.getBookingId())
-                .description("Hoàn tiền thực nhận đơn đặt bàn " + booking.getBookingCode()).build());
-    }
-
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @Transactional
     public void timeoutPendingBooking(UUID bookingId) {
-        Long orderCode = inTransaction(() -> bookingRepository.findById(bookingId)
-                .filter(b -> b.getStatus() == BookingStatus.PENDING_PAYMENT)
-                .map(Booking::getPaymentOrderCode).orElse(null));
-        if (orderCode == null) return;
-        var observation = paymentAttemptService.cancelAndReconcile(orderCode);
-        if (observation == null) return;
-        if (observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
-            inTransaction(() -> { confirmBookingPayment(orderCode,
-                    observation.getAmount() != null ? observation.getAmount().longValueExact() : null); return null; });
-            return;
-        }
-        if (observation.getStatus() != com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.CANCELLED
-                && observation.getStatus() != com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.EXPIRED) return;
-        inTransaction(() -> {
-            Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElseThrow();
-            if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) return null;
-            booking.setStatus(BookingStatus.PAYMENT_FAILED);
-            if (booking.getVoucher() != null) voucherLifecycleService.restoreVoucherForRefund(bookingId, booking.getVoucher().getVoucherId());
-            if (observation.getAmount() != null && observation.getAmount().signum() > 0) {
-                booking.setActualPaidAmount(observation.getAmount());
-                booking.setPaidAt(Instant.now());
-                refundActualCash(booking);
-                booking.setRefundProcessed(true);
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId).orElse(null);
+        if (booking == null || booking.getStatus() != BookingStatus.PENDING_PAYMENT) return;
+
+        booking.setStatus(BookingStatus.PAYMENT_FAILED);
+        if (booking.getVoucher() != null) {
+            if (voucherLifecycleService != null) {
+                voucherLifecycleService.restoreVoucherForRefund(bookingId, booking.getVoucher().getVoucherId());
+            } else {
+                CustomerVoucher v = customerVoucherRepository.findByIdWithLock(booking.getVoucher().getVoucherId()).orElse(null);
+                if (v != null) {
+                    v.setStatus("AVAILABLE");
+                    v.setLockedBookingId(null);
+                    v.setHoldUntil(null);
+                    customerVoucherRepository.save(v);
+                }
             }
-            bookingRepository.save(booking);
-            paymentAttemptService.markStatus(orderCode, observation.getStatus().name());
-            dispatchBookingNotification(booking, BookingEventType.PAYMENT_FAILED, "Đơn đặt bàn đã hết hạn thanh toán");
-            return null;
-        });
+        }
+        bookingRepository.save(booking);
+        evictCachedPayOSResponse(bookingId);
+
+        dispatchBookingNotification(booking, BookingEventType.PAYMENT_FAILED, "Đơn đặt bàn đã hết hạn thanh toán");
     }
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public BookingResponse getBookingPaymentLink(UUID bookingId) {
-        BookingResponse prepared = inTransaction(() -> {
-            User user = currentUserService.getCurrentUser();
-            Booking booking = bookingRepository.findById(bookingId)
-                    .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-            if (!booking.getUser().getUserId().equals(user.getUserId())) {
-                throw new AppException(ErrorCode.FORBIDDEN_ACTION);
-            }
-            return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
-        });
-        return prepared.getStatus() == BookingStatus.PENDING_PAYMENT ? resumePayment(prepared) : prepared;
-    }
+        User currentUser = currentUserService.getCurrentUser();
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-    private BookingResponse resumePayment(BookingResponse prepared) {
-        Long orderCode = prepared.getPaymentOrderCode();
-        // Recover persisted gateway details first. Never allocate a new order code on retry.
-        Optional<PaymentAttempt> attempt = paymentAttemptService.findByOrderCode(orderCode);
-        if (isPaymentDeadlinePassed(prepared)) {
-            timeoutPendingBooking(prepared.getBookingId());
-            throw new AppException(ErrorCode.BAD_REQUEST, "Đơn đặt bàn đã hết thời gian giữ chỗ.");
+        if (!booking.getUser().getUserId().equals(currentUser.getUserId())) {
+            throw new AppException(ErrorCode.FORBIDDEN_ACTION, "Bạn không thể thanh toán đơn đặt của người khác");
         }
-        if (attempt.isPresent() && isTerminalAttempt(attempt.get().getStatus())) {
-            prepared = createReplacementPaymentAttempt(prepared);
-            orderCode = prepared.getPaymentOrderCode();
-            attempt = paymentAttemptService.findByOrderCode(orderCode);
+
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION, "Đơn đặt bàn này không ở trạng thái chờ thanh toán");
         }
-        if (attempt.isPresent() && attempt.get().getCheckoutUrl() != null) {
-            var observation = paymentAttemptService.reconcile(orderCode);
-            if (observation != null && (observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.CANCELLED
-                    || observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.EXPIRED)) {
-                paymentAttemptService.markStatus(orderCode, observation.getStatus().name());
-                prepared = createReplacementPaymentAttempt(prepared);
-                orderCode = prepared.getPaymentOrderCode();
-                attempt = paymentAttemptService.findByOrderCode(orderCode);
-            } else if (observation != null && observation.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
-                final Long paidOrderCode = orderCode;
-                inTransaction(() -> {
-                    confirmBookingPayment(paidOrderCode,
-                            observation.getAmount() != null ? observation.getAmount().longValueExact() : null);
-                    return null;
-                });
-                Booking booking = bookingRepository.findById(prepared.getBookingId()).orElseThrow();
-                return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
-            } else {
-                prepared.setCheckoutUrl(attempt.get().getCheckoutUrl());
-                prepared.setPaymentQrCode(attempt.get().getQrCodeUrl());
-                return prepared;
-            }
-        }
-        final BookingResponse activeBooking = prepared;
-        final Long activeOrderCode = orderCode;
-        try {
-            PayOSResponse gateway = payOSService.createBookingPaymentLink(activeBooking.getBookingId(), activeOrderCode,
-                    activeBooking.getCustomerPaidAmount().longValueExact(), "DATBAN " + activeOrderCode);
-            if (gateway == null) return activeBooking;
-            if ("PAID".equals(gateway.getStatus())) {
-                var observed = paymentAttemptService.reconcile(activeOrderCode);
-                if (observed != null && observed.getStatus() == com.moodcafe.payment.dto.GatewayPaymentObservation.GatewayStatus.PAID) {
-                    inTransaction(() -> { confirmBookingPayment(activeOrderCode,
-                            observed.getAmount() != null ? observed.getAmount().longValueExact() : null); return null; });
+
+        StoreBookingConfig config = getOrCreateConfig(booking.getStore());
+
+        PayOSResponse payResponse = getCachedPayOSResponse(booking.getBookingId());
+        if (payResponse == null) {
+            try {
+                payResponse = payOSService.createBookingPaymentLink(
+                        booking.getBookingId(),
+                        booking.getPaymentOrderCode(),
+                        booking.getCustomerPaidAmount().longValueExact(),
+                        "DATBAN " + booking.getPaymentOrderCode()
+                );
+                if (payResponse != null) {
+                    cachePayOSResponse(booking.getBookingId(), payResponse);
                 }
+            } catch (Exception e) {
+                log.error("Failed to generate payment link for booking {}: {}", booking.getBookingCode(), e.getMessage());
             }
-            return inTransaction(() -> {
-                Booking booking = bookingRepository.findById(activeBooking.getBookingId())
-                        .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-                if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-                    booking.setPaymentUrl(gateway.getCheckoutUrl());
-                    bookingRepository.save(booking);
-                }
-                paymentAttemptService.recordGatewayResponse(activeOrderCode, gateway.getPaymentLinkId(),
-                        gateway.getCheckoutUrl(), gateway.getQrCode());
-                cachePayOSResponse(booking.getBookingId(), gateway);
-                BookingResponse response = enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
-                if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-                    response.setCheckoutUrl(gateway.getCheckoutUrl());
-                    response.setPaymentQrCode(gateway.getQrCode());
-                    response.setPaymentAccountNumber(gateway.getAccountNumber());
-                    response.setPaymentAccountName(gateway.getAccountName());
-                    response.setPaymentBin(gateway.getBin());
-                    response.setPaymentDescription(gateway.getDescription());
-                }
-                return response;
-            });
-        } catch (Exception ex) {
-            // Preparation already committed: accepted-but-timeout must retain booking, voucher and attempt.
-            inTransaction(() -> {
-                paymentAttemptService.markStatus(activeOrderCode, "UNKNOWN");
-                return null;
-            });
-            log.warn("Gateway outcome unknown for booking {} / order {}", activeBooking.getBookingId(), activeOrderCode);
-            return activeBooking;
         }
-    }
 
-    private boolean isTerminalAttempt(String status) {
-        return "CANCELLED".equalsIgnoreCase(status) || "EXPIRED".equalsIgnoreCase(status);
-    }
-
-    private boolean isPaymentDeadlinePassed(BookingResponse booking) {
-        return booking.getPaymentExpiresAt() != null && !Instant.now().isBefore(booking.getPaymentExpiresAt());
-    }
-
-    /** Creates a new PayOS session while preserving the original booking hold and voucher lock. */
-    private BookingResponse createReplacementPaymentAttempt(BookingResponse prepared) {
-        return inTransaction(() -> {
-            Booking booking = bookingRepository.findByIdForUpdate(prepared.getBookingId())
-                    .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
-            if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
-                return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
-            }
-            if (booking.getPaymentExpiresAt() != null && !Instant.now().isBefore(booking.getPaymentExpiresAt())) {
-                throw new AppException(ErrorCode.BAD_REQUEST, "Đơn đặt bàn đã hết thời gian giữ chỗ.");
-            }
-            Optional<PaymentAttempt> active = paymentAttemptService.findActiveBookingAttempt(booking.getBookingId().toString());
-            if (active.isPresent()) {
-                booking.setPaymentOrderCode(active.get().getOrderCode());
-                bookingRepository.save(booking);
-                return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
-            }
-            long replacementOrderCode = orderCodeGeneratorService.nextOrderCode();
-            paymentAttemptService.createAttempt("BOOKING", booking.getBookingId().toString(), replacementOrderCode,
-                    booking.getCustomerPaidAmount(), "VND", null, booking.getUser().getUserId(), null);
-            booking.setPaymentOrderCode(replacementOrderCode);
-            booking.setPaymentUrl(null);
-            bookingRepository.save(booking);
-            return enrichBookingResponse(booking, getOrCreateConfig(booking.getStore()));
-        });
+        BookingResponse res = enrichBookingResponse(booking, config);
+        if (payResponse != null) {
+            res.setCheckoutUrl(payResponse.getCheckoutUrl());
+            res.setPaymentQrCode(payResponse.getQrCode());
+            res.setPaymentAccountNumber(payResponse.getAccountNumber());
+            res.setPaymentAccountName(payResponse.getAccountName());
+            res.setPaymentBin(payResponse.getBin());
+            res.setPaymentDescription(payResponse.getDescription());
+        }
+        return res;
     }
 
     @Override
@@ -1602,25 +1076,101 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() != BookingStatus.PAID_CONFIRMED) {
             throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION);
         }
+        StoreBookingConfig config = getOrCreateConfig(booking.getStore());
         Instant now = Instant.now();
         Instant grace = booking.getGraceDeadline() != null ? booking.getGraceDeadline()
-                : booking.getStartTime().plus(Duration.ofMinutes(getOrCreateConfig(booking.getStore()).getGracePeriodMins()));
-        if (now.isBefore(booking.getStartTime().minus(Duration.ofMinutes(30))) || now.isAfter(grace)) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Ngoài thời gian nhận bàn, vui lòng kiểm tra luồng nhận nước trễ");
+                : booking.getStartTime().plus(Duration.ofMinutes(config.getGracePeriodMins()));
+
+        boolean earlyEnabled = config.getIsEarlyCheckInEnabled() != null ? config.getIsEarlyCheckInEnabled() : true;
+        int maxEarlyMins = (config.getMaxEarlyCheckInMins() != null && config.getMaxEarlyCheckInMins() > 0)
+                ? config.getMaxEarlyCheckInMins() : 60;
+
+        // 1. Kiểm tra nếu khách đến sớm hơn giờ hẹn
+        if (now.isBefore(booking.getStartTime())) {
+            if (!earlyEnabled) {
+                throw new AppException(ErrorCode.BAD_REQUEST,
+                        "Quán hiện không áp dụng nhận bàn sớm. Vui lòng quay lại vào đúng giờ hẹn");
+            }
+            if (now.isBefore(booking.getStartTime().minus(Duration.ofMinutes(maxEarlyMins)))) {
+                throw new AppException(ErrorCode.BAD_REQUEST,
+                        "Chưa đến thời gian nhận bàn (Quán chỉ hỗ trợ nhận bàn sớm tối đa trước " + maxEarlyMins + " phút so với giờ hẹn)");
+            }
         }
+
+        // 2. Kiểm tra nếu đến quá trễ (vượt quá grace period của quán)
+        if (now.isAfter(grace)) {
+            throw new AppException(ErrorCode.BAD_REQUEST,
+                    "Đã quá thời gian nhận bàn quy định, vui lòng kiểm tra luồng nhận nước trễ (Claim Late)");
+        }
+
+        // 3. Time-Window Shift: Nếu check-in sớm, kiểm tra lịch bàn trống trước khi dịch chuyển
+        if (now.isBefore(booking.getStartTime())) {
+            Duration duration = Duration.between(booking.getStartTime(), booking.getEndTime());
+            Instant shiftedStart = now;
+            Instant shiftedEnd = now.plus(duration);
+
+            TableCategory category = booking.getTableCategory();
+            if (category != null) {
+                long occupied = bookingRepository.countOverlappingBookingsExcluding(
+                        category.getCategoryId(),
+                        OCCUPIED_STATUSES,
+                        booking.getBookingId(),
+                        shiftedStart,
+                        shiftedEnd
+                );
+
+                int quota = category.getAppQuota() != null ? category.getAppQuota() : 0;
+                if (occupied >= quota) {
+                    throw new AppException(ErrorCode.NO_TABLE_AVAILABLE,
+                            "Không thể nhận bàn sớm do loại bàn này hiện đã kín chỗ trong khung giờ check-in sớm ("
+                            + category.getName() + "). Vui lòng đợi đến giờ hẹn.");
+                }
+            }
+
+            booking.setStartTime(shiftedStart);
+            booking.setEndTime(shiftedEnd);
+            booking.setIsEarlyCheckIn(true);
+        }
+
+        if (request.getPhysicalTableNumber() != null && !request.getPhysicalTableNumber().isBlank()) {
+            booking.setPhysicalTableNumber(request.getPhysicalTableNumber().trim());
+        }
+
         booking.setStatus(BookingStatus.CHECKED_IN);
-        booking.setCheckedInAt(Instant.now());
+        booking.setCheckedInAt(now);
         booking = bookingRepository.save(booking);
 
-        settleNoShowRevenue(booking);
+        // 1. Check-in Settlement: Giải ngân doanh thu về số dư khả dụng của Quán ngay tại bước Check-in
+        if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
+            if (merchantWalletService != null) {
+                merchantWalletService.settleToAvailable(
+                        booking.getStore().getStoreId(),
+                        booking.getMerchantNetAmount(),
+                        "BOOKING",
+                        booking.getBookingId().toString(),
+                        "Giải ngân doanh thu đơn đặt bàn check-in #" + booking.getBookingCode()
+                );
+            }
+        }
 
-        StoreBookingConfig config = getOrCreateConfig(booking.getStore());
+        // 2. Trao thưởng Loyalty MoodPoints (Spend Points + Thưởng đúng giờ) ngay tại bước Check-in
+        try {
+            if (loyaltyRewardService != null) {
+                loyaltyRewardService.awardBookingSpendReward(booking);
+                loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to award loyalty rewards at check-in: {}", ex.getMessage());
+        }
+
+        config = getOrCreateConfig(booking.getStore());
         BookingResponse res = enrichBookingResponse(booking, config);
 
         dispatchBookingNotification(
                 booking,
                 BookingEventType.CHECKED_IN,
                 "Khách " + booking.getCustomerName() + " đã check-in thành công cho đơn " + booking.getBookingCode()
+                        + (booking.getPhysicalTableNumber() != null ? " (" + booking.getPhysicalTableNumber() + ")" : "")
         );
         return res;
     }
@@ -1687,31 +1237,14 @@ public class BookingServiceImpl implements BookingService {
             throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Đơn đặt bàn không thuộc cơ sở này");
         }
 
-        if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+        if (booking.getStatus() != BookingStatus.CHECKED_IN && booking.getStatus() != BookingStatus.CHECK_OUT_PENDING) {
             throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
-                    "Chỉ đơn đang ngồi (CHECKED_IN) mới có thể hoàn tất trả bàn");
+                    "Chỉ đơn đang ngồi (CHECKED_IN) hoặc chờ trả bàn (CHECK_OUT_PENDING) mới có thể hoàn tất trả bàn");
         }
 
         booking.setStatus(BookingStatus.COMPLETED);
         booking.setCompletedAt(Instant.now());
         booking = bookingRepository.save(booking);
-
-        if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
-            if (merchantWalletService != null) merchantWalletService.settleToAvailable(
-                    booking.getStore().getStoreId(),
-                    booking.getMerchantNetAmount(),
-                    "BOOKING",
-                    booking.getBookingId().toString(),
-                    "Giải ngân doanh thu đơn đặt bàn hoàn tất #" + booking.getBookingCode()
-            );
-        }
-
-        try {
-            if (loyaltyRewardService != null) loyaltyRewardService.awardBookingSpendReward(booking);
-            if (loyaltyRewardService != null) loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
-        } catch (Exception ex) {
-            log.warn("Failed to award spend reward: {}", ex.getMessage());
-        }
 
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
         BookingResponse res = enrichBookingResponse(booking, config);
@@ -1726,7 +1259,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse selfCheckIn(UUID bookingId, String qrToken) {
+    public BookingResponse requestCheckout(UUID bookingId) {
         User currentUser = currentUserService.getCurrentUser();
         Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
@@ -1734,36 +1267,112 @@ public class BookingServiceImpl implements BookingService {
         if (!booking.getUser().getUserId().equals(currentUser.getUserId())) {
             throw new AppException(ErrorCode.FORBIDDEN_ACTION, "Bạn không thể thao tác trên đơn của người khác");
         }
-        if (booking.getStatus() != BookingStatus.PAID_CONFIRMED) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Đơn không ở trạng thái chờ nhận bàn");
+
+        if (booking.getStatus() != BookingStatus.CHECKED_IN) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
+                    "Chỉ đơn đang ngồi (CHECKED_IN) mới có thể báo trả bàn");
         }
 
-        requireTrustedPhysicalChallenge();
+        booking.setStatus(BookingStatus.CHECK_OUT_PENDING);
+        booking.setCheckOutRequestedAt(Instant.now());
+        booking = bookingRepository.save(booking);
 
-        // 2. Strict arrival time window check: cannot check in > 30 mins before start, or after grace deadline
-        Instant now = Instant.now();
-        Instant earliestAllowed = booking.getStartTime().minus(Duration.ofMinutes(30));
-        if (now.isBefore(earliestAllowed)) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Chưa đến thời gian nhận bàn (chỉ có thể nhận bàn trước tối đa 30 phút)");
+        StoreBookingConfig config = getOrCreateConfig(booking.getStore());
+        BookingResponse res = enrichBookingResponse(booking, config);
+
+        dispatchBookingNotification(
+                booking,
+                BookingEventType.CHECK_OUT_REQUESTED,
+                "Khách hàng vừa bấm báo trả bàn cho đơn " + booking.getBookingCode()
+        );
+        return res;
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse cancelCheckoutRequest(UUID bookingId) {
+        User currentUser = currentUserService.getCurrentUser();
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+
+        boolean isCustomer = booking.getUser().getUserId().equals(currentUser.getUserId());
+        if (!isCustomer) {
+            storeStaffService.requireStoreAccess(booking.getStore().getStoreId(), "OWNER", "MANAGER", "CASHIER");
         }
-        Instant graceDeadline = booking.getGraceDeadline() != null
-                ? booking.getGraceDeadline()
-                : booking.getStartTime().plus(Duration.ofMinutes(30));
-        if (now.isAfter(graceDeadline)) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Đã quá thời gian nhận bàn (grace period)");
+
+        if (booking.getStatus() != BookingStatus.CHECK_OUT_PENDING) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
+                    "Chỉ đơn đang chờ xác nhận trả bàn (CHECK_OUT_PENDING) mới có thể hủy yêu cầu");
         }
 
         booking.setStatus(BookingStatus.CHECKED_IN);
-        booking.setCheckedInAt(now);
+        booking.setCheckOutRequestedAt(null);
         booking = bookingRepository.save(booking);
 
-        if (!now.isAfter(graceDeadline)) {
-            try {
-                if (loyaltyRewardService != null) loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
-            } catch (Exception ex) {
-                log.warn("Failed to award on-time check-in reward: {}", ex.getMessage());
-            }
+        StoreBookingConfig config = getOrCreateConfig(booking.getStore());
+        BookingResponse res = enrichBookingResponse(booking, config);
+
+        dispatchBookingNotification(
+                booking,
+                BookingEventType.CHECK_OUT_CANCELLED,
+                "Yêu cầu trả bàn của đơn " + booking.getBookingCode() + " đã được hủy."
+        );
+        return res;
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse undoComplete(UUID storeId, UUID bookingId) {
+        User currentUser = currentUserService.getCurrentUser();
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
+
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (!booking.getStore().getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Đơn đặt bàn không thuộc cơ sở này");
         }
+
+        if (booking.getStatus() != BookingStatus.COMPLETED) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
+                    "Chỉ đơn đã hoàn tất (COMPLETED) mới có thể hoàn tác");
+        }
+
+        Instant completedAt = booking.getCompletedAt() != null ? booking.getCompletedAt() : booking.getUpdatedAt();
+        if (completedAt != null && Duration.between(completedAt, Instant.now()).toMinutes() > 10) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Đã quá thời hạn 10 phút để hoàn tác hoàn tất đơn");
+        }
+
+        booking.setStatus(BookingStatus.CHECKED_IN);
+        booking.setCompletedAt(null);
+        booking = bookingRepository.save(booking);
+
+        StoreBookingConfig config = getOrCreateConfig(booking.getStore());
+        BookingResponse res = enrichBookingResponse(booking, config);
+
+        dispatchBookingNotification(
+                booking,
+                BookingEventType.CHECKED_IN,
+                "Đơn đặt bàn " + booking.getBookingCode() + " đã được hoàn tác về trạng thái đang ngồi."
+        );
+        return res;
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse updatePhysicalTable(UUID storeId, UUID bookingId, String physicalTableNumber) {
+        User currentUser = currentUserService.getCurrentUser();
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
+
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
+                .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
+
+        if (!booking.getStore().getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Đơn đặt bàn không thuộc cơ sở này");
+        }
+
+        booking.setPhysicalTableNumber(physicalTableNumber != null ? physicalTableNumber.trim() : null);
+        booking = bookingRepository.save(booking);
 
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
         return enrichBookingResponse(booking, config);
@@ -1771,62 +1380,88 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse selfCheckOut(UUID bookingId, String qrToken) {
+    public BookingResponse createWalkInHold(UUID storeId, UUID categoryId, Integer durationMinutes, String physicalTableNumber) {
         User currentUser = currentUserService.getCurrentUser();
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
+
+        Store store = storeRepository.findById(storeId)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
+
+        TableCategory category = tableCategoryRepository.findById(categoryId)
+                .orElseThrow(() -> new AppException(ErrorCode.TABLE_CATEGORY_NOT_FOUND));
+
+        if (!category.getStore().getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Loại bàn không thuộc cơ sở này");
+        }
+
+        int duration = (durationMinutes != null && durationMinutes > 0) ? durationMinutes : 120;
+        Instant now = Instant.now();
+        Instant end = now.plus(Duration.ofMinutes(duration));
+
+        String code = "WLK" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        String tableNum = (physicalTableNumber != null && !physicalTableNumber.isBlank())
+                ? physicalTableNumber.trim()
+                : null;
+
+        Booking booking = Booking.builder()
+                .bookingCode(code)
+                .store(store)
+                .tableCategory(category)
+                .user(currentUser)
+                .customerName("Khách vãng lai (" + category.getName() + ")")
+                .customerPhone("N/A")
+                .guestCount(category.getMaxCapacity() != null ? category.getMaxCapacity() : 2)
+                .physicalTableNumber(tableNum)
+                .startTime(now)
+                .endTime(end)
+                .status(BookingStatus.WALK_IN_HOLD)
+                .minSpendAmount(0L)
+                .grossAmount(BigDecimal.ZERO)
+                .voucherDiscount(BigDecimal.ZERO)
+                .customerPaidAmount(BigDecimal.ZERO)
+                .actualPaidAmount(BigDecimal.ZERO)
+                .commissionAmount(BigDecimal.ZERO)
+                .merchantNetAmount(BigDecimal.ZERO)
+                .refundProcessed(true)
+                .build();
+
+        booking = bookingRepository.save(booking);
+
+        StoreBookingConfig config = getOrCreateConfig(store);
+        BookingResponse res = enrichBookingResponse(booking, config);
+
+        dispatchBookingNotification(
+                booking,
+                BookingEventType.WALK_IN_HELD,
+                "Đã giữ tạm 1 slot bàn cho khách vãng lai (" + category.getName() + ")"
+        );
+        return res;
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse releaseWalkInHold(UUID storeId, UUID bookingId) {
+        User currentUser = currentUserService.getCurrentUser();
+        storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER", "CASHIER");
+
         Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new AppException(ErrorCode.BOOKING_NOT_FOUND));
 
-        if (!booking.getUser().getUserId().equals(currentUser.getUserId())) {
-            throw new AppException(ErrorCode.FORBIDDEN_ACTION, "Bạn không thể thao tác trên đơn của người khác");
-        }
-        if (booking.getStatus() != BookingStatus.CHECKED_IN) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Đơn không ở trạng thái đang sử dụng");
+        if (!booking.getStore().getStoreId().equals(storeId)) {
+            throw new AppException(ErrorCode.FORBIDDEN_STORE_ACCESS, "Đơn không thuộc cơ sở này");
         }
 
-        checkoutChallenges.verify(bookingId, qrToken);
-
-        Instant now = Instant.now();
-        Instant checkedInMoment = booking.getCheckedInAt() != null ? booking.getCheckedInAt() : booking.getStartTime();
-        long durationMinutes = Duration.between(checkedInMoment, now).toMinutes();
+        if (booking.getStatus() != BookingStatus.WALK_IN_HOLD) {
+            throw new AppException(ErrorCode.INVALID_BOOKING_STATUS_TRANSITION,
+                    "Chỉ đơn khóa bàn vãng lai (WALK_IN_HOLD) mới có thể nhả bàn");
+        }
 
         booking.setStatus(BookingStatus.COMPLETED);
-        booking.setCompletedAt(now);
+        booking.setCompletedAt(Instant.now());
         booking = bookingRepository.save(booking);
-
-        if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
-            if (merchantWalletService != null) merchantWalletService.settleToAvailable(
-                    booking.getStore().getStoreId(),
-                    booking.getMerchantNetAmount(),
-                    "BOOKING",
-                    booking.getBookingId().toString(),
-                    "Giải ngân doanh thu đơn tự quét trả bàn #" + booking.getBookingCode()
-            );
-        }
-
-        try {
-            if (loyaltyRewardService != null) loyaltyRewardService.awardBookingSpendReward(booking);
-            if (loyaltyRewardService != null) loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
-        } catch (Exception ex) {
-            log.warn("Failed to award spend reward: {}", ex.getMessage());
-        }
-
-        if (durationMinutes >= 30) {
-            try {
-                if (loyaltyRewardService != null) loyaltyRewardService.awardBookingSelfCheckOut(booking, durationMinutes);
-            } catch (Exception ex) {
-                log.warn("Failed to award self checkout reward: {}", ex.getMessage());
-            }
-        }
 
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
         return enrichBookingResponse(booking, config);
-    }
-
-    private void requireTrustedPhysicalChallenge() {
-        // No staff-provisioned, short-lived store challenge exists yet. A customer booking
-        // token or a token signed using the historical public default secret proves no presence.
-        throw new AppException(ErrorCode.FORBIDDEN_ACTION,
-                "Vui lòng nhờ nhân viên xác nhận nhận/trả bàn tại quán");
     }
 
     private Instant calculateEndTime(Instant startTime, StoreBookingConfig config, Store store, TableCategory category) {
@@ -1883,6 +1518,8 @@ public class BookingServiceImpl implements BookingService {
                         .gracePeriodMins(30)
                         .minAdvanceMins(30)
                         .freeCancelHours(2)
+                        .isEarlyCheckInEnabled(true)
+                        .maxEarlyCheckInMins(60)
                         .build());
     }
 
@@ -1926,15 +1563,13 @@ public class BookingServiceImpl implements BookingService {
         res.setCustomerPaidAmount(booking.getCustomerPaidAmount());
         res.setActualPaidAmount(booking.getActualPaidAmount());
         res.setPaymentExpiresAt(booking.getPaymentExpiresAt());
-        paymentAttemptService.findByOrderCode(booking.getPaymentOrderCode())
-                .ifPresent(attempt -> res.setPaymentSessionStatus(attempt.getStatus()));
+        res.setPaymentSessionStatus(booking.getStatus() != null ? booking.getStatus().name() : null);
         res.setGuestCount(booking.getGuestCount());
         res.setFreeCancelDeadline(booking.getFreeCancelDeadline());
         res.setGraceDeadline(booking.getGraceDeadline());
         res.setServiceClosingDeadline(booking.getServiceClosingDeadline());
-        var actions = bookingFinanceService.calculateCustomerAllowedActions(booking);
-        res.setAllowedActions(actions == null ? List.of() : actions.stream()
-                .filter(action -> !action.equals("SELF_CHECK_IN")).toList());
+        var actions = calculateCustomerAllowedActions(booking);
+        res.setAllowedActions(actions != null ? actions : List.of());
 
         boolean cancelable = (booking.getStatus() == BookingStatus.PAID_CONFIRMED || booking.getStatus() == BookingStatus.PENDING_PAYMENT)
                 && (booking.getFreeCancelDeadline() == null || Instant.now().isBefore(booking.getFreeCancelDeadline()));
@@ -1999,6 +1634,32 @@ public class BookingServiceImpl implements BookingService {
                 staffTitle = "Khách đã nhận bàn (" + bookingCode + ")";
                 staffMsg = "Khách hàng " + customerName + " (" + bookingCode + ") đã check-in thành công.";
             }
+            case CHECK_OUT_REQUESTED -> {
+                notifType = NotificationType.RESERVATION_UPDATED;
+                customerTitle = "Đã gửi yêu cầu trả bàn (" + bookingCode + ")";
+                customerMsg = message != null ? message : "Nhân viên đang tiến hành kiểm tra & dọn bàn. Cảm ơn bạn!";
+                staffTitle = "Khách báo trả bàn (" + (booking.getPhysicalTableNumber() != null ? booking.getPhysicalTableNumber() : bookingCode) + ")";
+                staffMsg = "Khách hàng " + customerName + " (" + (booking.getPhysicalTableNumber() != null ? booking.getPhysicalTableNumber() : bookingCode) + ") vừa bấm báo trả bàn. Hãy kiểm tra & dọn bàn.";
+            }
+            case CHECK_OUT_CANCELLED -> {
+                notifType = NotificationType.RESERVATION_UPDATED;
+                customerTitle = "Đã hủy yêu cầu trả bàn (" + bookingCode + ")";
+                customerMsg = message != null ? message : "Yêu cầu trả bàn đã được hủy. Chúc bạn có thời gian tuyệt vời tại quán!";
+                staffTitle = "Hủy yêu cầu trả bàn (" + (booking.getPhysicalTableNumber() != null ? booking.getPhysicalTableNumber() : bookingCode) + ")";
+                staffMsg = "Đơn của khách " + customerName + " (" + (booking.getPhysicalTableNumber() != null ? booking.getPhysicalTableNumber() : bookingCode) + ") đã quay lại trạng thái đang ngồi.";
+            }
+            case OVERSTAY_ALERT -> {
+                notifType = NotificationType.RESERVATION_UPDATED;
+                customerTitle = "Hết giờ ngồi (" + bookingCode + ")";
+                customerMsg = "Thời gian sử dụng bàn tại " + storeName + " đã kết thúc. Vui lòng bấm 'Trả bàn' nếu bạn chuẩn bị rời quán nhé!";
+                staffTitle = "Hết giờ ngồi: " + (booking.getPhysicalTableNumber() != null ? booking.getPhysicalTableNumber() : bookingCode);
+                staffMsg = "Đơn đặt bàn của khách " + customerName + " (" + (booking.getPhysicalTableNumber() != null ? booking.getPhysicalTableNumber() : bookingCode) + ") đã hết giờ ngồi quy định.";
+            }
+            case WALK_IN_HELD -> {
+                notifType = NotificationType.RESERVATION_UPDATED;
+                staffTitle = "Khóa bàn tạm cho khách vãng lai";
+                staffMsg = message != null ? message : "Đã khóa 1 slot bàn cho khách vãng lai.";
+            }
             case COMPLETED -> {
                 notifType = NotificationType.RESERVATION_UPDATED;
                 customerTitle = "Trải nghiệm hoàn tất (" + bookingCode + ")";
@@ -2030,12 +1691,12 @@ public class BookingServiceImpl implements BookingService {
             case PAYMENT_FAILED -> {
                 notifType = NotificationType.RESERVATION_CANCELLED;
                 customerTitle = "Thanh toán đặt bàn thất bại (" + bookingCode + ")";
-                customerMsg = message != null ? message : "Giao dịch cọc đồ uống cho đơn " + bookingCode + " đã thất bại hoặc quá hạn.";
+                customerMsg = message != null ? message : "Giao dịch thanh toán gói đồ uống cho đơn " + bookingCode + " đã thất bại hoặc quá hạn.";
             }
             case CREATED -> {
                 notifType = NotificationType.RESERVATION_CREATED;
                 customerTitle = "Tạo đơn đặt bàn (" + bookingCode + ")";
-                customerMsg = "Vui lòng thanh toán cọc trong vòng 15 phút để hoàn tất giữ chỗ tại " + storeName + ".";
+                customerMsg = "Vui lòng thanh toán gói đồ uống trong vòng 15 phút để hoàn tất giữ chỗ tại " + storeName + ".";
             }
             default -> {
                 log.info("Booking event {} not requiring notification dispatch.", eventType);
@@ -2119,4 +1780,142 @@ public class BookingServiceImpl implements BookingService {
             redisTemplate.delete("booking:payos:" + bookingId);
         } catch (Exception ignored) {}
     }
+
+    /**
+     * Resolves the financial snapshot (gross, voucher discount, customer paid, commission, merchant net, funding split).
+     */
+    private ReservationFinancialSnapshot resolveFinancialSnapshot(
+            Store store,
+            TableCategory category,
+            CustomerVoucher voucher
+    ) {
+        Long minSpend = category.getMinSpendAmount() != null ? category.getMinSpendAmount() : 0L;
+        BigDecimal grossAmount = BigDecimal.valueOf(minSpend);
+
+        BigDecimal voucherDiscount = BigDecimal.ZERO;
+        BigDecimal refundFunded = BigDecimal.ZERO;
+        BigDecimal rewardFunded = BigDecimal.ZERO;
+
+        if (voucher != null) {
+            if (voucher.getMinGrossAmount() != null && grossAmount.compareTo(voucher.getMinGrossAmount()) < 0) {
+                throw new AppException(ErrorCode.BAD_REQUEST, "Đơn chưa đạt giá trị tối thiểu của voucher");
+            }
+            voucherDiscount = voucher.getFaceValueVnd() != null ? voucher.getFaceValueVnd() : BigDecimal.ZERO;
+            List<VoucherPointAllocation> allocations = voucherPointAllocationRepository.findByVoucherId(voucher.getVoucherId());
+            for (VoucherPointAllocation alloc : allocations) {
+                BigDecimal allocAmount = BigDecimal.valueOf(alloc.getAllocatedPoints());
+                if ("REFUND".equalsIgnoreCase(alloc.getFundingType())) {
+                    refundFunded = refundFunded.add(allocAmount);
+                } else {
+                    rewardFunded = rewardFunded.add(allocAmount);
+                }
+            }
+
+            // Fallback if allocations not explicitly set
+            if (allocations.isEmpty() && voucherDiscount.compareTo(BigDecimal.ZERO) > 0) {
+                rewardFunded = voucherDiscount;
+            }
+        }
+
+        ReservationPricingInput pricingInput = ReservationPricingInput.builder()
+                .storeId(store.getStoreId())
+                .grossAmount(grossAmount)
+                .voucherDiscount(voucherDiscount)
+                .voucherRefundFunded(refundFunded)
+                .voucherRewardFunded(rewardFunded)
+                .build();
+
+        return reservationPricingService.quote(pricingInput);
+    }
+
+    /**
+     * Computes the 3 service deadlines based on store booking configuration and closing time.
+     */
+    private Deadlines calculateDeadlines(Store store, StoreBookingConfig config, Instant startTime) {
+        int freeCancelHours = config.getFreeCancelHours() != null ? config.getFreeCancelHours() : 2;
+        int gracePeriodMins = config.getGracePeriodMins() != null ? config.getGracePeriodMins() : 30;
+
+        Instant freeCancelDeadline = startTime.minus(Duration.ofHours(freeCancelHours));
+        Instant graceDeadline = startTime.plus(Duration.ofMinutes(gracePeriodMins));
+
+        ZonedDateTime startVn = startTime.atZone(VN_ZONE);
+        LocalDate startDate = startVn.toLocalDate();
+        LocalTime closingTime = store.getClosingTime() != null ? store.getClosingTime() : LocalTime.of(22, 0);
+
+        Instant closingDeadline;
+        if (store.getOpeningTime() != null && closingTime.isBefore(store.getOpeningTime())) {
+            // Over-midnight closing
+            closingDeadline = startDate.plusDays(1).atTime(closingTime).atZone(VN_ZONE).toInstant();
+        } else {
+            closingDeadline = startDate.atTime(closingTime).atZone(VN_ZONE).toInstant();
+        }
+
+        return new Deadlines(freeCancelDeadline, graceDeadline, closingDeadline);
+    }
+
+    /**
+     * Determines allowed actions for a customer on a booking.
+     */
+    private List<String> calculateCustomerAllowedActions(Booking booking) {
+        if (booking == null || booking.getStatus() == null) {
+            return List.of();
+        }
+        Instant now = Instant.now();
+        List<String> actions = new ArrayList<>();
+
+        switch (booking.getStatus()) {
+            case PENDING_PAYMENT -> {
+                actions.add("PAY");
+                actions.add("CANCEL");
+            }
+            case PAID_CONFIRMED -> {
+                if (booking.getFreeCancelDeadline() != null && now.isBefore(booking.getFreeCancelDeadline())) {
+                    actions.add("CANCEL");
+                }
+            }
+            case CHECKED_IN -> {
+                actions.add("REQUEST_CHECKOUT");
+            }
+            case CHECK_OUT_PENDING -> {
+                actions.add("CANCEL_CHECKOUT_REQUEST");
+            }
+            case COMPLETED, CLAIMED_LATE -> {
+                actions.add("REVIEW");
+            }
+            default -> {}
+        }
+
+        return actions;
+    }
+
+    /**
+     * Determines allowed actions for staff/cashier on a booking.
+     */
+    private List<String> calculateStaffAllowedActions(Booking booking) {
+        if (booking == null || booking.getStatus() == null) {
+            return List.of();
+        }
+        Instant now = Instant.now();
+        List<String> actions = new ArrayList<>();
+
+        switch (booking.getStatus()) {
+            case PAID_CONFIRMED -> {
+                actions.add("CHECK_IN");
+                actions.add("CANCEL");
+            }
+            case CHECKED_IN, CHECK_OUT_PENDING -> {
+                actions.add("COMPLETE");
+            }
+            case TABLE_EXPIRED -> {
+                if (booking.getServiceClosingDeadline() == null || now.isBefore(booking.getServiceClosingDeadline())) {
+                    actions.add("CLAIM_LATE");
+                }
+            }
+            default -> {}
+        }
+
+        return actions;
+    }
+
+    private record Deadlines(Instant freeCancelDeadline, Instant graceDeadline, Instant serviceClosingDeadline) {}
 }

@@ -5,7 +5,6 @@ import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
 import com.moodcafe.payment.service.PayOSServiceImpl;
-import com.moodcafe.payment.service.PaymentAttemptService;
 import com.moodcafe.subscription.abstraction.repository.SubscriptionPaymentRepository;
 import com.moodcafe.subscription.abstraction.service.SubscriptionService;
 import com.moodcafe.subscription.entity.SubscriptionPayment;
@@ -45,8 +44,6 @@ class PayOSServiceTest {
 
     @Mock
     private CurrentUserService currentUserService;
-    @Mock
-    private PaymentAttemptService paymentAttemptService;
 
     @Mock
     private com.moodcafe.sponsored.abstraction.repository.SponsoredListingRepository sponsoredListingRepository;
@@ -64,8 +61,7 @@ class PayOSServiceTest {
                 subscriptionPaymentRepository,
                 subscriptionService,
                 userRepository,
-                currentUserService,
-                paymentAttemptService
+                currentUserService
         );
         payOSService.setSponsoredListingRepository(sponsoredListingRepository);
         payOSService.setSponsoredListingService(sponsoredListingService);
@@ -193,7 +189,6 @@ class PayOSServiceTest {
 
         assertFalse(payOSService.checkPaymentStatus(orderCode));
 
-        verify(paymentAttemptService).markStatus(orderCode, "CANCELLED");
         verify(bookingService, never()).timeoutPendingBooking(any());
     }
 

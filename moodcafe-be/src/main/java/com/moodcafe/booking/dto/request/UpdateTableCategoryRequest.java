@@ -34,8 +34,8 @@ public class UpdateTableCategoryRequest {
     @Max(value = 1000, message = "Số lượng bàn tối đa 1000")
     private Integer appQuota;
 
-    @NotNull(message = "Hạn mức đồ uống trả trước không được để trống")
-    @Min(value = 0, message = "Hạn mức đồ uống không thể âm")
+    @NotNull(message = "Giá trị gói đồ uống trả trước không được để trống")
+    @Min(value = 0, message = "Giá trị gói đồ uống trả trước không thể âm")
     private Long minSpendAmount;
 
     @Size(max = 1000, message = "Đường dẫn ảnh không quá 1000 ký tự")

@@ -2,26 +2,23 @@ package com.moodcafe.booking;
 
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
-import com.moodcafe.booking.abstraction.repository.BookingQuoteRepository;
 import com.moodcafe.booking.abstraction.repository.BookingRepository;
 import com.moodcafe.booking.abstraction.repository.StoreBookingConfigRepository;
 import com.moodcafe.booking.abstraction.repository.TableCategoryRepository;
 import com.moodcafe.booking.dto.request.CreateBookingRequest;
 import com.moodcafe.booking.dto.response.BookingResponse;
 import com.moodcafe.booking.entity.Booking;
-import com.moodcafe.booking.entity.BookingQuote;
 import com.moodcafe.booking.entity.StoreBookingConfig;
 import com.moodcafe.booking.entity.TableCategory;
 import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.booking.mapper.BookingMapper;
-import com.moodcafe.booking.service.BookingFinanceService;
 import com.moodcafe.booking.service.BookingServiceImpl;
 import com.moodcafe.finance.dto.ReservationFinancialSnapshot;
+import com.moodcafe.finance.service.BookingCommissionService;
+import com.moodcafe.finance.service.ReservationPricingService;
 import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.payment.abstraction.service.PayOSService;
-import com.moodcafe.payment.service.OrderCodeGeneratorService;
-import com.moodcafe.payment.service.PaymentAttemptService;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -29,7 +26,9 @@ import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
+import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
+import com.moodcafe.voucher.service.VoucherLifecycleService;
 import com.moodcafe.wallet.service.CustomerWalletService;
 import com.moodcafe.wallet.service.MerchantWalletService;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +39,7 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -53,8 +53,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class BookingPaymentLifecycleIT {
+class BookingPaymentLifecycleTest {
 
+    @Mock
+    private BookingCommissionService commissionService;
     @Mock
     private BookingRepository bookingRepository;
     @Mock
@@ -76,21 +78,21 @@ class BookingPaymentLifecycleIT {
     @Mock
     private NotificationDispatcherService notificationDispatcherService;
     @Mock
-    private BookingFinanceService bookingFinanceService;
-    @Mock
-    private BookingQuoteRepository bookingQuoteRepository;
-    @Mock
     private CustomerVoucherRepository customerVoucherRepository;
     @Mock
-    private OrderCodeGeneratorService orderCodeGeneratorService;
+    private VoucherPointAllocationRepository voucherPointAllocationRepository;
     @Mock
-    private PaymentAttemptService paymentAttemptService;
+    private ReservationPricingService reservationPricingService;
     @Mock
     private MerchantWalletService merchantWalletService;
     @Mock
     private CustomerWalletService customerWalletService;
     @Mock
     private LoyaltyRewardService loyaltyRewardService;
+    @Mock
+    private VoucherLifecycleService voucherLifecycleService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private BookingServiceImpl bookingService;
 
@@ -137,6 +139,7 @@ class BookingPaymentLifecycleIT {
                 .build();
 
         bookingService = new BookingServiceImpl(
+                commissionService,
                 bookingRepository,
                 tableCategoryRepository,
                 configRepository,
@@ -149,15 +152,17 @@ class BookingPaymentLifecycleIT {
                 notificationDispatcherService,
                 null,
                 null,
-                bookingFinanceService,
-                bookingQuoteRepository,
                 customerVoucherRepository,
-                orderCodeGeneratorService,
-                paymentAttemptService,
+                voucherPointAllocationRepository,
+                reservationPricingService,
                 merchantWalletService,
                 customerWalletService,
-                loyaltyRewardService
+                loyaltyRewardService,
+                voucherLifecycleService,
+                transactionManager
         );
+
+        lenient().when(commissionService.record(any(), any())).thenReturn(true);
     }
 
     @Test
@@ -188,7 +193,7 @@ class BookingPaymentLifecycleIT {
                 .voucher(voucher)
                 .build();
 
-        when(bookingRepository.findByOrderCodeForUpdate(orderCode)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByPaymentOrderCodeForUpdate(orderCode)).thenReturn(Optional.of(booking));
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Act: Webhook confirmation with paidAmount = 150,000 VND
@@ -202,7 +207,6 @@ class BookingPaymentLifecycleIT {
         assertNotNull(voucher.getUsedAt());
 
         verify(customerVoucherRepository).save(voucher);
-        verify(paymentAttemptService).markStatus(orderCode, "PAID");
         verify(merchantWalletService).holdPending(
                 eq(storeId),
                 eq(new BigDecimal("170000.00")),
@@ -223,7 +227,7 @@ class BookingPaymentLifecycleIT {
                 .customerPaidAmount(new BigDecimal("150000.00"))
                 .build();
 
-        when(bookingRepository.findByOrderCodeForUpdate(orderCode)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByPaymentOrderCodeForUpdate(orderCode)).thenReturn(Optional.of(booking));
 
         // Act & Assert
         AppException ex = assertThrows(AppException.class, () ->
@@ -245,7 +249,7 @@ class BookingPaymentLifecycleIT {
                 .paymentOrderCode(orderCode)
                 .build();
 
-        when(bookingRepository.findByOrderCodeForUpdate(orderCode)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByPaymentOrderCodeForUpdate(orderCode)).thenReturn(Optional.of(booking));
 
         // Act
         bookingService.confirmBookingPayment(orderCode, 150000L);
@@ -263,7 +267,7 @@ class BookingPaymentLifecycleIT {
         when(configRepository.findByStoreStoreId(storeId)).thenReturn(Optional.of(config));
         when(tableCategoryRepository.findByIdWithLock(categoryId)).thenReturn(Optional.of(category));
         when(bookingRepository.countOverlappingBookings(any(), any(), any(), any())).thenReturn(0L);
-        when(orderCodeGeneratorService.nextOrderCode()).thenReturn(999111L);
+        when(payOSService.generateOrderCode()).thenReturn(999111L);
 
         UUID voucherId = UUID.randomUUID();
         CustomerVoucher voucher = CustomerVoucher.builder()
@@ -285,35 +289,8 @@ class BookingPaymentLifecycleIT {
                 .voucherRefundFundedAmount(BigDecimal.ZERO)
                 .voucherRewardFundedAmount(new BigDecimal("200000.00"))
                 .build();
-        UUID quoteId = UUID.randomUUID();
-        String fingerprint = "FP_ZERO_PAY";
-        when(bookingFinanceService.calculateFingerprint(eq(storeId), eq(categoryId), any(), eq(2), eq(voucherId)))
-                .thenReturn(fingerprint);
-        BookingQuote quote = BookingQuote.builder()
-                .quoteId(quoteId)
-                .user(customer)
-                .store(store)
-                .tableCategory(category)
-                .selectionFingerprint(fingerprint)
-                .grossAmount(new BigDecimal("200000.00"))
-                .voucherDiscount(new BigDecimal("200000.00"))
-                .customerPaidAmount(BigDecimal.ZERO)
-                .commissionRate(new BigDecimal("0.15"))
-                .commissionAmount(new BigDecimal("30000.00"))
-                .merchantNetAmount(new BigDecimal("170000.00"))
-                .voucherRefundFundedAmount(BigDecimal.ZERO)
-                .voucherRewardFundedAmount(new BigDecimal("200000.00"))
-                .expiresAt(Instant.now().plusSeconds(900))
-                .build();
-        when(bookingQuoteRepository.findByQuoteIdAndUserUserId(quoteId, userId)).thenReturn(Optional.of(quote));
 
-        when(bookingFinanceService.calculateDeadlines(eq(store), eq(config), any())).thenReturn(
-                new BookingFinanceService.Deadlines(
-                        Instant.now().plusSeconds(3600),
-                        Instant.now().plusSeconds(7200),
-                        Instant.now().plusSeconds(10800)
-                )
-        );
+        when(reservationPricingService.quote(any())).thenReturn(zeroPaySnapshot);
 
         when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> {
             Booking b = inv.getArgument(0);
@@ -324,13 +301,11 @@ class BookingPaymentLifecycleIT {
         CreateBookingRequest request = CreateBookingRequest.builder()
                 .storeId(storeId)
                 .categoryId(categoryId)
-                .quoteId(quoteId)
                 .startTime(Instant.now().plusSeconds(7200))
                 .guestCount(2)
                 .voucherId(voucherId)
                 .customerName("Tran Van B")
                 .customerPhone("0909123456")
-                .intentKey("INTENT_ZERO_PAY_1")
                 .build();
 
         // Act
@@ -353,27 +328,18 @@ class BookingPaymentLifecycleIT {
     void missingVerifiedAmountCannotConfirmPayment() {
         Booking booking = Booking.builder().bookingId(UUID.randomUUID()).status(BookingStatus.PENDING_PAYMENT)
                 .customerPaidAmount(BigDecimal.valueOf(150000)).build();
-        when(bookingRepository.findByOrderCodeForUpdate(123L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByPaymentOrderCodeForUpdate(123L)).thenReturn(Optional.of(booking));
         assertThrows(AppException.class, () -> bookingService.confirmBookingPayment(123L, null));
         assertEquals(BookingStatus.PENDING_PAYMENT, booking.getStatus());
     }
 
-    @Test
-    void createAndResumeMustSuspendOuterTransactionBeforeGateway() throws Exception {
-        var create = BookingServiceImpl.class.getMethod("createBooking", CreateBookingRequest.class)
-                .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
-        var resume = BookingServiceImpl.class.getMethod("getBookingPaymentLink", UUID.class)
-                .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
-        assertEquals(org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED, create.propagation());
-        assertEquals(org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED, resume.propagation());
-    }
 
     @Test
     void verifiedLatePaymentOnClosedBookingRefundsActualCashIdempotently() {
         Booking booking = Booking.builder().bookingId(UUID.randomUUID()).user(customer).store(store)
                 .status(BookingStatus.PAYMENT_FAILED).customerPaidAmount(BigDecimal.valueOf(150000))
                 .actualPaidAmount(BigDecimal.ZERO).paymentOrderCode(123L).build();
-        when(bookingRepository.findByOrderCodeForUpdate(123L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByPaymentOrderCodeForUpdate(123L)).thenReturn(Optional.of(booking));
         bookingService.confirmBookingPayment(123L, 160000L);
         bookingService.confirmBookingPayment(123L, 160000L);
         assertEquals(BigDecimal.valueOf(160000), booking.getActualPaidAmount());
@@ -390,7 +356,7 @@ class BookingPaymentLifecycleIT {
         Booking booking = Booking.builder().bookingId(UUID.randomUUID()).user(customer).store(store)
                 .status(BookingStatus.CANCELLED_REFUNDED).customerPaidAmount(BigDecimal.valueOf(100))
                 .actualPaidAmount(BigDecimal.valueOf(40)).refundProcessed(true).paymentOrderCode(123L).build();
-        when(bookingRepository.findByOrderCodeForUpdate(123L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.findByPaymentOrderCodeForUpdate(123L)).thenReturn(Optional.of(booking));
         bookingService.confirmBookingPayment(123L, 100L);
         bookingService.confirmBookingPayment(123L, 100L);
         bookingService.confirmBookingPayment(123L, 40L);

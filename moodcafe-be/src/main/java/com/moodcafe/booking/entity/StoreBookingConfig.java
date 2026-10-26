@@ -77,6 +77,14 @@ public class StoreBookingConfig {
     @Column(name = "free_cancel_hours", nullable = false)
     private Integer freeCancelHours = 2;
 
+    @Builder.Default
+    @Column(name = "is_early_check_in_enabled", nullable = false)
+    private Boolean isEarlyCheckInEnabled = true;
+
+    @Builder.Default
+    @Column(name = "max_early_check_in_mins", nullable = false)
+    private Integer maxEarlyCheckInMins = 60;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

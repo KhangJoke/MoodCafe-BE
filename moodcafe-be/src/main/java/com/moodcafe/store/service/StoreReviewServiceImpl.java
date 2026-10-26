@@ -171,7 +171,9 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             }
 
             BookingStatus bStatus = booking.getStatus();
-            boolean validStay = bStatus == BookingStatus.COMPLETED
+            boolean validStay = bStatus == BookingStatus.CHECKED_IN
+                    || bStatus == BookingStatus.CHECK_OUT_PENDING
+                    || bStatus == BookingStatus.COMPLETED
                     || bStatus == BookingStatus.CLAIMED_LATE;
             if (!validStay) {
                 throw new AppException(ErrorCode.BAD_REQUEST, "Chỉ có thể đánh giá sau khi đã nhận bàn");

@@ -50,9 +50,5 @@ public class CreateBookingRequest {
     @Size(max = 1000, message = "Ghi chú không quá 1000 ký tự")
     private String note;
 
-    private UUID quoteId;
-
     private UUID voucherId;
-
-    private String intentKey;
 }

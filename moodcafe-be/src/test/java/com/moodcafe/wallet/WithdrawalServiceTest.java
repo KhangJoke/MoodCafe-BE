@@ -1,11 +1,14 @@
 package com.moodcafe.wallet;
 
+import com.moodcafe.configuration.abstraction.repository.SystemConfigurationRepository;
+import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.wallet.abstraction.repository.StoreBankAccountRepository;
 import com.moodcafe.wallet.abstraction.repository.WithdrawalRequestRepository;
 import com.moodcafe.wallet.entity.StoreBankAccount;
 import com.moodcafe.wallet.entity.WithdrawalRequest;
 import com.moodcafe.wallet.service.MerchantWalletService;
+import com.moodcafe.wallet.service.PayoutBreakdownService;
 import com.moodcafe.wallet.service.StoreFinancialSecurityService;
 import com.moodcafe.wallet.service.WithdrawalService;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +34,9 @@ class WithdrawalServiceTest {
     private WithdrawalRequestRepository withdrawalRequestRepository;
 
     @Mock
+    private SystemConfigurationRepository configRepository;
+
+    @Mock
     private StoreBankAccountRepository bankAccountRepository;
 
     @Mock
@@ -38,6 +44,12 @@ class WithdrawalServiceTest {
 
     @Mock
     private StoreFinancialSecurityService financialSecurityService;
+
+    @Mock
+    private PayoutBreakdownService breakdownService;
+
+    @Mock
+    private NotificationDispatcherService notifications;
 
     @InjectMocks
     private WithdrawalService withdrawalService;
@@ -67,7 +79,11 @@ class WithdrawalServiceTest {
     @DisplayName("Request Withdrawal: 100.000đ passes minimum threshold and locks funds")
     void testRequestWithdrawalMinimum100kPassed() {
         when(bankAccountRepository.findById(bankAccountId)).thenReturn(Optional.of(bankAccount));
-        when(withdrawalRequestRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(withdrawalRequestRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            WithdrawalRequest r = inv.getArgument(0);
+            r.setWithdrawalId(UUID.randomUUID());
+            return r;
+        });
 
         WithdrawalRequest req = withdrawalService.requestWithdrawal(
                 ownerId,

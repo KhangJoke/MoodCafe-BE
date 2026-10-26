@@ -7,6 +7,7 @@ import com.moodcafe.booking.dto.request.UpdateTableCategoryRequest;
 import com.moodcafe.booking.dto.response.TableCategoryResponse;
 import com.moodcafe.booking.entity.TableCategory;
 import com.moodcafe.booking.mapper.BookingMapper;
+import com.moodcafe.configuration.abstraction.repository.SystemConfigurationRepository;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -27,6 +28,7 @@ public class TableCategoryServiceImpl implements TableCategoryService {
     private final StoreRepository storeRepository;
     private final StoreStaffService storeStaffService;
     private final BookingMapper bookingMapper;
+    private final SystemConfigurationRepository systemConfigurationRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -70,6 +72,14 @@ public class TableCategoryServiceImpl implements TableCategoryService {
     public TableCategoryResponse createTableCategory(UUID storeId, CreateTableCategoryRequest request) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
 
+        long minAllowed = getMinDrinkPackageVnd();
+        if (request.getMinSpendAmount() == null || request.getMinSpendAmount() < minAllowed) {
+            throw new AppException(
+                    ErrorCode.INVALID_INPUT,
+                    String.format("Giá trị gói đồ uống trả trước phải tối thiểu %,d VNĐ", minAllowed)
+            );
+        }
+
         Store store = storeRepository.findById(storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.STORE_NOT_FOUND));
 
@@ -92,6 +102,14 @@ public class TableCategoryServiceImpl implements TableCategoryService {
     @Transactional
     public TableCategoryResponse updateTableCategory(UUID storeId, UUID categoryId, UpdateTableCategoryRequest request) {
         storeStaffService.requireStoreAccess(storeId, "OWNER", "MANAGER");
+
+        long minAllowed = getMinDrinkPackageVnd();
+        if (request.getMinSpendAmount() == null || request.getMinSpendAmount() < minAllowed) {
+            throw new AppException(
+                    ErrorCode.INVALID_INPUT,
+                    String.format("Giá trị gói đồ uống trả trước phải tối thiểu %,d VNĐ", minAllowed)
+            );
+        }
 
         TableCategory category = categoryRepository.findByCategoryIdAndStoreStoreId(categoryId, storeId)
                 .orElseThrow(() -> new AppException(ErrorCode.TABLE_CATEGORY_NOT_FOUND));
@@ -117,5 +135,17 @@ public class TableCategoryServiceImpl implements TableCategoryService {
                 .orElseThrow(() -> new AppException(ErrorCode.TABLE_CATEGORY_NOT_FOUND));
 
         categoryRepository.delete(category);
+    }
+
+    private long getMinDrinkPackageVnd() {
+        return systemConfigurationRepository.findByConfigKey("MIN_TABLE_DRINK_PACKAGE_VND")
+                .map(config -> {
+                    try {
+                        return Long.parseLong(config.getConfigValue().trim());
+                    } catch (NumberFormatException e) {
+                        return 20000L;
+                    }
+                })
+                .orElse(20000L);
     }
 }

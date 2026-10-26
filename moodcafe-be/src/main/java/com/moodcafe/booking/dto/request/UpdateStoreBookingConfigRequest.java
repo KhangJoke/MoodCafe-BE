@@ -46,4 +46,10 @@ public class UpdateStoreBookingConfigRequest {
     @Min(value = 0, message = "Thời gian hủy miễn phí không thể âm")
     @Max(value = 72, message = "Thời gian hủy miễn phí tối đa 72 giờ")
     private Integer freeCancelHours;
+
+    private Boolean isEarlyCheckInEnabled;
+
+    @Min(value = 0, message = "Thời gian nhận bàn sớm không thể âm")
+    @Max(value = 180, message = "Thời gian nhận bàn sớm tối đa 180 phút")
+    private Integer maxEarlyCheckInMins;
 }

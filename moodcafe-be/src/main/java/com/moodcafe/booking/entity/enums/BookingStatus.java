@@ -27,6 +27,16 @@ public enum BookingStatus {
     CHECKED_IN,
 
     /**
+     * Khách đã báo trả bàn trên Mobile App (Slide-to-Checkout), đang chờ nhân viên kiểm tra & dọn bàn. Vẫn chiếm slot bàn.
+     */
+    CHECK_OUT_PENDING,
+
+    /**
+     * Khóa giữ chỗ tạm thời cho khách vãng lai (Walk-in Quick Hold) tại quầy để bảo vệ quỹ bàn trên App.
+     */
+    WALK_IN_HOLD,
+
+    /**
      * Khách rời đi, thu ngân bấm trả bàn hoặc hệ thống tự động hoàn tất khi hết giờ ngồi quy định.
      */
     COMPLETED,
@@ -50,6 +60,7 @@ public enum BookingStatus {
      * Kiểm tra trạng thái đơn có đang chiếm giữ slot bàn trong app_quota hay không.
      */
     public boolean occupiesTableSlot() {
-        return this == PENDING_PAYMENT || this == PAID_CONFIRMED || this == CHECKED_IN;
+        return this == PENDING_PAYMENT || this == PAID_CONFIRMED || this == CHECKED_IN
+                || this == CHECK_OUT_PENDING || this == WALK_IN_HOLD;
     }
 }

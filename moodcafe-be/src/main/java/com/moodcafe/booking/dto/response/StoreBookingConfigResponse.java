@@ -25,6 +25,8 @@ public class StoreBookingConfigResponse {
     private Integer gracePeriodMins;
     private Integer minAdvanceMins;
     private Integer freeCancelHours;
+    private Boolean isEarlyCheckInEnabled;
+    private Integer maxEarlyCheckInMins;
     private Instant createdAt;
     private Instant updatedAt;
 }

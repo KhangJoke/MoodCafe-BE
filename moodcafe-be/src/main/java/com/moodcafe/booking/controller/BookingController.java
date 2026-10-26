@@ -1,15 +1,13 @@
 package com.moodcafe.booking.controller;
 
 import com.moodcafe.booking.abstraction.service.BookingService;
-import com.moodcafe.booking.dto.request.BookingQuoteRequest;
 import com.moodcafe.booking.dto.request.CancelBookingRequest;
 import com.moodcafe.booking.dto.request.CreateBookingRequest;
+import com.moodcafe.booking.dto.request.CreateWalkInHoldRequest;
 import com.moodcafe.booking.dto.request.DeskCheckInRequest;
-import com.moodcafe.booking.dto.response.BookingCustomerDetailResponse;
+import com.moodcafe.booking.dto.request.UpdateTableNumberRequest;
 import com.moodcafe.booking.dto.response.BookingDeskSummaryResponse;
-import com.moodcafe.booking.dto.response.BookingQuoteResponse;
 import com.moodcafe.booking.dto.response.BookingResponse;
-import com.moodcafe.booking.dto.response.BookingStaffDetailResponse;
 import com.moodcafe.booking.dto.response.SlotAvailabilityResponse;
 import com.moodcafe.booking.dto.response.StoreDailyScheduleResponse;
 import com.moodcafe.shared.response.ApiResponse;
@@ -26,8 +24,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,15 +40,6 @@ import java.util.UUID;
 public class BookingController {
 
     private final BookingService bookingService;
-    private final com.moodcafe.booking.service.BookingCheckoutChallengeService checkoutChallenges;
-
-    @PostMapping("/stores/{storeId}/bookings/{bookingId}/checkout-challenge")
-    @PreAuthorize("isAuthenticated()")
-    public ApiResponse<com.moodcafe.booking.service.BookingCheckoutChallengeService.Challenge> checkoutChallenge(
-            @PathVariable UUID storeId,@PathVariable UUID bookingId) {
-        return ApiResponse.success(checkoutChallenges.issue(storeId,bookingId));
-    }
-
 
     // ==================== Customer Booking Flow ====================
 
@@ -71,22 +60,10 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
-    @PostMapping("/bookings/quote")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<BookingQuoteResponse>> getBookingQuote(
-            @Valid @RequestBody BookingQuoteRequest request) {
-        BookingQuoteResponse response = bookingService.getBookingQuote(request);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
     @PostMapping("/bookings")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<BookingResponse>> createBooking(
-            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
             @Valid @RequestBody CreateBookingRequest request) {
-        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
-            request.setIntentKey(idempotencyKey.trim());
-        }
         BookingResponse response = bookingService.createBooking(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(response, "Khởi tạo đơn đặt bàn thành công, vui lòng hoàn tất thanh toán"));
@@ -97,14 +74,6 @@ public class BookingController {
     public ResponseEntity<ApiResponse<BookingResponse>> getBookingDetail(
             @PathVariable UUID bookingId) {
         BookingResponse response = bookingService.getBookingDetail(bookingId);
-        return ResponseEntity.ok(ApiResponse.success(response));
-    }
-
-    @GetMapping("/bookings/{bookingId}/customer")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<BookingCustomerDetailResponse>> getCustomerBookingDetail(
-            @PathVariable UUID bookingId) {
-        BookingCustomerDetailResponse response = bookingService.getCustomerBookingDetail(bookingId);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 
@@ -141,22 +110,20 @@ public class BookingController {
         return ResponseEntity.ok(ApiResponse.success(page));
     }
 
-    @PostMapping("/bookings/{bookingId}/self-check-in")
+    @PostMapping("/bookings/{bookingId}/request-checkout")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<BookingResponse>> selfCheckIn(
-            @PathVariable UUID bookingId,
-            @RequestParam(required = false) String qrToken) {
-        BookingResponse response = bookingService.selfCheckIn(bookingId, qrToken);
-        return ResponseEntity.ok(ApiResponse.success(response, "Nhận bàn thành công"));
+    public ResponseEntity<ApiResponse<BookingResponse>> requestCheckout(
+            @PathVariable UUID bookingId) {
+        BookingResponse response = bookingService.requestCheckout(bookingId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Đã gửi thông báo báo trả bàn đến quầy thu ngân"));
     }
 
-    @PostMapping("/bookings/{bookingId}/self-check-out")
+    @PostMapping("/bookings/{bookingId}/cancel-checkout-request")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<BookingResponse>> selfCheckOut(
-            @PathVariable UUID bookingId,
-            @RequestParam(required = false) String qrToken) {
-        BookingResponse response = bookingService.selfCheckOut(bookingId, qrToken);
-        return ResponseEntity.ok(ApiResponse.success(response, "Trả bàn và hoàn tất thành công"));
+    public ResponseEntity<ApiResponse<BookingResponse>> cancelCheckoutRequest(
+            @PathVariable UUID bookingId) {
+        BookingResponse response = bookingService.cancelCheckoutRequest(bookingId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Đã hủy yêu cầu trả bàn"));
     }
 
     // ==================== Merchant Desk Operations ====================
@@ -171,15 +138,6 @@ public class BookingController {
             @PageableDefault(size = 15, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         PageResponse<BookingResponse> page = bookingService.getStoreDeskBookings(storeId, date, from, to, pageable);
         return ResponseEntity.ok(ApiResponse.success(page));
-    }
-
-    @GetMapping("/stores/{storeId}/bookings/{bookingId}")
-    @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<BookingStaffDetailResponse>> getStoreBookingStaffDetail(
-            @PathVariable UUID storeId,
-            @PathVariable UUID bookingId) {
-        BookingStaffDetailResponse response = bookingService.getStaffBookingDetail(storeId, bookingId);
-        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/stores/{storeId}/bookings/summary")
@@ -216,5 +174,47 @@ public class BookingController {
             @PathVariable UUID bookingId) {
         BookingResponse response = bookingService.deskComplete(storeId, bookingId);
         return ResponseEntity.ok(ApiResponse.success(response, "Hoàn tất trả bàn và giải phóng slot thành công"));
+    }
+
+    @PostMapping("/stores/{storeId}/bookings/{bookingId}/undo-complete")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<BookingResponse>> undoComplete(
+            @PathVariable UUID storeId,
+            @PathVariable UUID bookingId) {
+        BookingResponse response = bookingService.undoComplete(storeId, bookingId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Đã hoàn tác đơn về trạng thái đang ngồi"));
+    }
+
+    @PutMapping("/stores/{storeId}/bookings/{bookingId}/table-number")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<BookingResponse>> updatePhysicalTable(
+            @PathVariable UUID storeId,
+            @PathVariable UUID bookingId,
+            @Valid @RequestBody UpdateTableNumberRequest request) {
+        BookingResponse response = bookingService.updatePhysicalTable(storeId, bookingId, request.getPhysicalTableNumber());
+        return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật số bàn thành công"));
+    }
+
+    @PostMapping("/stores/{storeId}/bookings/walk-in-hold")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<BookingResponse>> createWalkInHold(
+            @PathVariable UUID storeId,
+            @Valid @RequestBody CreateWalkInHoldRequest request) {
+        BookingResponse response = bookingService.createWalkInHold(
+                storeId,
+                request.getCategoryId(),
+                request.getDurationMinutes(),
+                request.getPhysicalTableNumber()
+        );
+        return ResponseEntity.ok(ApiResponse.success(response, "Đã giữ tạm 1 slot bàn cho khách vãng lai"));
+    }
+
+    @PostMapping("/stores/{storeId}/bookings/{bookingId}/walk-in-release")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<BookingResponse>> releaseWalkInHold(
+            @PathVariable UUID storeId,
+            @PathVariable UUID bookingId) {
+        BookingResponse response = bookingService.releaseWalkInHold(storeId, bookingId);
+        return ResponseEntity.ok(ApiResponse.success(response, "Đã giải phóng bàn khách vãng lai"));
     }
 }

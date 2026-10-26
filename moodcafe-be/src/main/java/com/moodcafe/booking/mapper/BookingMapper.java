@@ -1,8 +1,6 @@
 package com.moodcafe.booking.mapper;
 
-import com.moodcafe.booking.dto.response.BookingCustomerDetailResponse;
 import com.moodcafe.booking.dto.response.BookingResponse;
-import com.moodcafe.booking.dto.response.BookingStaffDetailResponse;
 import com.moodcafe.booking.dto.response.StoreBookingConfigResponse;
 import com.moodcafe.booking.dto.response.TableCategoryResponse;
 import com.moodcafe.booking.entity.Booking;
@@ -30,18 +28,5 @@ public interface BookingMapper {
     @Mapping(source = "tableCategory.maxCapacity", target = "maxCapacity")
     @Mapping(source = "user.userId", target = "userId")
     BookingResponse toBookingResponse(Booking booking);
-
-    @Mapping(source = "store.storeId", target = "storeId")
-    @Mapping(source = "store.name", target = "storeName")
-    @Mapping(source = "store.address", target = "storeAddress")
-    @Mapping(source = "store.phone", target = "storePhone")
-    @Mapping(source = "tableCategory.categoryId", target = "categoryId")
-    @Mapping(source = "tableCategory.name", target = "categoryName")
-    @Mapping(source = "tableCategory.imageUrl", target = "categoryImageUrl")
-    @Mapping(source = "tableCategory.maxCapacity", target = "maxCapacity")
-    @Mapping(source = "user.userId", target = "userId")
-    BookingCustomerDetailResponse toCustomerDetail(Booking booking);
-
-    @Mapping(source = "tableCategory.name", target = "categoryName")
-    BookingStaffDetailResponse toStaffDetail(Booking booking);
 }
+

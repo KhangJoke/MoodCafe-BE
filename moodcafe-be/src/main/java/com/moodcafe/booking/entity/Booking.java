@@ -86,10 +86,6 @@ public class Booking {
     @Column(name = "guest_count", nullable = false)
     private Integer guestCount = 2;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quote_id")
-    private BookingQuote quote;
-
     @Column(name = "start_time", nullable = false)
     private Instant startTime;
 
@@ -153,9 +149,6 @@ public class Booking {
     @Column(name = "paid_at")
     private Instant paidAt;
 
-    @Column(name = "payment_url", length = 500)
-    private String paymentUrl;
-
     @Column(name = "payment_order_code")
     private Long paymentOrderCode;
 
@@ -178,11 +171,21 @@ public class Booking {
     @Column(name = "service_closing_deadline")
     private Instant serviceClosingDeadline;
 
+    @Column(name = "physical_table_number", length = 50)
+    private String physicalTableNumber;
+
     @Column(name = "checked_in_at")
     private Instant checkedInAt;
 
+    @Column(name = "check_out_requested_at")
+    private Instant checkOutRequestedAt;
+
     @Column(name = "completed_at")
     private Instant completedAt;
+
+    @Builder.Default
+    @Column(name = "is_early_check_in", nullable = false)
+    private Boolean isEarlyCheckIn = false;
 
     @Column(name = "claimed_late_at")
     private Instant claimedLateAt;

@@ -7,28 +7,21 @@ import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.StoreBookingConfig;
 import com.moodcafe.booking.entity.enums.BookingEventType;
 import com.moodcafe.booking.entity.enums.BookingStatus;
+import com.moodcafe.finance.service.BookingCommissionService;
 import com.moodcafe.store.entity.Store;
-import com.moodcafe.loyalty.service.LoyaltyRewardService;
-import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
-import com.moodcafe.voucher.entity.CustomerVoucher;
-import com.moodcafe.voucher.service.VoucherLifecycleService;
-import com.moodcafe.payment.abstraction.service.PayOSService;
 import com.moodcafe.wallet.service.MerchantWalletService;
-import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.List;
 
 @Slf4j
@@ -38,29 +31,20 @@ public class BookingScheduledJobs {
 
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
 
-    @Autowired
-    private com.moodcafe.finance.service.BookingCommissionService commissionService;
+    private final BookingCommissionService commissionService;
     private final BookingRepository bookingRepository;
     private final StoreBookingConfigRepository configRepository;
     private final BookingService bookingService;
-    private final CustomerVoucherRepository customerVoucherRepository;
     private final MerchantWalletService merchantWalletService;
-    private final LoyaltyRewardService loyaltyRewardService;
-
-    @Autowired(required = false)
-    @Lazy
-    private PayOSService payOSService;
-
-    @Autowired(required = false)
-    private VoucherLifecycleService voucherLifecycleService;
 
     /**
-     * Tác vụ 1: Quét các đơn PENDING_PAYMENT quá 15 phút chưa thanh toán
-     * -> Chuyển sang PAYMENT_FAILED và lập tức giải phóng slot bàn.
+     * Tác vụ 1: Quét các đơn PENDING_PAYMENT quá thời hạn thanh toán
+     * -> Áp dụng khoảng đệm an toàn 2 phút (chờ Webhook ngân hàng về trễ) trước khi hủy đơn.
      */
     @Scheduled(fixedRate = 60000)
     public void timeoutUnpaidBookings() {
-        Instant threshold = Instant.now();
+        // Đệm 2 phút: chỉ quét các đơn có paymentExpiresAt trước thời điểm hiện tại trừ 2 phút
+        Instant threshold = Instant.now().minus(Duration.ofMinutes(2));
         for (Booking candidate : bookingRepository.findAllByStatusAndPaymentExpiresAtBefore(BookingStatus.PENDING_PAYMENT, threshold)) {
             try {
                 bookingService.timeoutPendingBooking(candidate.getBookingId());
@@ -107,11 +91,12 @@ public class BookingScheduledJobs {
 
     /**
      * Tác vụ 3: Với quán bật giới hạn thời gian ngồi (is_time_limit_enabled = true)
-     * Quét các đơn CHECKED_IN đã quá endTime quy định -> Chuyển sang COMPLETED và giải phóng slot bàn.
+     * Quét các đơn CHECKED_IN đã quá endTime quy định -> Phát cảnh báo quá giờ (OVERSTAY_ALERT)
+     * đến quầy thu ngân và khách, KHÔNG tự động mở bàn mù quáng khi khách vẫn đang ngồi tại quán.
      */
     @Scheduled(fixedRate = 120000)
     @Transactional
-    public void autoReleaseSittingTime() {
+    public void notifyOverstayBookings() {
         List<Booking> overtimed = bookingRepository.findAllCheckedInPastEndTime(
                 BookingStatus.CHECKED_IN,
                 Instant.now()
@@ -124,33 +109,12 @@ public class BookingScheduledJobs {
                     .orElse(null);
 
             if (config == null || Boolean.TRUE.equals(config.getIsTimeLimitEnabled())) {
-                booking.setStatus(BookingStatus.COMPLETED);
-                booking.setCompletedAt(Instant.now());
-                bookingRepository.save(booking);
-
-                if (commissionService.record(booking, "SETTLE") && booking.getMerchantNetAmount() != null && booking.getMerchantNetAmount().compareTo(BigDecimal.ZERO) > 0) {
-                    merchantWalletService.settleToAvailable(
-                            booking.getStore().getStoreId(),
-                            booking.getMerchantNetAmount(),
-                            "BOOKING",
-                            booking.getBookingId().toString(),
-                            "Giải ngân đơn tự động hoàn tất #" + booking.getBookingCode()
-                    );
-                }
-
-                try {
-                    loyaltyRewardService.awardBookingSpendReward(booking);
-                    loyaltyRewardService.awardBookingOnTimeCheckIn(booking);
-                } catch (Exception ex) {
-                    log.warn("Failed to award spend reward: {}", ex.getMessage());
-                }
-
                 bookingService.dispatchBookingNotification(
                         booking,
-                        BookingEventType.COMPLETED,
-                        "Đơn đặt bàn " + booking.getBookingCode() + " đã hết thời gian ngồi quy định."
+                        BookingEventType.OVERSTAY_ALERT,
+                        "Đơn đặt bàn " + booking.getBookingCode() + " đã quá thời gian ngồi quy định."
                 );
-                log.info("Booking {} automatically completed after sitting duration, table slot released", booking.getBookingCode());
+                log.info("Booking {} exceeded sitting duration, dispatched OVERSTAY_ALERT", booking.getBookingCode());
             }
         }
     }

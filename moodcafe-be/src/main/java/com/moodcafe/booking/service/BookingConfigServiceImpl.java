@@ -43,6 +43,8 @@ public class BookingConfigServiceImpl implements BookingConfigService {
                                 .gracePeriodMins(30)
                                 .minAdvanceMins(30)
                                 .freeCancelHours(2)
+                                .isEarlyCheckInEnabled(true)
+                                .maxEarlyCheckInMins(60)
                                 .build()
                 ));
 
@@ -68,6 +70,12 @@ public class BookingConfigServiceImpl implements BookingConfigService {
         config.setGracePeriodMins(request.getGracePeriodMins());
         config.setMinAdvanceMins(request.getMinAdvanceMins());
         config.setFreeCancelHours(request.getFreeCancelHours());
+        if (request.getIsEarlyCheckInEnabled() != null) {
+            config.setIsEarlyCheckInEnabled(request.getIsEarlyCheckInEnabled());
+        }
+        if (request.getMaxEarlyCheckInMins() != null) {
+            config.setMaxEarlyCheckInMins(request.getMaxEarlyCheckInMins());
+        }
 
         config = configRepository.save(config);
         return bookingMapper.toConfigResponse(config);

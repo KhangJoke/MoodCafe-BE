@@ -2,9 +2,11 @@ package com.moodcafe.booking.abstraction.repository;
 
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.enums.BookingStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -18,16 +20,13 @@ import java.util.UUID;
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM Booking b WHERE b.bookingId = :id")
     Optional<Booking> findByIdForUpdate(@Param("id") UUID id);
 
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT b FROM Booking b WHERE b.paymentOrderCode = :orderCode")
-    Optional<Booking> findByOrderCodeForUpdate(@Param("orderCode") Long orderCode);
-
-    boolean existsByQuoteQuoteId(UUID quoteId);
-
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT b FROM Booking b WHERE b.paymentOrderCode = :paymentOrderCode")
+    Optional<Booking> findByPaymentOrderCodeForUpdate(@Param("paymentOrderCode") Long paymentOrderCode);
 
     Optional<Booking> findByBookingCode(String bookingCode);
 
@@ -81,6 +80,24 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     long countOverlappingBookings(
             @Param("categoryId") UUID categoryId,
             @Param("statuses") Collection<BookingStatus> statuses,
+            @Param("reqStart") Instant reqStart,
+            @Param("reqEnd") Instant reqEnd
+    );
+
+    /**
+     * Đếm số lượng đơn đang chiếm giữ slot bàn trong khoảng thời gian giao nhau (Overlap),
+     * ngoại trừ một đơn đặt bàn cụ thể (dùng khi kiểm tra dịch chuyển khung giờ check-in sớm).
+     */
+    @Query("SELECT COUNT(b) FROM Booking b " +
+           "WHERE b.tableCategory.categoryId = :categoryId " +
+           "AND b.status IN :statuses " +
+           "AND b.bookingId != :excludeBookingId " +
+           "AND b.startTime < :reqEnd " +
+           "AND b.endTime > :reqStart")
+    long countOverlappingBookingsExcluding(
+            @Param("categoryId") UUID categoryId,
+            @Param("statuses") Collection<BookingStatus> statuses,
+            @Param("excludeBookingId") UUID excludeBookingId,
             @Param("reqStart") Instant reqStart,
             @Param("reqEnd") Instant reqEnd
     );

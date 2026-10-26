@@ -2,7 +2,6 @@ package com.moodcafe.booking;
 
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
-import com.moodcafe.booking.abstraction.repository.BookingQuoteRepository;
 import com.moodcafe.booking.abstraction.repository.BookingRepository;
 import com.moodcafe.booking.abstraction.repository.StoreBookingConfigRepository;
 import com.moodcafe.booking.abstraction.repository.TableCategoryRepository;
@@ -13,14 +12,13 @@ import com.moodcafe.booking.entity.StoreBookingConfig;
 import com.moodcafe.booking.entity.TableCategory;
 import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.booking.mapper.BookingMapper;
-import com.moodcafe.booking.service.BookingFinanceService;
 import com.moodcafe.booking.service.BookingServiceImpl;
 import com.moodcafe.finance.dto.ReservationFinancialSnapshot;
+import com.moodcafe.finance.service.BookingCommissionService;
+import com.moodcafe.finance.service.ReservationPricingService;
+import com.moodcafe.loyalty.service.LoyaltyRewardService;
 import com.moodcafe.notification.abstraction.service.NotificationDispatcherService;
 import com.moodcafe.payment.abstraction.service.PayOSService;
-import com.moodcafe.payment.entity.PaymentAttempt;
-import com.moodcafe.payment.service.OrderCodeGeneratorService;
-import com.moodcafe.payment.service.PaymentAttemptService;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
@@ -28,6 +26,10 @@ import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.store.entity.enums.StoreStatus;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
+import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
+import com.moodcafe.voucher.service.VoucherLifecycleService;
+import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.wallet.service.MerchantWalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,7 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -49,8 +52,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class BookingCreationConcurrencyIT {
+class BookingCreationConcurrencyTest {
 
+    @Mock
+    private BookingCommissionService commissionService;
     @Mock
     private BookingRepository bookingRepository;
     @Mock
@@ -72,15 +77,21 @@ class BookingCreationConcurrencyIT {
     @Mock
     private NotificationDispatcherService notificationDispatcherService;
     @Mock
-    private BookingFinanceService bookingFinanceService;
-    @Mock
-    private BookingQuoteRepository bookingQuoteRepository;
-    @Mock
     private CustomerVoucherRepository customerVoucherRepository;
     @Mock
-    private OrderCodeGeneratorService orderCodeGeneratorService;
+    private VoucherPointAllocationRepository voucherPointAllocationRepository;
     @Mock
-    private PaymentAttemptService paymentAttemptService;
+    private ReservationPricingService reservationPricingService;
+    @Mock
+    private MerchantWalletService merchantWalletService;
+    @Mock
+    private CustomerWalletService customerWalletService;
+    @Mock
+    private LoyaltyRewardService loyaltyRewardService;
+    @Mock
+    private VoucherLifecycleService voucherLifecycleService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private BookingServiceImpl bookingService;
 
@@ -127,6 +138,7 @@ class BookingCreationConcurrencyIT {
                 .build();
 
         bookingService = new BookingServiceImpl(
+                commissionService,
                 bookingRepository,
                 tableCategoryRepository,
                 configRepository,
@@ -139,11 +151,14 @@ class BookingCreationConcurrencyIT {
                 notificationDispatcherService,
                 null,
                 null,
-                bookingFinanceService,
-                bookingQuoteRepository,
                 customerVoucherRepository,
-                orderCodeGeneratorService,
-                paymentAttemptService
+                voucherPointAllocationRepository,
+                reservationPricingService,
+                merchantWalletService,
+                customerWalletService,
+                loyaltyRewardService,
+                voucherLifecycleService,
+                transactionManager
         );
     }
 
@@ -163,18 +178,9 @@ class BookingCreationConcurrencyIT {
                 .commissionAmount(new BigDecimal("7500"))
                 .merchantNetAmount(new BigDecimal("42500"))
                 .build();
-        UUID quoteId = UUID.randomUUID();
-        var quote = com.moodcafe.booking.entity.BookingQuote.builder().quoteId(quoteId)
-                .expiresAt(Instant.now().plusSeconds(900)).selectionFingerprint("selected")
-                .grossAmount(snapshot.getGrossAmount()).voucherDiscount(snapshot.getVoucherDiscount())
-                .customerPaidAmount(snapshot.getCustomerPaidAmount()).commissionRate(snapshot.getCommissionRate())
-                .commissionAmount(snapshot.getCommissionAmount()).merchantNetAmount(snapshot.getMerchantNetAmount()).build();
-        when(bookingQuoteRepository.findByQuoteIdAndUserUserId(quoteId, userId)).thenReturn(Optional.of(quote));
-        when(bookingFinanceService.calculateFingerprint(any(), any(), any(), any(), any())).thenReturn("selected");
-        when(bookingFinanceService.calculateDeadlines(any(), any(), any())).thenReturn(
-                new BookingFinanceService.Deadlines(Instant.now(), Instant.now(), Instant.now()));
+        when(reservationPricingService.quote(any())).thenReturn(snapshot);
 
-        when(orderCodeGeneratorService.nextOrderCode()).thenReturn(2000000001L);
+        when(payOSService.generateOrderCode()).thenReturn(2000000001L);
 
         // Atomic occupied counter simulates DB lock serialization
         AtomicInteger occupiedCounter = new AtomicInteger(0);
@@ -191,7 +197,6 @@ class BookingCreationConcurrencyIT {
         CreateBookingRequest req1 = CreateBookingRequest.builder()
                 .storeId(storeId)
                 .categoryId(categoryId)
-                .quoteId(quoteId)
                 .startTime(Instant.now().plusSeconds(3600))
                 .guestCount(2)
                 .customerName("Khach 1")
@@ -201,7 +206,6 @@ class BookingCreationConcurrencyIT {
         CreateBookingRequest req2 = CreateBookingRequest.builder()
                 .storeId(storeId)
                 .categoryId(categoryId)
-                .quoteId(quoteId)
                 .startTime(Instant.now().plusSeconds(3600))
                 .guestCount(2)
                 .customerName("Khach 2")

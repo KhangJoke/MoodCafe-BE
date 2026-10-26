@@ -133,7 +133,7 @@ public class SubscriptionMapper {
         }
 
         if (plan.isDepositRules()) {
-            features.add("Thiết lập quy tắc đặt cọc trước (Pre-pay / Deposit)");
+            features.add("Thiết lập gói đồ uống trả trước (F&B Credit / Min Spend)");
         }
 
         if (plan.isAllowSponsoredListing()) {

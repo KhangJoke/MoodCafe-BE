@@ -1,19 +1,14 @@
 package com.moodcafe.booking.abstraction.service;
 
-import com.moodcafe.booking.dto.request.BookingQuoteRequest;
 import com.moodcafe.booking.dto.request.CancelBookingRequest;
 import com.moodcafe.booking.dto.request.CreateBookingRequest;
 import com.moodcafe.booking.dto.request.DeskCheckInRequest;
-import com.moodcafe.booking.dto.response.BookingCustomerDetailResponse;
 import com.moodcafe.booking.dto.response.BookingDeskSummaryResponse;
-import com.moodcafe.booking.dto.response.BookingQuoteResponse;
 import com.moodcafe.booking.dto.response.BookingResponse;
-import com.moodcafe.booking.dto.response.BookingStaffDetailResponse;
 import com.moodcafe.booking.dto.response.SlotAvailabilityResponse;
 import com.moodcafe.booking.dto.response.StoreDailyScheduleResponse;
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.enums.BookingEventType;
-
 import com.moodcafe.shared.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -28,8 +23,6 @@ public interface BookingService {
 
     SlotAvailabilityResponse checkSlotAvailability(UUID storeId, UUID categoryId, Instant startTime);
 
-    BookingQuoteResponse getBookingQuote(BookingQuoteRequest request);
-
     BookingResponse createBooking(CreateBookingRequest request);
 
     void confirmBookingPayment(Long paymentOrderCode);
@@ -37,10 +30,6 @@ public interface BookingService {
     void confirmBookingPayment(Long paymentOrderCode, Long paidAmountVnd);
 
     BookingResponse getBookingDetail(UUID bookingId);
-
-    BookingCustomerDetailResponse getCustomerBookingDetail(UUID bookingId);
-
-    BookingStaffDetailResponse getStaffBookingDetail(UUID storeId, UUID bookingId);
 
     BookingResponse getBookingByCode(String bookingCode);
 
@@ -68,9 +57,17 @@ public interface BookingService {
 
     BookingResponse deskComplete(UUID storeId, UUID bookingId);
 
-    BookingResponse selfCheckIn(UUID bookingId, String qrToken);
+    BookingResponse requestCheckout(UUID bookingId);
 
-    BookingResponse selfCheckOut(UUID bookingId, String qrToken);
+    BookingResponse cancelCheckoutRequest(UUID bookingId);
+
+    BookingResponse undoComplete(UUID storeId, UUID bookingId);
+
+    BookingResponse updatePhysicalTable(UUID storeId, UUID bookingId, String physicalTableNumber);
+
+    BookingResponse createWalkInHold(UUID storeId, UUID categoryId, Integer durationMinutes, String physicalTableNumber);
+
+    BookingResponse releaseWalkInHold(UUID storeId, UUID bookingId);
 
     void dispatchBookingNotification(Booking booking, BookingEventType eventType, String customMsg);
 }
