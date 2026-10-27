@@ -8,7 +8,7 @@ import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.wallet.abstraction.repository.PointTransactionRepository;
 import com.moodcafe.wallet.dto.CustomerWalletResponse;
 import com.moodcafe.wallet.entity.PointTransaction;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.wallet.service.CustomerLoyaltyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -22,29 +22,29 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Customer - MoodPoints Wallet", description = "APIs xem số dư và lịch sử tích/hoàn/đổi điểm MoodPoints")
+@Tag(name = "Customer - Loyalty & MoodPoints", description = "APIs xem số dư MoodPoints và lịch sử biến động điểm Loyalty")
 @RestController
-@RequestMapping("/api/me/wallet")
+@RequestMapping("/api/me/loyalty")
 @RequiredArgsConstructor
-public class CustomerWalletController {
+public class CustomerLoyaltyController {
 
-    private final CustomerWalletService customerWalletService;
+    private final CustomerLoyaltyService customerLoyaltyService;
     private final PointTransactionRepository pointTransactionRepository;
     private final CurrentUserService currentUserService;
 
-    @Operation(summary = "1. Xem số dư ví MoodPoints của tôi (1 điểm = 1đ)")
+    @Operation(summary = "1. Xem số dư điểm MoodPoints của tôi (1 điểm = 1đ)")
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<ApiResponse<CustomerWalletResponse>> getMyWallet() {
+    public ResponseEntity<ApiResponse<CustomerWalletResponse>> getMyLoyalty() {
         User user = currentUserService.getCurrentUser();
         if (user == null) {
             throw new AppException(ErrorCode.UNAUTHORIZED, "Vui lòng đăng nhập");
         }
-        CustomerWalletResponse wallet = customerWalletService.getWallet(user.getUserId());
-        return ResponseEntity.ok(ApiResponse.success(wallet, "Lấy thông tin ví MoodPoints thành công"));
+        CustomerWalletResponse wallet = customerLoyaltyService.getLoyaltyAccount(user.getUserId());
+        return ResponseEntity.ok(ApiResponse.success(wallet, "Lấy thông tin điểm MoodPoints thành công"));
     }
 
-    @Operation(summary = "2. Lịch sử biến động điểm MoodPoints (hoàn đơn, tích điểm, đổi voucher)")
+    @Operation(summary = "2. Lịch sử biến động điểm MoodPoints (hoàn đơn, tích điểm, đổi voucher, nhận thưởng quest)")
     @GetMapping("/transactions")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Page<PointTransaction>>> getMyTransactions(
@@ -57,6 +57,6 @@ public class CustomerWalletController {
         }
         Pageable pageable = PageRequest.of(page, size);
         Page<PointTransaction> txs = pointTransactionRepository.findByUserIdOrderByCreatedAtDesc(user.getUserId(), pageable);
-        return ResponseEntity.ok(ApiResponse.success(txs, "Lấy lịch sử giao dịch thành công"));
+        return ResponseEntity.ok(ApiResponse.success(txs, "Lấy lịch sử biến động điểm thành công"));
     }
 }
