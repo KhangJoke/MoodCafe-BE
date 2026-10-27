@@ -1,5 +1,6 @@
 package com.moodcafe.store.dto.response;
 
+import com.moodcafe.gamification.dto.response.EquippedTitleDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,6 +25,7 @@ public class StoreReviewResponse {
     private UUID userId;
     private String userFullName;
     private String userAvatarUrl;
+    private EquippedTitleDto userEquippedTitle;
     private UUID visitVerificationId;
     private UUID reservationId;
     private boolean verified;

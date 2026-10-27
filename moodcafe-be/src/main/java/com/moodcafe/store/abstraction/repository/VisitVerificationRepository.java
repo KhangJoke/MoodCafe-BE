@@ -2,6 +2,8 @@ package com.moodcafe.store.abstraction.repository;
 
 import com.moodcafe.store.entity.VisitVerification;
 import com.moodcafe.store.entity.enums.VisitVerificationStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -23,6 +25,8 @@ public interface VisitVerificationRepository extends JpaRepository<VisitVerifica
     );
 
     List<VisitVerification> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId);
+
+    Page<VisitVerification> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 
     List<VisitVerification> findAllByStoreStoreIdOrderByCreatedAtDesc(UUID storeId);
 

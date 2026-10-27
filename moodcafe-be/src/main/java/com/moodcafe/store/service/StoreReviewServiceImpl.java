@@ -57,6 +57,8 @@ import com.moodcafe.store.abstraction.repository.VisitVerificationRepository;
 import com.moodcafe.store.entity.VisitVerification;
 import com.moodcafe.store.entity.enums.VisitVerificationStatus;
 import lombok.RequiredArgsConstructor;
+import com.moodcafe.gamification.abstraction.service.CustomerTitleService;
+import com.moodcafe.gamification.abstraction.service.QuestEventService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -96,6 +98,24 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     private final NotificationDispatcherService notificationDispatcherService;
     private final BookingRepository bookingRepository;
     private final LoyaltyRewardService loyaltyRewardService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private QuestEventService questEventService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CustomerTitleService customerTitleService;
+
+    private StoreReviewResponse toEnrichedResponse(StoreReview review) {
+        StoreReviewResponse res = storeReviewMapper.toResponse(review);
+        if (res != null && review != null && review.getUser() != null && review.getUser().getUserId() != null && customerTitleService != null) {
+            try {
+                res.setUserEquippedTitle(customerTitleService.getEquippedTitle(review.getUser().getUserId()));
+            } catch (Exception ex) {
+                log.warn("Failed to get equipped title for review user {}: {}", review.getUser().getUserId(), ex.getMessage());
+            }
+        }
+        return res;
+    }
 
     @Override
     @Transactional
@@ -298,7 +318,15 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             );
         }
 
-        return storeReviewMapper.toResponse(review);
+        try {
+            if (questEventService != null) {
+                questEventService.onReviewSubmitted(review);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to trigger quest event for review: {}", ex.getMessage());
+        }
+
+        return toEnrichedResponse(review);
     }
 
     @Override
@@ -349,7 +377,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         recalculateStoreTagScores(storeId);
         log.info("Review {} updated by user {}", reviewId, currentUser.getUserId());
 
-        return storeReviewMapper.toResponse(review);
+        return toEnrichedResponse(review);
     }
 
     @Override
@@ -404,7 +432,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        return storeReviewRepository.findAll(spec, pageable).map(storeReviewMapper::toResponse);
+        return storeReviewRepository.findAll(spec, pageable).map(this::toEnrichedResponse);
     }
 
     @Override
@@ -467,7 +495,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         StoreReview review = storeReviewRepository.findById(reviewId)
                 .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
 
-        return storeReviewMapper.toResponse(review);
+        return toEnrichedResponse(review);
     }
 
     @Override
@@ -527,7 +555,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     public StoreReviewResponse getMyReviewForStore(UUID storeId) {
         User currentUser = currentUserService.getCurrentUser();
         return storeReviewRepository.findFirstByStoreStoreIdAndUserUserIdOrderByCreatedAtDesc(storeId, currentUser.getUserId())
-                .map(storeReviewMapper::toResponse)
+                .map(this::toEnrichedResponse)
                 .orElse(null);
     }
 
@@ -559,7 +587,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             );
         }
 
-        return storeReviewMapper.toResponse(review);
+        return toEnrichedResponse(review);
     }
 
     @Override
@@ -827,7 +855,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
 
-        return storeReviewRepository.findAll(spec, pageable).map(storeReviewMapper::toResponse);
+        return storeReviewRepository.findAll(spec, pageable).map(this::toEnrichedResponse);
     }
 
     @Override

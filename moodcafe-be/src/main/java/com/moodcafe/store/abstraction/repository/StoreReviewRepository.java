@@ -26,6 +26,8 @@ public interface StoreReviewRepository extends JpaRepository<StoreReview, UUID>,
 
     List<StoreReview> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId);
 
+    Page<StoreReview> findAllByUserUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
     boolean existsByStoreStoreIdAndUserUserId(UUID storeId, UUID userId);
 
     @Query("SELECT COUNT(r) > 0 FROM StoreReview r WHERE r.store.storeId = :storeId AND r.user.userId = :userId")

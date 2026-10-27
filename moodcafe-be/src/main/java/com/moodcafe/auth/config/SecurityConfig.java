@@ -142,7 +142,10 @@ public class SecurityConfig {
                                 "/api/tags/*",
                                 "/api/subscriptions/plans",
                                 "/api/sponsored/plans",
-                                "/api/sponsored/placements/**"
+                                "/api/sponsored/placements/**",
+                                "/api/users/*/public-profile",
+                                "/api/users/*/reviews",
+                                "/api/users/*/vibesnaps"
                         ).permitAll()
 
                         .requestMatchers(

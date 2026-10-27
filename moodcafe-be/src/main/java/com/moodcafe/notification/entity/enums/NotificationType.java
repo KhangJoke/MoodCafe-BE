@@ -43,6 +43,10 @@ public enum NotificationType {
     REVIEW_REPLIED,
     REVIEW_REPORT_RESOLVED,
 
+    // Gamification
+    QUEST_CLAIMABLE,
+    TITLE_UNLOCKED,
+
     // System
     SYSTEM_ANNOUNCEMENT
 }

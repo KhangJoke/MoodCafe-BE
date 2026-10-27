@@ -2,13 +2,16 @@ package com.moodcafe.auth.dto.user.response;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.moodcafe.auth.dto.role.response.RoleResponse;
+import com.moodcafe.gamification.dto.response.EquippedTitleDto;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Getter
+@Setter
 @Builder
 public class UserResponse {
 
@@ -16,6 +19,7 @@ public class UserResponse {
     private String email;
     private String fullName;
     private String avatarUrl;
+    private EquippedTitleDto equippedTitle;
 
     private RoleResponse role;
 

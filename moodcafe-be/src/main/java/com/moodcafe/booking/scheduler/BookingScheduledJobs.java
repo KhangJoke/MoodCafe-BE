@@ -10,6 +10,7 @@ import com.moodcafe.booking.entity.enums.BookingStatus;
 import com.moodcafe.finance.service.BookingCommissionService;
 import com.moodcafe.store.entity.Store;
 import com.moodcafe.wallet.service.MerchantWalletService;
+import com.moodcafe.gamification.abstraction.service.QuestEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -36,6 +37,9 @@ public class BookingScheduledJobs {
     private final StoreBookingConfigRepository configRepository;
     private final BookingService bookingService;
     private final MerchantWalletService merchantWalletService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private QuestEventService questEventService;
 
     /**
      * Tác vụ 1: Quét các đơn PENDING_PAYMENT quá thời hạn thanh toán
@@ -79,6 +83,15 @@ public class BookingScheduledJobs {
             if (now.isAfter(expiryMoment)) {
                 booking.setStatus(BookingStatus.TABLE_EXPIRED);
                 bookingRepository.save(booking);
+
+                try {
+                    if (questEventService != null) {
+                        questEventService.onBookingTableExpired(booking);
+                    }
+                } catch (Exception ex) {
+                    log.warn("Failed to trigger quest event at table expiry: {}", ex.getMessage());
+                }
+
                 bookingService.dispatchBookingNotification(
                         booking,
                         BookingEventType.TABLE_EXPIRED,

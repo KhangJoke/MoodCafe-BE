@@ -10,13 +10,16 @@ import com.moodcafe.auth.entity.User;
 import com.moodcafe.auth.mapper.UserMapper;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
+import com.moodcafe.gamification.abstraction.service.CustomerTitleService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
@@ -26,10 +29,26 @@ public class UserServiceImpl implements UserService {
     private final CurrentUserService currentUserService;
     private final PasswordEncoder passwordEncoder;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private CustomerTitleService customerTitleService;
+
+    private UserResponse toEnrichedUserResponse(User user) {
+        if (user == null) return null;
+        UserResponse response = userMapper.toResponse(user);
+        if (response != null && customerTitleService != null) {
+            try {
+                response.setEquippedTitle(customerTitleService.getEquippedTitle(user.getUserId()));
+            } catch (Exception ex) {
+                log.warn("Failed to get equipped title for user {}: {}", user.getUserId(), ex.getMessage());
+            }
+        }
+        return response;
+    }
+
     @Override
     public UserResponse getCurrentUser() {
         User user = currentUserService.getCurrentUser();
-        return userMapper.toResponse(user);
+        return toEnrichedUserResponse(user);
     }
 
 
@@ -39,7 +58,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        return userMapper.toResponse(user);
+        return toEnrichedUserResponse(user);
     }
 
     @Override
@@ -56,7 +75,7 @@ public class UserServiceImpl implements UserService {
 
         userRepository.save(user);
 
-        return userMapper.toResponse(user);
+        return toEnrichedUserResponse(user);
     }
 
     @Override
@@ -66,7 +85,7 @@ public class UserServiceImpl implements UserService {
         user.setFirstLogin(false);
         user = userRepository.save(user);
 
-        return userMapper.toResponse(user);
+        return toEnrichedUserResponse(user);
     }
 
     @Override
