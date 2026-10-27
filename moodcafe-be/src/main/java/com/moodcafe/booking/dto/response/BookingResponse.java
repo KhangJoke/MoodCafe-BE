@@ -1,6 +1,7 @@
 package com.moodcafe.booking.dto.response;
 
 import com.moodcafe.booking.entity.enums.BookingStatus;
+import com.moodcafe.gamification.dto.response.EquippedTitleDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -35,6 +36,7 @@ public class BookingResponse {
     private String customerName;
     private String customerPhone;
     private String customerEmail;
+    private EquippedTitleDto customerEquippedTitle;
     private Instant startTime;
     private Instant endTime;
     private BookingStatus status;

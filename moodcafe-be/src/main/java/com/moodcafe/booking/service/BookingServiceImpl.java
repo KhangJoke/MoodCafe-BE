@@ -12,6 +12,7 @@ import com.moodcafe.booking.dto.request.CreateBookingRequest;
 import com.moodcafe.booking.dto.request.DeskCheckInRequest;
 import com.moodcafe.booking.dto.response.BookingDeskSummaryResponse;
 import com.moodcafe.booking.dto.response.BookingResponse;
+import com.moodcafe.booking.enricher.BookingResponseEnricher;
 import com.moodcafe.booking.dto.response.CategoryScheduleDTO;
 import com.moodcafe.booking.dto.response.RefundOutcomeResponse;
 import com.moodcafe.booking.dto.response.SlotAvailabilityResponse;
@@ -77,6 +78,9 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import com.moodcafe.gamification.abstraction.service.CustomerTitleService;
+import com.moodcafe.gamification.abstraction.service.QuestEventService;
+import org.springframework.beans.factory.annotation.Autowired;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -118,6 +122,15 @@ public class BookingServiceImpl implements BookingService {
     private final LoyaltyRewardService loyaltyRewardService;
     private final VoucherLifecycleService voucherLifecycleService;
     private final PlatformTransactionManager transactionManager;
+
+    @Autowired(required = false)
+    private QuestEventService questEventService;
+
+    @Autowired(required = false)
+    private CustomerTitleService customerTitleService;
+
+    @Autowired(required = false)
+    private BookingResponseEnricher bookingResponseEnricher;
 
     @Override
     @Transactional(readOnly = true)
@@ -164,26 +177,9 @@ public class BookingServiceImpl implements BookingService {
                 boolean isPast = slotStart.isBefore(minAdvanceInstant);
 
                 if (isPast) {
-                    timeSlots.add(TimeSlotDTO.builder()
-                            .time(timeStr)
-                            .startTime(slotStart)
-                            .endTime(calculateEndTime(slotStart, config, store, cat))
-                            .availableCount(0)
-                            .occupiedCount(cat.getAppQuota())
-                            .status(SlotStatus.PAST)
-                            .availableDurationMins(0)
-                            .build());
+                    timeSlots.add(buildBlockedTimeSlot(timeStr, slotStart, calculateEndTime(slotStart, config, store, cat), cat.getAppQuota(), SlotStatus.PAST, null));
                 } else if (!isBookingEnabled) {
-                    timeSlots.add(TimeSlotDTO.builder()
-                            .time(timeStr)
-                            .startTime(slotStart)
-                            .endTime(calculateEndTime(slotStart, config, store, cat))
-                            .availableCount(0)
-                            .occupiedCount(cat.getAppQuota())
-                            .status(SlotStatus.FULL)
-                            .availableDurationMins(0)
-                            .note("Quán hiện đang tạm tắt nhận đặt bàn")
-                            .build());
+                    timeSlots.add(buildBlockedTimeSlot(timeStr, slotStart, calculateEndTime(slotStart, config, store, cat), cat.getAppQuota(), SlotStatus.FULL, "Quán hiện đang tạm tắt nhận đặt bàn"));
                 } else if (Boolean.TRUE.equals(config.getIsTimeLimitEnabled())) {
                     // Case 1: Quán BẬT giới hạn thời gian ngồi
                     int standardMins = config.getSittingDurationMins();
@@ -199,16 +195,7 @@ public class BookingServiceImpl implements BookingService {
                     int availableAtStart = Math.max(0, cat.getAppQuota() - (int) occupiedAtStart);
 
                     if (availableAtStart <= 0) {
-                        timeSlots.add(TimeSlotDTO.builder()
-                                .time(timeStr)
-                                .startTime(slotStart)
-                                .endTime(standardEnd)
-                                .availableCount(0)
-                                .occupiedCount(cat.getAppQuota())
-                                .status(SlotStatus.FULL)
-                                .availableDurationMins(0)
-                                .note("Đã kín chỗ trong khung giờ này")
-                                .build());
+                        timeSlots.add(buildBlockedTimeSlot(timeStr, slotStart, standardEnd, cat.getAppQuota(), SlotStatus.FULL, "Đã kín chỗ trong khung giờ này"));
                     } else {
                         // Kiểm tra điểm nghẽn (blockage) trong khoảng [slotStart, standardEnd]
                         Instant earliestBlockage = null;
@@ -229,41 +216,18 @@ public class BookingServiceImpl implements BookingService {
                             String nextBookingStr = earliestBlockage.atZone(VN_ZONE).toLocalTime().format(timeFormatter);
 
                             if (availableMins < 45) {
-                                timeSlots.add(TimeSlotDTO.builder()
-                                        .time(timeStr)
-                                        .startTime(slotStart)
-                                        .endTime(earliestBlockage)
-                                        .availableCount(0)
-                                        .occupiedCount(cat.getAppQuota())
-                                        .status(SlotStatus.FULL)
-                                        .availableDurationMins(availableMins)
-                                        .nextBookingTime(nextBookingStr)
-                                        .note("Khoảng trống chỉ còn " + availableMins + " phút, không đủ thời gian phục vụ tối thiểu")
-                                        .build());
+                                timeSlots.add(buildTimeSlot(timeStr, slotStart, earliestBlockage, 0, cat.getAppQuota(),
+                                        SlotStatus.FULL, availableMins,
+                                        "Khoảng trống chỉ còn " + availableMins + " phút, không đủ thời gian phục vụ tối thiểu", nextBookingStr));
                             } else {
-                                timeSlots.add(TimeSlotDTO.builder()
-                                        .time(timeStr)
-                                        .startTime(slotStart)
-                                        .endTime(earliestBlockage)
-                                        .availableCount(availableAtStart)
-                                        .occupiedCount((int) occupiedAtStart)
-                                        .status(SlotStatus.LIMITED_TIME)
-                                        .availableDurationMins(availableMins)
-                                        .nextBookingTime(nextBookingStr)
-                                        .note("Chỉ còn trống " + availableMins + " phút do ca sau có khách đặt lúc " + nextBookingStr)
-                                        .build());
+                                timeSlots.add(buildTimeSlot(timeStr, slotStart, earliestBlockage, availableAtStart, (int) occupiedAtStart,
+                                        SlotStatus.LIMITED_TIME, availableMins,
+                                        "Chỉ còn trống " + availableMins + " phút do ca sau có khách đặt lúc " + nextBookingStr, nextBookingStr));
                             }
                         } else {
                             SlotStatus status = (availableAtStart == 1) ? SlotStatus.ALMOST_FULL : SlotStatus.AVAILABLE;
-                            timeSlots.add(TimeSlotDTO.builder()
-                                    .time(timeStr)
-                                    .startTime(slotStart)
-                                    .endTime(standardEnd)
-                                    .availableCount(availableAtStart)
-                                    .occupiedCount((int) occupiedAtStart)
-                                    .status(status)
-                                    .availableDurationMins(standardMins)
-                                    .build());
+                            timeSlots.add(buildTimeSlot(timeStr, slotStart, standardEnd, availableAtStart, (int) occupiedAtStart,
+                                    status, standardMins, null, null));
                         }
                     }
                 } else {
@@ -277,60 +241,43 @@ public class BookingServiceImpl implements BookingService {
                     int remainingMins = Math.max(0, (int) ChronoUnit.MINUTES.between(slotStart, closingInstant));
 
                     if (available <= 0) {
-                        timeSlots.add(TimeSlotDTO.builder()
-                                .time(timeStr)
-                                .startTime(slotStart)
-                                .endTime(closingInstant)
-                                .availableCount(0)
-                                .occupiedCount(cat.getAppQuota())
-                                .status(SlotStatus.FULL)
-                                .availableDurationMins(0)
-                                .note("Đã kín chỗ đến giờ đóng cửa")
-                                .build());
+                        timeSlots.add(buildBlockedTimeSlot(timeStr, slotStart, closingInstant, cat.getAppQuota(), SlotStatus.FULL, "Đã kín chỗ đến giờ đóng cửa"));
                     } else {
                         SlotStatus status = (available == 1) ? SlotStatus.ALMOST_FULL : SlotStatus.AVAILABLE;
-                        timeSlots.add(TimeSlotDTO.builder()
-                                .time(timeStr)
-                                .startTime(slotStart)
-                                .endTime(closingInstant)
-                                .availableCount(available)
-                                .occupiedCount((int) occupied)
-                                .status(status)
-                                .availableDurationMins(remainingMins)
-                                .build());
+                        timeSlots.add(buildTimeSlot(timeStr, slotStart, closingInstant, available, (int) occupied,
+                                status, remainingMins, null, null));
                     }
                 }
 
                 currentSlotTime = currentSlotTime.plusMinutes(30);
             }
 
-            categoryDTOs.add(CategoryScheduleDTO.builder()
-                    .categoryId(cat.getCategoryId())
-                    .categoryName(cat.getName())
-                    .maxCapacity(cat.getMaxCapacity())
-                    .minSpendAmount(cat.getMinSpendAmount())
-                    .totalQuota(cat.getAppQuota())
-                    .imageUrl(cat.getImageUrl())
-                    .description(cat.getDescription())
-                    .timeSlots(timeSlots)
-                    .build());
+            categoryDTOs.add(bookingMapper.toCategoryScheduleDTO(cat, timeSlots));
         }
 
-        return StoreDailyScheduleResponse.builder()
-                .storeId(store.getStoreId())
-                .storeName(store.getName())
-                .date(targetDate)
-                .isBookingEnabled(isBookingEnabled)
-                .isTimeLimitEnabled(config.getIsTimeLimitEnabled())
-                .sittingDurationMins(config.getSittingDurationMins())
-                .cleanupBufferMins(config.getCleanupBufferMins())
-                .minAdvanceMins(config.getMinAdvanceMins())
-                .gracePeriodMins(config.getGracePeriodMins())
-                .freeCancelHours(config.getFreeCancelHours())
-                .openingTime(openingTime.format(timeFormatter))
-                .closingTime(closingTime.format(timeFormatter))
-                .categories(categoryDTOs)
+        return bookingMapper.toStoreDailyScheduleResponse(store, targetDate, config, isBookingEnabled,
+                openingTime.format(timeFormatter), closingTime.format(timeFormatter), categoryDTOs);
+    }
+
+    private TimeSlotDTO buildTimeSlot(String timeStr, Instant startTime, Instant endTime,
+                                      int availableCount, int occupiedCount, SlotStatus status,
+                                      int availableDurationMins, String note, String nextBookingTime) {
+        return TimeSlotDTO.builder()
+                .time(timeStr)
+                .startTime(startTime)
+                .endTime(endTime)
+                .availableCount(availableCount)
+                .occupiedCount(occupiedCount)
+                .status(status)
+                .availableDurationMins(availableDurationMins)
+                .note(note)
+                .nextBookingTime(nextBookingTime)
                 .build();
+    }
+
+    private TimeSlotDTO buildBlockedTimeSlot(String timeStr, Instant startTime, Instant endTime,
+                                             int quota, SlotStatus status, String note) {
+        return buildTimeSlot(timeStr, startTime, endTime, 0, quota, status, 0, note, null);
     }
 
     @Override
@@ -365,17 +312,7 @@ public class BookingServiceImpl implements BookingService {
         int totalQuota = category.getAppQuota();
         int available = Math.max(0, totalQuota - (int) occupied);
 
-        return SlotAvailabilityResponse.builder()
-                .categoryId(category.getCategoryId())
-                .categoryName(category.getName())
-                .startTime(startTime)
-                .endTime(endTime)
-                .totalQuota(totalQuota)
-                .occupiedCount((int) occupied)
-                .availableCount(available)
-                .isAvailable(available > 0)
-                .minSpendAmount(category.getMinSpendAmount())
-                .build();
+        return bookingMapper.toSlotAvailabilityResponse(category, startTime, endTime, totalQuota, (int) occupied, available);
     }
 
     public static String computeBookingPayloadHash(CreateBookingRequest request) {
@@ -519,12 +456,11 @@ public class BookingServiceImpl implements BookingService {
 
         ReservationFinancialSnapshot snapshot = resolveFinancialSnapshot(store, category, voucher);
         Deadlines deadlines = calculateDeadlines(store, config, request.getStartTime());
+        long paymentOrderCode = paymentService.generateOrderCode();
+        boolean requiresDeposit = snapshot.getCustomerPaidAmount().compareTo(BigDecimal.ZERO) > 0;
 
         String bookingCode = "MC" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         String qrToken = UUID.randomUUID().toString();
-        long paymentOrderCode = paymentService.generateOrderCode();
-
-        boolean requiresDeposit = snapshot.getCustomerPaidAmount().compareTo(BigDecimal.ZERO) > 0;
 
         Booking booking = Booking.builder()
                 .bookingCode(bookingCode)
@@ -593,6 +529,18 @@ public class BookingServiceImpl implements BookingService {
         return booking;
     }
 
+    private void creditBookingRefundPoints(Booking booking, long points, String businessKey, String description) {
+        if (customerWalletService != null && booking != null && booking.getUser() != null && points > 0) {
+            customerWalletService.creditRefundPoints(RefundPointCommand.builder()
+                    .userId(booking.getUser().getUserId())
+                    .points(points)
+                    .refundId(booking.getBookingId() != null ? booking.getBookingId().toString() : null)
+                    .businessKey(businessKey)
+                    .description(description)
+                    .build());
+        }
+    }
+
     @Override
     @Transactional
     public void confirmBookingPayment(Long paymentOrderCode) {
@@ -616,10 +564,8 @@ public class BookingServiceImpl implements BookingService {
                 BigDecimal delta = cumulative.subtract(previous);
                 String businessKey = previous.signum() == 0 ? "REFUND_BOOKING_" + booking.getBookingId()
                         : "REFUND_BOOKING_" + booking.getBookingId() + "_TOTAL_" + paidAmountVnd;
-                customerWalletService.creditRefundPoints(RefundPointCommand.builder()
-                        .userId(booking.getUser().getUserId()).points(delta.longValueExact())
-                        .refundId(booking.getBookingId().toString()).businessKey(businessKey)
-                        .description("Hoàn phần tiền thực nhận tăng thêm đơn " + booking.getBookingCode()).build());
+                creditBookingRefundPoints(booking, delta.longValueExact(), businessKey,
+                        "Hoàn phần tiền thực nhận tăng thêm đơn " + booking.getBookingCode());
                 booking.setActualPaidAmount(cumulative);
                 booking.setPaidAt(Instant.now());
                 booking.setRefundProcessed(true);
@@ -780,15 +726,8 @@ public class BookingServiceImpl implements BookingService {
 
             BigDecimal paid = booking.getActualPaidAmount() != null ? booking.getActualPaidAmount() : BigDecimal.ZERO;
             if (paid.compareTo(BigDecimal.ZERO) > 0) {
-                if (customerWalletService != null) {
-                    customerWalletService.creditRefundPoints(RefundPointCommand.builder()
-                            .userId(booking.getUser().getUserId())
-                            .points(paid.longValue())
-                            .refundId(booking.getBookingId().toString())
-                            .businessKey("REFUND_BOOKING_" + booking.getBookingId())
-                            .description("Hoàn gói đồ uống đơn đặt bàn " + booking.getBookingCode() + " thành MoodPoints (1:1)")
-                            .build());
-                }
+                creditBookingRefundPoints(booking, paid.longValue(), "REFUND_BOOKING_" + booking.getBookingId(),
+                        "Hoàn gói đồ uống đơn đặt bàn " + booking.getBookingCode() + " thành MoodPoints (1:1)");
                 booking.setRefundProcessed(true);
             }
         }
@@ -887,10 +826,11 @@ public class BookingServiceImpl implements BookingService {
             payResponse = getCachedPayOSResponse(booking.getBookingId());
             if (payResponse == null) {
                 String sanitizedDesc = "DATBAN " + currentOrderCode;
+                double amount = (double) (booking.getCustomerPaidAmount() != null ? booking.getCustomerPaidAmount().longValue() : booking.getMinSpendAmount());
                 payResponse = PayOSResponse.builder()
                         .checkoutUrl("https://pay.payos.vn/web/" + linkInfo.getId())
                         .orderCode(currentOrderCode)
-                        .amount((double) (booking.getCustomerPaidAmount() != null ? booking.getCustomerPaidAmount().longValue() : booking.getMinSpendAmount()))
+                        .amount(amount)
                         .description(sanitizedDesc)
                         .status("PENDING")
                         .paymentLinkId(linkInfo.getId())
@@ -1096,15 +1036,7 @@ public class BookingServiceImpl implements BookingService {
                 .mapToLong(TableCategory::getAppQuota)
                 .sum();
 
-        return BookingDeskSummaryResponse.builder()
-                .totalTodayBookings(dayBookings.size())
-                .pendingArrivalCount(confirmed)
-                .checkedInCount(checkedIn)
-                .completedCount(completed)
-                .tableExpiredCount(tableExpired)
-                .claimedLateCount(claimedLate)
-                .totalAppQuota(totalQuota)
-                .build();
+        return bookingMapper.toDeskSummaryResponse(dayBookings.size(), confirmed, checkedIn, completed, tableExpired, claimedLate, totalQuota);
     }
 
     @Override
@@ -1225,6 +1157,14 @@ public class BookingServiceImpl implements BookingService {
             log.warn("Failed to award loyalty rewards at check-in: {}", ex.getMessage());
         }
 
+        try {
+            if (questEventService != null) {
+                questEventService.onBookingCheckedIn(booking);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to trigger quest event at check-in: {}", ex.getMessage());
+        }
+
         config = getOrCreateConfig(booking.getStore());
         BookingResponse res = enrichBookingResponse(booking, config);
 
@@ -1273,6 +1213,14 @@ public class BookingServiceImpl implements BookingService {
             if (loyaltyRewardService != null) loyaltyRewardService.awardBookingSpendReward(booking);
         } catch (Exception ex) {
             log.warn("Failed to award spend reward: {}", ex.getMessage());
+        }
+
+        try {
+            if (questEventService != null) {
+                questEventService.onBookingClaimedLate(booking);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to trigger quest event at claim late: {}", ex.getMessage());
         }
 
         StoreBookingConfig config = getOrCreateConfig(booking.getStore());
@@ -1459,7 +1407,6 @@ public class BookingServiceImpl implements BookingService {
         int duration = (durationMinutes != null && durationMinutes > 0) ? durationMinutes : 120;
         Instant now = Instant.now();
         Instant end = now.plus(Duration.ofMinutes(duration));
-
         String code = "WLK" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
         String tableNum = (physicalTableNumber != null && !physicalTableNumber.isBlank())
                 ? physicalTableNumber.trim()
@@ -1486,7 +1433,6 @@ public class BookingServiceImpl implements BookingService {
                 .merchantNetAmount(BigDecimal.ZERO)
                 .refundProcessed(true)
                 .build();
-
         booking = bookingRepository.save(booking);
 
         StoreBookingConfig config = getOrCreateConfig(store);
@@ -1605,60 +1551,11 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BookingResponse enrichBookingResponse(Booking booking, StoreBookingConfig config) {
-        BookingResponse res = bookingMapper.toBookingResponse(booking);
-        res.setGracePeriodMins(config.getGracePeriodMins());
-        res.setFreeCancelHours(config.getFreeCancelHours());
-
-        if (booking.getStore() != null && booking.getStore().getStoreId() != null) {
-            UUID storeId = booking.getStore().getStoreId();
-            String storeImg = storeImageRepository.findByStoreStoreIdAndPrimaryTrue(storeId)
-                    .map(StoreImage::getImageUrl)
-                    .orElseGet(() -> storeImageRepository.findAllByStoreStoreId(storeId).stream()
-                            .findFirst()
-                            .map(StoreImage::getImageUrl)
-                            .orElse(null));
-            res.setStoreImageUrl(storeImg);
+        if (bookingResponseEnricher != null) {
+            return bookingResponseEnricher.enrich(booking, config);
         }
-
-        res.setGrossAmount(booking.getGrossAmount());
-        res.setVoucherDiscount(booking.getVoucherDiscount());
-        res.setCustomerPaidAmount(booking.getCustomerPaidAmount());
-        res.setActualPaidAmount(booking.getActualPaidAmount());
-        res.setPaymentExpiresAt(booking.getPaymentExpiresAt());
-        res.setPaymentSessionStatus(booking.getStatus() != null ? booking.getStatus().name() : null);
-        res.setGuestCount(booking.getGuestCount());
-        res.setFreeCancelDeadline(booking.getFreeCancelDeadline());
-        res.setGraceDeadline(booking.getGraceDeadline());
-        res.setServiceClosingDeadline(booking.getServiceClosingDeadline());
-        var actions = calculateCustomerAllowedActions(booking);
-        res.setAllowedActions(actions != null ? actions : List.of());
-
-        boolean cancelable = (booking.getStatus() == BookingStatus.PAID_CONFIRMED || booking.getStatus() == BookingStatus.PENDING_PAYMENT)
-                && (booking.getFreeCancelDeadline() == null || Instant.now().isBefore(booking.getFreeCancelDeadline()));
-        res.setIsCancelable(cancelable);
-
-        if (booking.getStatus() == BookingStatus.PENDING_PAYMENT) {
-            PayOSResponse cached = getCachedPayOSResponse(booking.getBookingId());
-            if (cached != null) {
-                res.setCheckoutUrl(cached.getCheckoutUrl());
-                res.setPaymentQrCode(cached.getQrCode());
-                res.setPaymentAccountNumber(cached.getAccountNumber());
-                res.setPaymentAccountName(cached.getAccountName());
-                res.setPaymentBin(cached.getBin());
-                res.setPaymentDescription(cached.getDescription());
-            }
-        }
-
-        if (Boolean.TRUE.equals(booking.getRefundProcessed())) {
-            res.setRefundOutcome(RefundOutcomeResponse.builder()
-                    .actualPaidRefundPoints(booking.getActualPaidAmount() != null ? booking.getActualPaidAmount().longValue() : 0L)
-                    .voucherRestorationStatus(booking.getVoucher() != null ? "RESTORED" : "NO_VOUCHER")
-                    .processedAt(booking.getCancelledAt())
-                    .eventId("EVT-" + booking.getBookingCode())
-                    .build());
-        }
-
-        return res;
+        return new BookingResponseEnricher(bookingMapper, storeImageRepository, redisTemplate, objectMapper, customerTitleService)
+                .enrich(booking, config);
     }
 
     @Override
@@ -1920,69 +1817,6 @@ public class BookingServiceImpl implements BookingService {
         return new Deadlines(freeCancelDeadline, graceDeadline, closingDeadline);
     }
 
-    /**
-     * Determines allowed actions for a customer on a booking.
-     */
-    private List<String> calculateCustomerAllowedActions(Booking booking) {
-        if (booking == null || booking.getStatus() == null) {
-            return List.of();
-        }
-        Instant now = Instant.now();
-        List<String> actions = new ArrayList<>();
-
-        switch (booking.getStatus()) {
-            case PENDING_PAYMENT -> {
-                actions.add("PAY");
-                actions.add("CANCEL");
-            }
-            case PAID_CONFIRMED -> {
-                if (booking.getFreeCancelDeadline() != null && now.isBefore(booking.getFreeCancelDeadline())) {
-                    actions.add("CANCEL");
-                }
-            }
-            case CHECKED_IN -> {
-                actions.add("REQUEST_CHECKOUT");
-            }
-            case CHECK_OUT_PENDING -> {
-                actions.add("CANCEL_CHECKOUT_REQUEST");
-            }
-            case COMPLETED, CLAIMED_LATE -> {
-                actions.add("REVIEW");
-            }
-            default -> {}
-        }
-
-        return actions;
-    }
-
-    /**
-     * Determines allowed actions for staff/cashier on a booking.
-     */
-    private List<String> calculateStaffAllowedActions(Booking booking) {
-        if (booking == null || booking.getStatus() == null) {
-            return List.of();
-        }
-        Instant now = Instant.now();
-        List<String> actions = new ArrayList<>();
-
-        switch (booking.getStatus()) {
-            case PAID_CONFIRMED -> {
-                actions.add("CHECK_IN");
-                actions.add("CANCEL");
-            }
-            case CHECKED_IN, CHECK_OUT_PENDING -> {
-                actions.add("COMPLETE");
-            }
-            case TABLE_EXPIRED -> {
-                if (booking.getServiceClosingDeadline() == null || now.isBefore(booking.getServiceClosingDeadline())) {
-                    actions.add("CLAIM_LATE");
-                }
-            }
-            default -> {}
-        }
-
-        return actions;
-    }
 
     private record Deadlines(Instant freeCancelDeadline, Instant graceDeadline, Instant serviceClosingDeadline) {}
 }
