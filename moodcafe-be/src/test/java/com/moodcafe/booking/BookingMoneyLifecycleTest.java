@@ -29,8 +29,8 @@ import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.service.VoucherLifecycleService;
-import com.moodcafe.wallet.dto.RefundPointCommand;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.dto.RefundPointCommand;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import com.moodcafe.wallet.service.MerchantWalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -90,7 +90,7 @@ class BookingMoneyLifecycleTest {
     @Mock
     private MerchantWalletService merchantWalletService;
     @Mock
-    private CustomerWalletService customerWalletService;
+    private CustomerLoyaltyService customerLoyaltyService;
     @Mock
     private LoyaltyRewardService loyaltyRewardService;
     @Mock
@@ -160,7 +160,7 @@ class BookingMoneyLifecycleTest {
                 voucherPointAllocationRepository,
                 reservationPricingService,
                 merchantWalletService,
-                customerWalletService,
+                customerLoyaltyService,
                 loyaltyRewardService,
                 voucherLifecycleService,
                 transactionManager
@@ -312,7 +312,7 @@ class BookingMoneyLifecycleTest {
 
         // Credit customer MoodPoints 1:1
         ArgumentCaptor<RefundPointCommand> cmdCaptor = ArgumentCaptor.forClass(RefundPointCommand.class);
-        verify(customerWalletService).creditRefundPoints(cmdCaptor.capture());
+        verify(customerLoyaltyService).creditRefundPoints(cmdCaptor.capture());
         RefundPointCommand capturedCmd = cmdCaptor.getValue();
         assertEquals(userId, capturedCmd.getUserId());
         assertEquals(150000L, capturedCmd.getPoints());
@@ -346,7 +346,7 @@ class BookingMoneyLifecycleTest {
                 bookingService.cancelBooking(bookingId, req)
         );
         assertTrue(ex.getMessage().contains("quá thời hạn"));
-        verify(customerWalletService, never()).creditRefundPoints(any());
+        verify(customerLoyaltyService, never()).creditRefundPoints(any());
         verify(merchantWalletService, never()).revertPending(any(), any(), any(), any(), any());
     }
 }

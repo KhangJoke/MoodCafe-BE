@@ -1,7 +1,7 @@
 package com.moodcafe.finance.service;
 
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
-import com.moodcafe.wallet.abstraction.repository.CustomerWalletRepository;
+import com.moodcafe.loyalty.abstraction.repository.CustomerWalletRepository;
 import com.moodcafe.wallet.abstraction.repository.MerchantWalletRepository;
 import com.moodcafe.wallet.abstraction.repository.WithdrawalRequestRepository;
 import lombok.AllArgsConstructor;

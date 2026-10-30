@@ -10,8 +10,8 @@ import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.entity.VoucherPointAllocation;
 import com.moodcafe.voucher.entity.VoucherRedemption;
 import com.moodcafe.voucher.entity.VoucherTemplate;
-import com.moodcafe.wallet.dto.PointAllocation;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.dto.PointAllocation;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,7 +37,7 @@ public class VoucherRedemptionService {
     private final CustomerVoucherRepository customerVoucherRepository;
     private final VoucherPointAllocationRepository allocationRepository;
     private final VoucherRedemptionRepository voucherRedemptionRepository;
-    private final CustomerWalletService customerWalletService;
+    private final CustomerLoyaltyService customerLoyaltyService;
 
     /**
      * Atomically redeems points for a personal voucher:
@@ -87,7 +87,7 @@ public class VoucherRedemptionService {
                 ? businessKey.trim()
                 : "REDEEM_" + userId + "_" + System.currentTimeMillis();
 
-        PointAllocation allocation = customerWalletService.allocatePoints(
+        PointAllocation allocation = customerLoyaltyService.allocatePoints(
                 userId,
                 template.getPointCost(),
                 key,

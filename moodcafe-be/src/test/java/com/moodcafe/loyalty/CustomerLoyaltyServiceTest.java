@@ -1,16 +1,16 @@
-package com.moodcafe.wallet;
+package com.moodcafe.loyalty;
 
+import com.moodcafe.loyalty.abstraction.repository.CustomerWalletRepository;
+import com.moodcafe.loyalty.abstraction.repository.PointLotRepository;
+import com.moodcafe.loyalty.abstraction.repository.PointTransactionRepository;
+import com.moodcafe.loyalty.dto.PointAllocation;
+import com.moodcafe.loyalty.dto.RefundPointCommand;
+import com.moodcafe.loyalty.dto.RewardPointCommand;
+import com.moodcafe.loyalty.entity.CustomerWallet;
+import com.moodcafe.loyalty.entity.PointLot;
+import com.moodcafe.loyalty.entity.PointTransaction;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import com.moodcafe.shared.exceptions.AppException;
-import com.moodcafe.wallet.abstraction.repository.CustomerWalletRepository;
-import com.moodcafe.wallet.abstraction.repository.PointLotRepository;
-import com.moodcafe.wallet.abstraction.repository.PointTransactionRepository;
-import com.moodcafe.wallet.dto.PointAllocation;
-import com.moodcafe.wallet.dto.RefundPointCommand;
-import com.moodcafe.wallet.dto.RewardPointCommand;
-import com.moodcafe.wallet.entity.CustomerWallet;
-import com.moodcafe.wallet.entity.PointLot;
-import com.moodcafe.wallet.entity.PointTransaction;
-import com.moodcafe.wallet.service.CustomerWalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-class PointWalletServiceTest {
+class CustomerLoyaltyServiceTest {
 
     @Mock
     private CustomerWalletRepository customerWalletRepository;
@@ -43,7 +43,7 @@ class PointWalletServiceTest {
     private PointTransactionRepository pointTransactionRepository;
 
     @InjectMocks
-    private CustomerWalletService walletService;
+    private CustomerLoyaltyService loyaltyService;
 
     private UUID userId;
     private CustomerWallet wallet;
@@ -74,7 +74,7 @@ class PointWalletServiceTest {
                 .description("Hoàn tiền đơn RES_001")
                 .build();
 
-        PointTransaction tx = walletService.creditRefundPoints(cmd);
+        PointTransaction tx = loyaltyService.creditRefundPoints(cmd);
 
         assertNotNull(tx);
         assertEquals(90000L, tx.getAmount());
@@ -106,7 +106,7 @@ class PointWalletServiceTest {
                 .businessKey("REFUND_123")
                 .build();
 
-        PointTransaction result = walletService.creditRefundPoints(cmd);
+        PointTransaction result = loyaltyService.creditRefundPoints(cmd);
 
         assertSame(existingTx, result);
         verify(customerWalletRepository, never()).findByUserIdWithLock(any());
@@ -130,7 +130,7 @@ class PointWalletServiceTest {
                 .businessKey("REWARD_CHECKIN_1")
                 .build();
 
-        PointTransaction tx = walletService.creditRewardPoints(cmd);
+        PointTransaction tx = loyaltyService.creditRewardPoints(cmd);
 
         assertNotNull(tx);
         assertEquals(1000L, tx.getAmount());
@@ -174,7 +174,7 @@ class PointWalletServiceTest {
         when(pointTransactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // Customer redeems a 50k voucher -> should consume 50k from REFUND lot, 0 from REWARD
-        PointAllocation allocation = walletService.allocatePoints(userId, 50000L, "REDEEM_VOUCHER_50K", "Đổi voucher 50k");
+        PointAllocation allocation = loyaltyService.allocatePoints(userId, 50000L, "REDEEM_VOUCHER_50K", "Đổi voucher 50k");
 
         assertNotNull(allocation);
         assertEquals(50000L, allocation.getTotalAllocatedPoints());
@@ -210,7 +210,7 @@ class PointWalletServiceTest {
         when(customerWalletRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(pointTransactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        PointAllocation allocation = walletService.allocatePoints(userId, 95000L, "REDEEM_95K", "Đổi voucher 95k");
+        PointAllocation allocation = loyaltyService.allocatePoints(userId, 95000L, "REDEEM_95K", "Đổi voucher 95k");
 
         assertNotNull(allocation);
         assertEquals(95000L, allocation.getTotalAllocatedPoints());
@@ -228,8 +228,9 @@ class PointWalletServiceTest {
         when(customerWalletRepository.findByUserIdWithLock(userId)).thenReturn(Optional.of(wallet));
 
         AppException ex = assertThrows(AppException.class, () ->
-                walletService.allocatePoints(userId, 50000L, "REDEEM_FAIL", "Đổi voucher 50k"));
+                loyaltyService.allocatePoints(userId, 50000L, "REDEEM_FAIL", "Đổi voucher 50k"));
 
         assertTrue(ex.getMessage().contains("Số dư MoodPoints không đủ"));
     }
 }
+

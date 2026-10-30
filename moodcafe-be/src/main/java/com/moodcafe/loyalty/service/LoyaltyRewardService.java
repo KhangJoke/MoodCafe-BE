@@ -6,8 +6,8 @@ import com.moodcafe.loyalty.abstraction.repository.ReservationLoyaltyRewardRepos
 import com.moodcafe.loyalty.entity.ReservationLoyaltyReward;
 import com.moodcafe.store.abstraction.repository.StoreReviewRepository;
 import com.moodcafe.store.entity.StoreReview;
-import com.moodcafe.wallet.dto.RewardPointCommand;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.dto.RewardPointCommand;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,19 +27,19 @@ public class LoyaltyRewardService {
     private static final long VERIFIED_REVIEW_POINTS = 50L;
 
     private final ReservationLoyaltyRewardRepository rewardRepository;
-    private final CustomerWalletService customerWalletService;
+    private final CustomerLoyaltyService customerLoyaltyService;
     private final StoreReviewRepository storeReviewRepository;
     private final BookingRepository bookingRepository;
 
     @Autowired
     public LoyaltyRewardService(
             ReservationLoyaltyRewardRepository rewardRepository,
-            CustomerWalletService customerWalletService,
+            CustomerLoyaltyService customerLoyaltyService,
             StoreReviewRepository storeReviewRepository,
             BookingRepository bookingRepository
     ) {
         this.rewardRepository = rewardRepository;
-        this.customerWalletService = customerWalletService;
+        this.customerLoyaltyService = customerLoyaltyService;
         this.storeReviewRepository = storeReviewRepository;
         this.bookingRepository = bookingRepository;
     }
@@ -73,7 +73,7 @@ public class LoyaltyRewardService {
                 .build();
         rewardRepository.save(reward);
 
-        customerWalletService.creditRewardPoints(RewardPointCommand.builder()
+        customerLoyaltyService.creditRewardPoints(RewardPointCommand.builder()
                 .userId(booking.getUser().getUserId())
                 .points(pointsToAward)
                 .rewardType("SPEND")
@@ -105,7 +105,7 @@ public class LoyaltyRewardService {
                 .build();
         rewardRepository.save(reward);
 
-        customerWalletService.creditRewardPoints(RewardPointCommand.builder()
+        customerLoyaltyService.creditRewardPoints(RewardPointCommand.builder()
                 .userId(booking.getUser().getUserId())
                 .points(ON_TIME_CHECK_IN_POINTS)
                 .rewardType("ON_TIME_CHECK_IN")
@@ -142,7 +142,7 @@ public class LoyaltyRewardService {
                 .build();
         rewardRepository.save(reward);
 
-        customerWalletService.creditRewardPoints(RewardPointCommand.builder()
+        customerLoyaltyService.creditRewardPoints(RewardPointCommand.builder()
                 .userId(booking.getUser().getUserId())
                 .points(SELF_CHECK_OUT_POINTS)
                 .rewardType("SELF_CHECK_OUT")
@@ -208,7 +208,7 @@ public class LoyaltyRewardService {
                     .build();
             rewardRepository.save(reward);
 
-            customerWalletService.creditRewardPoints(RewardPointCommand.builder()
+            customerLoyaltyService.creditRewardPoints(RewardPointCommand.builder()
                     .userId(reviewUserId)
                     .points(VERIFIED_REVIEW_POINTS)
                     .rewardType("VERIFIED_REVIEW")

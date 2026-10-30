@@ -29,7 +29,7 @@ import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.service.VoucherLifecycleService;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import com.moodcafe.wallet.service.MerchantWalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -86,7 +86,7 @@ class BookingPaymentLifecycleTest {
     @Mock
     private MerchantWalletService merchantWalletService;
     @Mock
-    private CustomerWalletService customerWalletService;
+    private CustomerLoyaltyService customerLoyaltyService;
     @Mock
     private LoyaltyRewardService loyaltyRewardService;
     @Mock
@@ -156,7 +156,7 @@ class BookingPaymentLifecycleTest {
                 voucherPointAllocationRepository,
                 reservationPricingService,
                 merchantWalletService,
-                customerWalletService,
+                customerLoyaltyService,
                 loyaltyRewardService,
                 voucherLifecycleService,
                 transactionManager
@@ -344,8 +344,8 @@ class BookingPaymentLifecycleTest {
         bookingService.confirmBookingPayment(123L, 160000L);
         assertEquals(BigDecimal.valueOf(160000), booking.getActualPaidAmount());
         assertTrue(booking.getRefundProcessed());
-        var command = org.mockito.ArgumentCaptor.forClass(com.moodcafe.wallet.dto.RefundPointCommand.class);
-        verify(customerWalletService, times(1)).creditRefundPoints(command.capture());
+        var command = org.mockito.ArgumentCaptor.forClass(com.moodcafe.loyalty.dto.RefundPointCommand.class);
+        verify(customerLoyaltyService, times(1)).creditRefundPoints(command.capture());
         assertEquals(160000L, command.getValue().getPoints());
         assertEquals("REFUND_BOOKING_" + booking.getBookingId(), command.getValue().getBusinessKey());
         verifyNoInteractions(merchantWalletService);
@@ -361,8 +361,8 @@ class BookingPaymentLifecycleTest {
         bookingService.confirmBookingPayment(123L, 100L);
         bookingService.confirmBookingPayment(123L, 40L);
         assertEquals(BigDecimal.valueOf(100), booking.getActualPaidAmount());
-        var command = org.mockito.ArgumentCaptor.forClass(com.moodcafe.wallet.dto.RefundPointCommand.class);
-        verify(customerWalletService, times(1)).creditRefundPoints(command.capture());
+        var command = org.mockito.ArgumentCaptor.forClass(com.moodcafe.loyalty.dto.RefundPointCommand.class);
+        verify(customerLoyaltyService, times(1)).creditRefundPoints(command.capture());
         assertEquals(60L, command.getValue().getPoints());
         assertTrue(command.getValue().getBusinessKey().contains("100"));
     }

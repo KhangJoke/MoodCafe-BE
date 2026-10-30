@@ -1,4 +1,4 @@
-package com.moodcafe.wallet.entity;
+package com.moodcafe.loyalty.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -18,9 +18,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "point_transactions", indexes = {
-        @Index(name = "idx_point_transactions_user", columnList = "user_id, created_at"),
-        @Index(name = "idx_point_transactions_key", columnList = "business_key", unique = true)
+@Table(name = "customer_point_transactions", indexes = {
+        @Index(name = "idx_customer_point_tx_user", columnList = "user_id"),
+        @Index(name = "idx_customer_point_tx_bizkey", columnList = "business_key", unique = true)
 })
 @Getter
 @Setter
@@ -34,31 +34,26 @@ public class PointTransaction {
     @Column(name = "transaction_id", nullable = false, updatable = false)
     private UUID transactionId;
 
-    @Column(name = "business_key", nullable = false, unique = true, length = 150)
+    @Column(name = "business_key", nullable = false, unique = true)
     private String businessKey;
 
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    /**
-     * Positive for credits, negative for debits.
-     */
     @Column(name = "amount", nullable = false)
-    private Long amount;
+    private Long amount; // Positive = credit, Negative = debit
 
     @Column(name = "balance_after", nullable = false)
     private Long balanceAfter;
 
-    /**
-     * REFUND_CREDIT, REWARD_CREDIT, REDEEM_DEBIT, REWARD_REVERSAL, EXPIRED_DEBIT
-     */
-    @Column(name = "tx_type", nullable = false, length = 50)
-    private String txType;
+    @Column(name = "tx_type", nullable = false, length = 30)
+    private String txType; // REFUND_CREDIT, REWARD_CREDIT, REDEEM_DEBIT, EXPIRE_DEBIT
 
-    @Column(name = "description", length = 255)
+    @Column(name = "description", length = 500)
     private String description;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }
+

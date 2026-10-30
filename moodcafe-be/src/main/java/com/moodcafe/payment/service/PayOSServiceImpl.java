@@ -7,7 +7,7 @@ import com.moodcafe.booking.abstraction.repository.BookingRepository;
 import com.moodcafe.booking.abstraction.service.BookingService;
 import com.moodcafe.booking.entity.Booking;
 import com.moodcafe.booking.entity.enums.BookingStatus;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import com.moodcafe.payment.abstraction.service.PaymentService;
 import com.moodcafe.payment.config.PayOSConfig;
 import com.moodcafe.payment.dto.request.PayOSWebhookRequest;
@@ -76,10 +76,10 @@ public class PayOSServiceImpl implements PaymentService {
 
     @Autowired(required = false)
     @Lazy
-    private CustomerWalletService customerWalletService;
+    private CustomerLoyaltyService customerLoyaltyService;
 
-    public void setCustomerWalletService(CustomerWalletService customerWalletService) {
-        this.customerWalletService = customerWalletService;
+    public void setCustomerLoyaltyService(CustomerLoyaltyService customerLoyaltyService) {
+        this.customerLoyaltyService = customerLoyaltyService;
     }
 
     public PayOSServiceImpl(

@@ -1,4 +1,4 @@
-package com.moodcafe.wallet.dto;
+package com.moodcafe.loyalty.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,3 +23,4 @@ public class RewardPointCommand {
     private String description;
     private Instant expiresAt;
 }
+

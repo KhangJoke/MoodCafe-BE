@@ -3,7 +3,7 @@ package com.moodcafe.voucher;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.service.VoucherLifecycleService;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +29,7 @@ class VoucherTransitionTest {
     @Mock
     private CustomerVoucherRepository customerVoucherRepository;
     @Mock
-    private CustomerWalletService customerWalletService;
+    private CustomerLoyaltyService customerLoyaltyService;
 
     @InjectMocks
     private VoucherLifecycleService voucherLifecycleService;

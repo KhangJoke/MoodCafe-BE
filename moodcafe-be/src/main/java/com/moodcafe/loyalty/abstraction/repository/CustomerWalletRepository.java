@@ -1,6 +1,6 @@
-package com.moodcafe.wallet.abstraction.repository;
+package com.moodcafe.loyalty.abstraction.repository;
 
-import com.moodcafe.wallet.entity.CustomerWallet;
+import com.moodcafe.loyalty.entity.CustomerWallet;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -20,3 +20,4 @@ public interface CustomerWalletRepository extends JpaRepository<CustomerWallet, 
     @Query("SELECT w FROM CustomerWallet w WHERE w.userId = :userId")
     Optional<CustomerWallet> findByUserIdWithLock(@Param("userId") UUID userId);
 }
+

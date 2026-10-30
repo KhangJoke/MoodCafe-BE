@@ -5,8 +5,8 @@ import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
-import com.moodcafe.wallet.dto.RefundPointCommand;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.dto.RefundPointCommand;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,7 +23,7 @@ public class VoucherLifecycleService {
 
     private final CustomerVoucherRepository customerVoucherRepository;
     private final VoucherPointAllocationRepository allocationRepository;
-    private final CustomerWalletService customerWalletService;
+    private final CustomerLoyaltyService customerLoyaltyService;
 
     /**
      * Locks a voucher when creating a reservation order awaiting payment.
@@ -147,7 +147,7 @@ public class VoucherLifecycleService {
         if (refundPoints != null && refundPoints > 0) {
             log.info("Refunding {} points from expired REFUND-backed voucher {} to user {}",
                     refundPoints, voucher.getVoucherId(), voucher.getUserId());
-            customerWalletService.creditRefundPoints(RefundPointCommand.builder()
+            customerLoyaltyService.creditRefundPoints(RefundPointCommand.builder()
                     .userId(voucher.getUserId())
                     .points(refundPoints)
                     .refundId(voucher.getVoucherId().toString())

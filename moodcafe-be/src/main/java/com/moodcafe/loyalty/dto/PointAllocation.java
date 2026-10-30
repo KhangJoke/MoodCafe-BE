@@ -1,4 +1,4 @@
-package com.moodcafe.wallet.dto;
+package com.moodcafe.loyalty.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -40,3 +40,4 @@ public class PointAllocation {
         private String fundingType; // REFUND or REWARD
     }
 }
+

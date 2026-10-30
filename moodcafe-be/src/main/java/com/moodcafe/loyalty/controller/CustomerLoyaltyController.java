@@ -1,14 +1,14 @@
-package com.moodcafe.wallet.controller;
+package com.moodcafe.loyalty.controller;
 
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.loyalty.abstraction.repository.PointTransactionRepository;
+import com.moodcafe.loyalty.dto.CustomerWalletResponse;
+import com.moodcafe.loyalty.entity.PointTransaction;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.shared.response.ApiResponse;
-import com.moodcafe.wallet.abstraction.repository.PointTransactionRepository;
-import com.moodcafe.wallet.dto.CustomerWalletResponse;
-import com.moodcafe.wallet.entity.PointTransaction;
-import com.moodcafe.wallet.service.CustomerLoyaltyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -60,3 +60,4 @@ public class CustomerLoyaltyController {
         return ResponseEntity.ok(ApiResponse.success(txs, "Lấy lịch sử biến động điểm thành công"));
     }
 }
+

@@ -1,6 +1,6 @@
-package com.moodcafe.wallet.abstraction.repository;
+package com.moodcafe.loyalty.abstraction.repository;
 
-import com.moodcafe.wallet.entity.PointTransaction;
+import com.moodcafe.loyalty.entity.PointTransaction;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,3 +16,4 @@ public interface PointTransactionRepository extends JpaRepository<PointTransacti
 
     Page<PointTransaction> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
 }
+

@@ -8,8 +8,8 @@ import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.entity.VoucherRedemption;
 import com.moodcafe.voucher.entity.VoucherTemplate;
 import com.moodcafe.voucher.service.VoucherRedemptionService;
-import com.moodcafe.wallet.dto.PointAllocation;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.dto.PointAllocation;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,7 +44,7 @@ class VoucherRedemptionIdempotencyTest {
     @Mock
     private VoucherRedemptionRepository voucherRedemptionRepository;
     @Mock
-    private CustomerWalletService customerWalletService;
+    private CustomerLoyaltyService customerLoyaltyService;
 
     private VoucherRedemptionService redemptionService;
 
@@ -61,7 +61,7 @@ class VoucherRedemptionIdempotencyTest {
                 customerVoucherRepository,
                 allocationRepository,
                 voucherRedemptionRepository,
-                customerWalletService
+                customerLoyaltyService
         );
     }
 
@@ -90,7 +90,7 @@ class VoucherRedemptionIdempotencyTest {
                         .fundingType("REFUND")
                         .build()))
                 .build();
-        when(customerWalletService.allocatePoints(eq(userId), eq(50000L), eq(intentKey), anyString())).thenReturn(allocation);
+        when(customerLoyaltyService.allocatePoints(eq(userId), eq(50000L), eq(intentKey), anyString())).thenReturn(allocation);
 
         UUID voucherId = UUID.randomUUID();
         when(customerVoucherRepository.save(any(CustomerVoucher.class))).thenAnswer(i -> {
@@ -105,7 +105,7 @@ class VoucherRedemptionIdempotencyTest {
         assertThat(result.getFaceValueVnd()).isEqualTo(new BigDecimal("50000"));
 
         // Verify allocation was recorded
-        verify(customerWalletService).allocatePoints(eq(userId), eq(50000L), eq(intentKey), anyString());
+        verify(customerLoyaltyService).allocatePoints(eq(userId), eq(50000L), eq(intentKey), anyString());
         // Verify idempotency redemption record was saved
         verify(voucherRedemptionRepository).save(any(VoucherRedemption.class));
     }
@@ -143,7 +143,7 @@ class VoucherRedemptionIdempotencyTest {
         assertThat(result.getCode()).isEqualTo("MOOD50K123");
 
         // Never deduct points again
-        verify(customerWalletService, never()).allocatePoints(any(), anyLong(), any(), any());
+        verify(customerLoyaltyService, never()).allocatePoints(any(), anyLong(), any(), any());
         // Never save new voucher
         verify(customerVoucherRepository, never()).save(any());
     }

@@ -1,4 +1,4 @@
-package com.moodcafe.wallet.entity;
+package com.moodcafe.loyalty.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,6 +19,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * Entity lưu trữ số dư điểm MoodPoints (Loyalty points) của khách hàng.
+ * Lưu ý: Khách hàng không có ví tiền mặt VND, bảng này thuần túy lưu trữ điểm tích lũy MoodPoints.
+ */
 @Entity
 @Table(name = "customer_wallets", indexes = {
         @Index(name = "idx_customer_wallets_user", columnList = "user_id", unique = true)
@@ -55,3 +59,4 @@ public class CustomerWallet {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
+

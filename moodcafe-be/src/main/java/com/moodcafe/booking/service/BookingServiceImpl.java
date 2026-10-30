@@ -50,8 +50,8 @@ import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationReposit
 import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.entity.VoucherPointAllocation;
 import com.moodcafe.voucher.service.VoucherLifecycleService;
-import com.moodcafe.wallet.dto.RefundPointCommand;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.dto.RefundPointCommand;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import com.moodcafe.wallet.service.MerchantWalletService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -118,7 +118,7 @@ public class BookingServiceImpl implements BookingService {
     private final VoucherPointAllocationRepository voucherPointAllocationRepository;
     private final ReservationPricingService reservationPricingService;
     private final MerchantWalletService merchantWalletService;
-    private final CustomerWalletService customerWalletService;
+    private final CustomerLoyaltyService customerLoyaltyService;
     private final LoyaltyRewardService loyaltyRewardService;
     private final VoucherLifecycleService voucherLifecycleService;
     private final PlatformTransactionManager transactionManager;
@@ -530,8 +530,8 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void creditBookingRefundPoints(Booking booking, long points, String businessKey, String description) {
-        if (customerWalletService != null && booking != null && booking.getUser() != null && points > 0) {
-            customerWalletService.creditRefundPoints(RefundPointCommand.builder()
+        if (customerLoyaltyService != null && booking != null && booking.getUser() != null && points > 0) {
+            customerLoyaltyService.creditRefundPoints(RefundPointCommand.builder()
                     .userId(booking.getUser().getUserId())
                     .points(points)
                     .refundId(booking.getBookingId() != null ? booking.getBookingId().toString() : null)

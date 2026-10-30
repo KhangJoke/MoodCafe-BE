@@ -1,4 +1,4 @@
-package com.moodcafe.wallet.dto;
+package com.moodcafe.loyalty.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,10 +13,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CustomerWalletResponse {
+public class RefundPointCommand {
     private UUID userId;
-    private Long pointsBalance;
-    @Builder.Default
-    private Long conversionRateVnd = 1L;
-    private Long spendablePoints;
+    private Long points;
+    private String refundId;
+    private String businessKey;
+    private String description;
 }
+

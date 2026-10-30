@@ -1,17 +1,17 @@
-package com.moodcafe.wallet.service;
+package com.moodcafe.loyalty.service;
 
+import com.moodcafe.loyalty.abstraction.repository.CustomerWalletRepository;
+import com.moodcafe.loyalty.abstraction.repository.PointLotRepository;
+import com.moodcafe.loyalty.abstraction.repository.PointTransactionRepository;
+import com.moodcafe.loyalty.dto.CustomerWalletResponse;
+import com.moodcafe.loyalty.dto.PointAllocation;
+import com.moodcafe.loyalty.dto.RefundPointCommand;
+import com.moodcafe.loyalty.dto.RewardPointCommand;
+import com.moodcafe.loyalty.entity.CustomerWallet;
+import com.moodcafe.loyalty.entity.PointLot;
+import com.moodcafe.loyalty.entity.PointTransaction;
 import com.moodcafe.shared.error.ErrorCode;
 import com.moodcafe.shared.exceptions.AppException;
-import com.moodcafe.wallet.abstraction.repository.CustomerWalletRepository;
-import com.moodcafe.wallet.abstraction.repository.PointLotRepository;
-import com.moodcafe.wallet.abstraction.repository.PointTransactionRepository;
-import com.moodcafe.wallet.dto.CustomerWalletResponse;
-import com.moodcafe.wallet.dto.PointAllocation;
-import com.moodcafe.wallet.dto.RefundPointCommand;
-import com.moodcafe.wallet.dto.RewardPointCommand;
-import com.moodcafe.wallet.entity.CustomerWallet;
-import com.moodcafe.wallet.entity.PointLot;
-import com.moodcafe.wallet.entity.PointTransaction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Primary;
@@ -26,8 +26,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Service managing user loyalty accounts and MoodPoints ledger.
- * Handles earning, expiration, refund crediting, and voucher allocation.
+ * Service quản lý tài khoản Loyalty và sổ cái điểm tích lũy MoodPoints của người dùng.
+ * Quản lý tích điểm (thưởng), hoàn điểm, hạn sử dụng điểm và phân bổ nguồn điểm khi đổi voucher.
  */
 @Slf4j
 @Service
@@ -80,7 +80,7 @@ public class CustomerLoyaltyService {
     }
 
     /**
-     * Credits 1:1 VND refund into MoodPoints. Never expires. Idempotent via businessKey.
+     * Hoàn tiền đặt bàn thành MoodPoints tỉ lệ 1:1 VNĐ. Không bao giờ hết hạn. Idempotent qua businessKey.
      */
     @Transactional
     public PointTransaction creditRefundPoints(RefundPointCommand cmd) {
@@ -95,7 +95,7 @@ public class CustomerLoyaltyService {
             return existing.get();
         }
 
-        // 2. Lock customer wallet
+        // 2. Lock customer loyalty wallet
         CustomerWallet wallet = getOrCreateWalletWithLock(cmd.getUserId());
 
         // 3. Create REFUND lot (expiresAt is NULL -> never expires)
@@ -128,7 +128,7 @@ public class CustomerLoyaltyService {
     }
 
     /**
-     * Credits reward / loyalty MoodPoints. Expires in 365 days by default. Idempotent via businessKey.
+     * Cộng điểm thưởng hành vi (đặt bàn, làm nhiệm vụ). Mặc định hết hạn sau 365 ngày. Idempotent qua businessKey.
      */
     @Transactional
     public PointTransaction creditRewardPoints(RewardPointCommand cmd) {
@@ -143,7 +143,7 @@ public class CustomerLoyaltyService {
             return existing.get();
         }
 
-        // 2. Lock customer wallet
+        // 2. Lock customer loyalty wallet
         CustomerWallet wallet = getOrCreateWalletWithLock(cmd.getUserId());
 
         Instant expiresAt = cmd.getExpiresAt() != null
@@ -180,11 +180,10 @@ public class CustomerLoyaltyService {
     }
 
     /**
-     * Atomically allocates points to redeem a voucher:
-     * - Consumes REFUND lots first (oldest first).
-     * - Then consumes REWARD lots (earliest expiring first).
-     * - Deducts remaining points from lots and decrements balance.
-     * - Records allocation split (refund vs reward) for accurate financial subsidy tracking.
+     * Phân bổ trừ điểm khi đổi voucher:
+     * - Trừ lot REFUND trước (theo thứ tự cũ nhất).
+     * - Sau đó trừ lot REWARD (theo thứ tự sắp hết hạn nhất).
+     * - Ghi nhận chi tiết nguồn vốn (REFUND vs REWARD) phục vụ đối soát tài chính trợ giá voucher.
      */
     @Transactional
     public PointAllocation allocatePoints(UUID userId, Long pointsToAllocate, String businessKey, String description) {
@@ -253,3 +252,4 @@ public class CustomerLoyaltyService {
                 .build();
     }
 }
+

@@ -28,7 +28,7 @@ import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.abstraction.repository.VoucherPointAllocationRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.service.VoucherLifecycleService;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import com.moodcafe.wallet.service.MerchantWalletService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -54,146 +54,169 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class BookingServiceWiringTest {
 
-    @Mock private BookingCommissionService commissionService;
-    @Mock private BookingRepository bookingRepository;
-    @Mock private TableCategoryRepository tableCategoryRepository;
-    @Mock private StoreBookingConfigRepository configRepository;
-    @Mock private StoreRepository storeRepository;
-    @Mock private StoreStaffService storeStaffService;
-    @Mock private CurrentUserService currentUserService;
-    @Mock private PaymentService paymentService;
-    @Mock private BookingMapper bookingMapper;
-    @Mock private StoreImageRepository storeImageRepository;
-    @Mock private NotificationDispatcherService notificationDispatcherService;
-    @Mock private RedisTemplate<String, String> redisTemplate;
-    @Mock private ObjectMapper objectMapper;
-    @Mock private CustomerVoucherRepository customerVoucherRepository;
-    @Mock private VoucherPointAllocationRepository voucherPointAllocationRepository;
-    @Mock private ReservationPricingService reservationPricingService;
-    @Mock private MerchantWalletService merchantWalletService;
-    @Mock private CustomerWalletService customerWalletService;
-    @Mock private LoyaltyRewardService loyaltyRewardService;
-    @Mock private VoucherLifecycleService voucherLifecycleService;
-    @Mock private PlatformTransactionManager transactionManager;
+        @Mock
+        private BookingCommissionService commissionService;
+        @Mock
+        private BookingRepository bookingRepository;
+        @Mock
+        private TableCategoryRepository tableCategoryRepository;
+        @Mock
+        private StoreBookingConfigRepository configRepository;
+        @Mock
+        private StoreRepository storeRepository;
+        @Mock
+        private StoreStaffService storeStaffService;
+        @Mock
+        private CurrentUserService currentUserService;
+        @Mock
+        private PaymentService paymentService;
+        @Mock
+        private BookingMapper bookingMapper;
+        @Mock
+        private StoreImageRepository storeImageRepository;
+        @Mock
+        private NotificationDispatcherService notificationDispatcherService;
+        @Mock
+        private RedisTemplate<String, String> redisTemplate;
+        @Mock
+        private ObjectMapper objectMapper;
+        @Mock
+        private CustomerVoucherRepository customerVoucherRepository;
+        @Mock
+        private VoucherPointAllocationRepository voucherPointAllocationRepository;
+        @Mock
+        private ReservationPricingService reservationPricingService;
+        @Mock
+        private MerchantWalletService merchantWalletService;
+        @Mock
+        private CustomerLoyaltyService customerLoyaltyService;
+        @Mock
+        private LoyaltyRewardService loyaltyRewardService;
+        @Mock
+        private VoucherLifecycleService voucherLifecycleService;
+        @Mock
+        private PlatformTransactionManager transactionManager;
 
-    private BookingServiceImpl bookingService;
+        private BookingServiceImpl bookingService;
 
-    private UUID userId;
-    private UUID storeId;
-    private User testUser;
-    private Store testStore;
-    private StoreBookingConfig testConfig;
+        private UUID userId;
+        private UUID storeId;
+        private User testUser;
+        private Store testStore;
+        private StoreBookingConfig testConfig;
 
-    @BeforeEach
-    void setUp() {
-        bookingService = new BookingServiceImpl(
-                commissionService,
-                bookingRepository, tableCategoryRepository, configRepository, storeRepository,
-                storeStaffService, currentUserService, paymentService, bookingMapper,
-                storeImageRepository, notificationDispatcherService, redisTemplate, objectMapper,
-                customerVoucherRepository, voucherPointAllocationRepository, reservationPricingService,
-                merchantWalletService, customerWalletService, loyaltyRewardService,
-                voucherLifecycleService, transactionManager
-        );
+        @BeforeEach
+        void setUp() {
+                bookingService = new BookingServiceImpl(
+                                commissionService,
+                                bookingRepository, tableCategoryRepository, configRepository, storeRepository,
+                                storeStaffService, currentUserService, paymentService, bookingMapper,
+                                storeImageRepository, notificationDispatcherService, redisTemplate, objectMapper,
+                                customerVoucherRepository, voucherPointAllocationRepository, reservationPricingService,
+                                merchantWalletService, customerLoyaltyService, loyaltyRewardService,
+                                voucherLifecycleService, transactionManager);
 
-        userId = UUID.randomUUID();
-        storeId = UUID.randomUUID();
-        testUser = User.builder().userId(userId).email("customer@test.com").build();
-        testStore = Store.builder().storeId(storeId).name("Test Store").build();
-        testConfig = StoreBookingConfig.builder()
-                .store(testStore)
-                .isBookingEnabled(true)
-                .gracePeriodMins(30)
-                .freeCancelHours(2)
-                .build();
-    }
-
-    @Test
-    @DisplayName("P1 Item 1: Spring can resolve constructor injection for both services unambiguously")
-    void testSpringConstructorResolution() {
-        try (var ctx = new AnnotationConfigApplicationContext()) {
-            ctx.registerBean(BookingCommissionService.class, () -> commissionService);
-            ctx.registerBean(BookingRepository.class, () -> bookingRepository);
-            ctx.registerBean(TableCategoryRepository.class, () -> tableCategoryRepository);
-            ctx.registerBean(StoreBookingConfigRepository.class, () -> configRepository);
-            ctx.registerBean(StoreRepository.class, () -> storeRepository);
-            ctx.registerBean(StoreStaffService.class, () -> storeStaffService);
-            ctx.registerBean(CurrentUserService.class, () -> currentUserService);
-            ctx.registerBean(PaymentService.class, () -> paymentService);
-            ctx.registerBean(BookingMapper.class, () -> bookingMapper);
-            ctx.registerBean(StoreImageRepository.class, () -> storeImageRepository);
-            ctx.registerBean(NotificationDispatcherService.class, () -> notificationDispatcherService);
-            ctx.registerBean("redisTemplate", RedisTemplate.class, () -> redisTemplate);
-            ctx.registerBean(ObjectMapper.class, () -> objectMapper);
-            ctx.registerBean(CustomerVoucherRepository.class, () -> customerVoucherRepository);
-            ctx.registerBean(VoucherPointAllocationRepository.class, () -> voucherPointAllocationRepository);
-            ctx.registerBean(ReservationPricingService.class, () -> reservationPricingService);
-            ctx.registerBean(MerchantWalletService.class, () -> merchantWalletService);
-            ctx.registerBean(CustomerWalletService.class, () -> customerWalletService);
-            ctx.registerBean(VoucherLifecycleService.class, () -> voucherLifecycleService);
-            ctx.registerBean(PlatformTransactionManager.class, () -> transactionManager);
-            ctx.registerBean(ReservationLoyaltyRewardRepository.class,
-                    () -> mock(ReservationLoyaltyRewardRepository.class));
-            ctx.registerBean(StoreReviewRepository.class,
-                    () -> mock(StoreReviewRepository.class));
-
-            ctx.register(LoyaltyRewardService.class);
-            ctx.register(BookingServiceImpl.class);
-
-            ctx.refresh();
-
-            assertThat(ctx.getBean(BookingServiceImpl.class)).isNotNull();
-            assertThat(ctx.getBean(LoyaltyRewardService.class)).isNotNull();
+                userId = UUID.randomUUID();
+                storeId = UUID.randomUUID();
+                testUser = User.builder().userId(userId).email("customer@test.com").build();
+                testStore = Store.builder().storeId(storeId).name("Test Store").build();
+                testConfig = StoreBookingConfig.builder()
+                                .store(testStore)
+                                .isBookingEnabled(true)
+                                .gracePeriodMins(30)
+                                .freeCancelHours(2)
+                                .build();
         }
-    }
 
-    @Test
-    @DisplayName("P1 Item 2 & P2 Item 14: Zero-Pay cancellation never refunds MoodPoints and safely restores voucher")
-    void testZeroPayCancel_RefundsZeroPointsAndRestoresVoucher() {
-        when(currentUserService.getCurrentUser()).thenReturn(testUser);
+        @Test
+        @DisplayName("P1 Item 1: Spring can resolve constructor injection for both services unambiguously")
+        void testSpringConstructorResolution() {
+                try (var ctx = new AnnotationConfigApplicationContext()) {
+                        ctx.registerBean(BookingCommissionService.class, () -> commissionService);
+                        ctx.registerBean(BookingRepository.class, () -> bookingRepository);
+                        ctx.registerBean(TableCategoryRepository.class, () -> tableCategoryRepository);
+                        ctx.registerBean(StoreBookingConfigRepository.class, () -> configRepository);
+                        ctx.registerBean(StoreRepository.class, () -> storeRepository);
+                        ctx.registerBean(StoreStaffService.class, () -> storeStaffService);
+                        ctx.registerBean(CurrentUserService.class, () -> currentUserService);
+                        ctx.registerBean(PaymentService.class, () -> paymentService);
+                        ctx.registerBean(BookingMapper.class, () -> bookingMapper);
+                        ctx.registerBean(StoreImageRepository.class, () -> storeImageRepository);
+                        ctx.registerBean(NotificationDispatcherService.class, () -> notificationDispatcherService);
+                        ctx.registerBean("redisTemplate", RedisTemplate.class, () -> redisTemplate);
+                        ctx.registerBean(ObjectMapper.class, () -> objectMapper);
+                        ctx.registerBean(CustomerVoucherRepository.class, () -> customerVoucherRepository);
+                        ctx.registerBean(VoucherPointAllocationRepository.class,
+                                        () -> voucherPointAllocationRepository);
+                        ctx.registerBean(ReservationPricingService.class, () -> reservationPricingService);
+                        ctx.registerBean(MerchantWalletService.class, () -> merchantWalletService);
+                        ctx.registerBean(CustomerLoyaltyService.class, () -> customerLoyaltyService);
+                        ctx.registerBean(VoucherLifecycleService.class, () -> voucherLifecycleService);
+                        ctx.registerBean(PlatformTransactionManager.class, () -> transactionManager);
+                        ctx.registerBean(ReservationLoyaltyRewardRepository.class,
+                                        () -> mock(ReservationLoyaltyRewardRepository.class));
+                        ctx.registerBean(StoreReviewRepository.class,
+                                        () -> mock(StoreReviewRepository.class));
 
-        UUID bookingId = UUID.randomUUID();
-        UUID voucherId = UUID.randomUUID();
-        CustomerVoucher voucher = CustomerVoucher.builder()
-                .voucherId(voucherId)
-                .userId(userId)
-                .build();
+                        ctx.register(LoyaltyRewardService.class);
+                        ctx.register(BookingServiceImpl.class);
 
-        Booking zeroPayBooking = Booking.builder()
-                .bookingId(bookingId)
-                .bookingCode("MCZERO01")
-                .user(testUser)
-                .store(testStore)
-                .status(BookingStatus.PAID_CONFIRMED)
-                .grossAmount(new BigDecimal("100000"))
-                .voucherDiscount(new BigDecimal("100000"))
-                .customerPaidAmount(BigDecimal.ZERO)
-                .actualPaidAmount(BigDecimal.ZERO)
-                .merchantNetAmount(new BigDecimal("85000"))
-                .voucher(voucher)
-                .startTime(Instant.now().plus(Duration.ofHours(5)))
-                .freeCancelDeadline(Instant.now().plus(Duration.ofHours(3)))
-                .build();
+                        ctx.refresh();
 
-        when(bookingRepository.findByIdForUpdate(bookingId)).thenReturn(Optional.of(zeroPayBooking));
-        when(configRepository.findByStoreStoreId(storeId)).thenReturn(Optional.of(testConfig));
-        when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(bookingMapper.toBookingResponse(any())).thenReturn(new BookingResponse());
-        when(commissionService.record(any(), eq("REVERSE"))).thenReturn(true);
+                        assertThat(ctx.getBean(BookingServiceImpl.class)).isNotNull();
+                        assertThat(ctx.getBean(LoyaltyRewardService.class)).isNotNull();
+                }
+        }
 
-        CancelBookingRequest request = new CancelBookingRequest();
-        request.setReason("Changed mind");
+        @Test
+        @DisplayName("P1 Item 2 & P2 Item 14: Zero-Pay cancellation never refunds MoodPoints and safely restores voucher")
+        void testZeroPayCancel_RefundsZeroPointsAndRestoresVoucher() {
+                when(currentUserService.getCurrentUser()).thenReturn(testUser);
 
-        BookingResponse response = bookingService.cancelBooking(bookingId, request);
-        assertThat(response).isNotNull();
+                UUID bookingId = UUID.randomUUID();
+                UUID voucherId = UUID.randomUUID();
+                CustomerVoucher voucher = CustomerVoucher.builder()
+                                .voucherId(voucherId)
+                                .userId(userId)
+                                .build();
 
-        // STRICT INVARIANT 1: Voucher restored via lifecycle service
-        verify(voucherLifecycleService).restoreVoucherForRefund(bookingId, voucherId);
+                Booking zeroPayBooking = Booking.builder()
+                                .bookingId(bookingId)
+                                .bookingCode("MCZERO01")
+                                .user(testUser)
+                                .store(testStore)
+                                .status(BookingStatus.PAID_CONFIRMED)
+                                .grossAmount(new BigDecimal("100000"))
+                                .voucherDiscount(new BigDecimal("100000"))
+                                .customerPaidAmount(BigDecimal.ZERO)
+                                .actualPaidAmount(BigDecimal.ZERO)
+                                .merchantNetAmount(new BigDecimal("85000"))
+                                .voucher(voucher)
+                                .startTime(Instant.now().plus(Duration.ofHours(5)))
+                                .freeCancelDeadline(Instant.now().plus(Duration.ofHours(3)))
+                                .build();
 
-        // STRICT INVARIANT 2: ZERO MoodPoints credited to wallet because actualPaidAmount was 0!
-        verifyNoInteractions(customerWalletService);
+                when(bookingRepository.findByIdForUpdate(bookingId)).thenReturn(Optional.of(zeroPayBooking));
+                when(configRepository.findByStoreStoreId(storeId)).thenReturn(Optional.of(testConfig));
+                when(bookingRepository.save(any(Booking.class))).thenAnswer(inv -> inv.getArgument(0));
+                when(bookingMapper.toBookingResponse(any())).thenReturn(new BookingResponse());
+                when(commissionService.record(any(), eq("REVERSE"))).thenReturn(true);
 
-        // Merchant pending was reverted
-        verify(merchantWalletService).revertPending(eq(storeId), eq(new BigDecimal("85000")), eq("BOOKING"), any(), any());
-    }
+                CancelBookingRequest request = new CancelBookingRequest();
+                request.setReason("Changed mind");
+
+                BookingResponse response = bookingService.cancelBooking(bookingId, request);
+                assertThat(response).isNotNull();
+
+                // STRICT INVARIANT 1: Voucher restored via lifecycle service
+                verify(voucherLifecycleService).restoreVoucherForRefund(bookingId, voucherId);
+
+                // STRICT INVARIANT 2: ZERO MoodPoints credited to wallet because
+                // actualPaidAmount was 0!
+                verifyNoInteractions(customerLoyaltyService);
+
+                // Merchant pending was reverted
+                verify(merchantWalletService).revertPending(eq(storeId), eq(new BigDecimal("85000")), eq("BOOKING"),
+                                any(), any());
+        }
 }
