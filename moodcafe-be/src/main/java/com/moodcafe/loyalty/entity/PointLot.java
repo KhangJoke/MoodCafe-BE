@@ -13,14 +13,15 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "customer_point_lots", indexes = {
-        @Index(name = "idx_customer_point_lots_user", columnList = "user_id"),
-        @Index(name = "idx_customer_point_lots_exp", columnList = "expires_at")
+@Table(name = "point_lots", indexes = {
+        @Index(name = "idx_point_lots_user_active", columnList = "user_id, source_type, remaining_points"),
+        @Index(name = "idx_point_lots_expiry", columnList = "expires_at")
 })
 @Getter
 @Setter
@@ -40,7 +41,7 @@ public class PointLot {
     @Column(name = "source_type", nullable = false, length = 30)
     private String sourceType; // REFUND or REWARD
 
-    @Column(name = "source_id")
+    @Column(name = "source_id", nullable = false, length = 100)
     private String sourceId;
 
     @Column(name = "issued_points", nullable = false)
@@ -55,5 +56,9 @@ public class PointLot {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 }
 

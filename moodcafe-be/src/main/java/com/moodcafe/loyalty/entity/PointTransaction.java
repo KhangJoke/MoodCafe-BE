@@ -18,9 +18,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "customer_point_transactions", indexes = {
-        @Index(name = "idx_customer_point_tx_user", columnList = "user_id"),
-        @Index(name = "idx_customer_point_tx_bizkey", columnList = "business_key", unique = true)
+@Table(name = "point_transactions", indexes = {
+        @Index(name = "idx_point_transactions_user", columnList = "user_id, created_at"),
+        @Index(name = "idx_point_transactions_key", columnList = "business_key", unique = true)
 })
 @Getter
 @Setter
@@ -34,7 +34,7 @@ public class PointTransaction {
     @Column(name = "transaction_id", nullable = false, updatable = false)
     private UUID transactionId;
 
-    @Column(name = "business_key", nullable = false, unique = true)
+    @Column(name = "business_key", nullable = false, unique = true, length = 150)
     private String businessKey;
 
     @Column(name = "user_id", nullable = false)
@@ -46,10 +46,10 @@ public class PointTransaction {
     @Column(name = "balance_after", nullable = false)
     private Long balanceAfter;
 
-    @Column(name = "tx_type", nullable = false, length = 30)
+    @Column(name = "tx_type", nullable = false, length = 50)
     private String txType; // REFUND_CREDIT, REWARD_CREDIT, REDEEM_DEBIT, EXPIRE_DEBIT
 
-    @Column(name = "description", length = 500)
+    @Column(name = "description", length = 255)
     private String description;
 
     @CreationTimestamp
