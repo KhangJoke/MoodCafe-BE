@@ -110,6 +110,10 @@ public class AdminQuestServiceImpl implements AdminQuestService {
         }
 
         String cleanCode = request.getCode().trim().toUpperCase();
+        if (request.getQuestGroup() == QuestGroup.DAILY || request.getQuestType() == QuestType.DAILY) {
+            throw new AppException(ErrorCode.BAD_REQUEST, "Hệ thống chỉ duy trì cố định 3 nhiệm vụ hàng ngày (DAILY). Vui lòng cập nhật chỉ tiêu hoặc bật/tắt kích hoạt trên 3 nhiệm vụ sẵn có thay vì tạo mới.");
+        }
+
         if (questRepository.findByCode(cleanCode).isPresent()) {
             throw new AppException(ErrorCode.CONFLICT, "Mã nhiệm vụ " + cleanCode + " đã tồn tại trong hệ thống");
         }
@@ -160,11 +164,15 @@ public class AdminQuestServiceImpl implements AdminQuestService {
         quest.setTargetValue(request.getTargetValue());
         quest.setRewardPoints(request.getRewardPoints());
 
-        if (request.getQuestGroup() != null) quest.setQuestGroup(request.getQuestGroup());
-        if (request.getQuestType() != null) quest.setQuestType(request.getQuestType());
-        if (request.getRuleType() != null) quest.setRuleType(request.getRuleType());
         if (request.getDisplayOrder() != null) quest.setDisplayOrder(request.getDisplayOrder());
         if (request.getIsActive() != null) quest.setActive(request.getIsActive());
+
+        // Đối với nhiệm vụ hệ thống (bao gồm 3 daily quest), giữ nguyên cấu trúc nhóm và luật
+        if (!quest.isSystem()) {
+            if (request.getQuestGroup() != null) quest.setQuestGroup(request.getQuestGroup());
+            if (request.getQuestType() != null) quest.setQuestType(request.getQuestType());
+            if (request.getRuleType() != null) quest.setRuleType(request.getRuleType());
+        }
 
         if (request.getRewardVoucherTemplateId() != null) {
             VoucherTemplate vt = voucherTemplateRepository.findById(request.getRewardVoucherTemplateId())
@@ -206,7 +214,7 @@ public class AdminQuestServiceImpl implements AdminQuestService {
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy nhiệm vụ"));
 
         if (quest.isSystem()) {
-            throw new AppException(ErrorCode.BAD_REQUEST, "Không được phép xóa nhiệm vụ cốt lõi của hệ thống");
+            throw new AppException(ErrorCode.BAD_REQUEST, "Không được phép xóa nhiệm vụ cố định của hệ thống. Bạn chỉ có thể bật/tắt trạng thái kích hoạt (isActive).");
         }
 
         quest.setDeleted(true);

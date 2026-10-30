@@ -19,9 +19,9 @@ import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.entity.VoucherTemplate;
-import com.moodcafe.wallet.dto.CustomerWalletResponse;
-import com.moodcafe.wallet.dto.RewardPointCommand;
-import com.moodcafe.wallet.service.CustomerWalletService;
+import com.moodcafe.loyalty.dto.CustomerWalletResponse;
+import com.moodcafe.loyalty.dto.RewardPointCommand;
+import com.moodcafe.loyalty.service.CustomerLoyaltyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -48,7 +48,7 @@ public class CustomerQuestServiceImpl implements CustomerQuestService {
     private final UserQuestProgressRepository progressRepository;
     private final UserTitleRepository userTitleRepository;
     private final CustomerVoucherRepository voucherRepository;
-    private final CustomerWalletService customerWalletService;
+    private final CustomerLoyaltyService customerLoyaltyService;
     private final CurrentUserService currentUserService;
 
     @Override
@@ -162,7 +162,7 @@ public class CustomerQuestServiceImpl implements CustomerQuestService {
 
         // 1. Cộng MoodPoints vào ví
         if (pointsAwarded > 0) {
-            customerWalletService.creditRewardPoints(RewardPointCommand.builder()
+            customerLoyaltyService.creditRewardPoints(RewardPointCommand.builder()
                     .userId(userId)
                     .points(pointsAwarded)
                     .rewardType("QUEST_REWARD")
@@ -225,7 +225,7 @@ public class CustomerQuestServiceImpl implements CustomerQuestService {
                     .build();
         }
 
-        CustomerWalletResponse wallet = customerWalletService.getWallet(userId);
+        CustomerWalletResponse wallet = customerLoyaltyService.getLoyaltyAccount(userId);
         long currentBalance = wallet != null && wallet.getPointsBalance() != null ? wallet.getPointsBalance() : 0L;
 
         return ClaimQuestRewardResponse.builder()

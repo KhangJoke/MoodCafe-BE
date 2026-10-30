@@ -59,7 +59,7 @@ public class AdminQuestController {
         return ResponseEntity.ok(ApiResponse.success(response, "Tạo nhiệm vụ mới thành công"));
     }
 
-    @Operation(summary = "Cập nhật thông tin cấu hình nhiệm vụ")
+    @Operation(summary = "Cập nhật thông tin cấu hình nhiệm vụ (Chỉ tiêu số lượng targetValue, điểm thưởng rewardPoints, bật/tắt isActive)")
     @PutMapping("/{questId}")
     public ResponseEntity<ApiResponse<QuestAdminResponse>> updateQuest(
             @PathVariable UUID questId,
@@ -69,7 +69,17 @@ public class AdminQuestController {
         return ResponseEntity.ok(ApiResponse.success(response, "Cập nhật nhiệm vụ thành công"));
     }
 
-    @Operation(summary = "Xóa (vô hiệu hóa/soft-delete) nhiệm vụ")
+    @Operation(summary = "Bật / tắt nhanh trạng thái kích hoạt của nhiệm vụ (Active / Inactive)")
+    @PatchMapping("/{questId}/toggle")
+    public ResponseEntity<ApiResponse<Void>> toggleQuestStatus(
+            @PathVariable UUID questId,
+            @RequestParam boolean active
+    ) {
+        adminQuestService.toggleQuestStatus(questId, active);
+        return ResponseEntity.ok(ApiResponse.success(null, "Cập nhật trạng thái nhiệm vụ thành công"));
+    }
+
+    @Operation(summary = "Xóa (vô hiệu hóa/soft-delete) nhiệm vụ (Không cho phép xóa nhiệm vụ hệ thống cố định)")
     @DeleteMapping("/{questId}")
     public ResponseEntity<ApiResponse<Void>> deleteQuest(@PathVariable UUID questId) {
         adminQuestService.deleteQuest(questId);

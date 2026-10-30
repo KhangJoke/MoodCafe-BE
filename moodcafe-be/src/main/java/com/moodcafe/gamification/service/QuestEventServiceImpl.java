@@ -197,10 +197,12 @@ public class QuestEventServiceImpl implements QuestEventService {
                 }
 
                 // Check quest-specific text & image conditions
-                if (q.getCode().contains("CRITIC")) {
+                if (q.getCode().contains("CRITIC") || q.getCode().contains("INFLUENCER")) {
                     if (charCount < 50 || imgCount < 1) continue;
                 } else if (q.getCode().contains("FIRST")) {
                     if (charCount < 30 || imgCount < 1) continue;
+                } else if (q.getCode().contains("VERIFIED") || q.getCode().contains("WRITER") || q.getCode().contains("SNAP")) {
+                    if (imgCount < 1) continue;
                 }
 
                 UserQuestProgress progress = getOrCreateProgress(user, q, periodKey);
