@@ -11,7 +11,6 @@ import com.moodcafe.gamification.abstraction.service.CustomerTitleService;
 import com.moodcafe.payment.dto.response.PayOSResponse;
 import com.moodcafe.store.abstraction.repository.StoreImageRepository;
 import com.moodcafe.store.entity.StoreImage;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -29,22 +28,20 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class BookingResponseEnricher {
 
     private final BookingMapper bookingMapper;
     private final StoreImageRepository storeImageRepository;
     private final RedisTemplate<String, String> redisTemplate;
     private final ObjectMapper objectMapper;
+    private final CustomerTitleService customerTitleService;
 
-    @Autowired(required = false)
-    private CustomerTitleService customerTitleService;
-
+    @Autowired
     public BookingResponseEnricher(BookingMapper bookingMapper,
                                   StoreImageRepository storeImageRepository,
                                   RedisTemplate<String, String> redisTemplate,
                                   ObjectMapper objectMapper,
-                                  CustomerTitleService customerTitleService) {
+                                  @Autowired(required = false) CustomerTitleService customerTitleService) {
         this.bookingMapper = bookingMapper;
         this.storeImageRepository = storeImageRepository;
         this.redisTemplate = redisTemplate;
