@@ -108,7 +108,7 @@ public class VisitVerificationServiceImpl implements VisitVerificationService {
                     currentUser.getUserId(), roundedDistance, GeoUtils.MAX_VERIFICATION_DISTANCE_METERS, storeId);
             throw new AppException(
                     ErrorCode.LOCATION_OUT_OF_RANGE,
-                    String.format("Bạn đang cách quán %.1fm, vượt quá bán kính cho phép (50m). Vui lòng di chuyển lại gần quán hoặc khu vực cửa sổ để bắt GPS tốt hơn.", roundedDistance),
+                    String.format("Bạn đang cách quán %.1fm, vượt quá bán kính cho phép (%.0fm). Vui lòng di chuyển lại gần quán hoặc khu vực cửa sổ để bắt GPS tốt hơn.", roundedDistance, GeoUtils.MAX_VERIFICATION_DISTANCE_METERS),
                     distanceDetails
             );
         }
