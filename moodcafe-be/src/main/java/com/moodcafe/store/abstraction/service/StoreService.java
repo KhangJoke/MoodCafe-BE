@@ -1,6 +1,7 @@
 package com.moodcafe.store.abstraction.service;
 
 import com.moodcafe.shared.response.PageResponse;
+import com.moodcafe.store.dto.request.AdminStoreImportRequest;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.StoreRegisterRequest;
 import com.moodcafe.store.dto.request.StoreResubmitRequest;
@@ -8,6 +9,7 @@ import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.StoreScheduleRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
+import com.moodcafe.store.dto.response.AdminStoreImportResponse;
 import com.moodcafe.store.dto.response.FeaturedMoodStoreResponse;
 import com.moodcafe.store.dto.response.MerchantDashboardResponse;
 import com.moodcafe.store.dto.response.StoreProfileResponse;
@@ -60,4 +62,6 @@ public interface StoreService {
     List<String> getActiveDistricts();
 
     PageResponse<StoreResponse> getAllStoresAdmin(StoreStatus status, String search, Pageable pageable);
+
+    AdminStoreImportResponse importStoresAdmin(AdminStoreImportRequest request);
 }

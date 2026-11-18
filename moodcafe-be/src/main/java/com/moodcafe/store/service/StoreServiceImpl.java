@@ -1,5 +1,6 @@
 package com.moodcafe.store.service;
 
+import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
 import com.moodcafe.configuration.abstraction.service.SystemConfigurationService;
@@ -19,11 +20,16 @@ import com.moodcafe.store.abstraction.service.StoreService;
 import com.moodcafe.store.abstraction.service.StoreStaffService;
 import com.moodcafe.store.abstraction.repository.TagRatingRepository;
 import com.moodcafe.store.abstraction.repository.StoreScheduleRepository;
+import com.moodcafe.store.dto.request.AdminStoreImportItemRequest;
+import com.moodcafe.store.dto.request.AdminStoreImportRequest;
 import com.moodcafe.store.dto.request.CreateStoreRequest;
 import com.moodcafe.store.dto.request.StoreScheduleRequest;
 import com.moodcafe.store.dto.request.StoreSearchRequest;
 import com.moodcafe.store.dto.request.UpdateStoreRequest;
 import com.moodcafe.store.dto.request.UpdateStoreStatusRequest;
+import com.moodcafe.store.dto.response.AdminStoreImportResponse;
+import com.moodcafe.store.dto.response.AdminStoreImportResponse.AdminStoreImportRowResult;
+import com.moodcafe.store.dto.response.AdminStoreImportResponse.ImportOutcome;
 import com.moodcafe.store.dto.response.FeaturedMoodStoreResponse;
 import com.moodcafe.store.dto.response.StoreProfileResponse;
 import com.moodcafe.store.dto.response.StoreScheduleResponse;
@@ -73,12 +79,17 @@ import com.moodcafe.tag.entity.enums.StoreTagStatus;
 import com.moodcafe.tag.mapper.StoreTagMapper;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.net.URI;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -90,6 +101,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -102,6 +114,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class StoreServiceImpl implements StoreService {
+
+    private static final String STORE_ROLE_OWNER = "OWNER";
+    private static final String SYSTEM_ROLE_CUSTOMER = "CUSTOMER";
+    private static final int MAX_HIGHLIGHTED_TAGS_PER_STORE = 4;
 
     private final StoreRepository storeRepository;
     private final StoreRoleRepository storeRoleRepository;
@@ -126,6 +142,20 @@ public class StoreServiceImpl implements StoreService {
     private final NotificationDispatcherService notificationDispatcherService;
     private final StoreScheduleRepository storeScheduleRepository;
     private final StoreScheduleMapper storeScheduleMapper;
+    private final UserRepository userRepository;
+    private final PlatformTransactionManager transactionManager;
+
+    @Value("${app.store.default-price-from:30000}")
+    private long defaultPriceFrom = 30000L;
+
+    @Value("${app.store.default-price-to:65000}")
+    private long defaultPriceTo = 65000L;
+
+    @Value("${app.store.import-max-batch-size:200}")
+    private int importMaxBatchSize = 200;
+
+    @Value("${cloudinary.cloud-name:}")
+    private String cloudinaryCloudName = "";
 
     @Override
     @Transactional
@@ -1798,5 +1828,405 @@ public class StoreServiceImpl implements StoreService {
     @Transactional(readOnly = true)
     public List<String> getActiveDistricts() {
         return storeRepository.findDistinctDistrictsByStatus(StoreStatus.ACTIVE);
+    }
+
+    @Override
+    public AdminStoreImportResponse importStoresAdmin(AdminStoreImportRequest request) {
+        currentUserService.requireSystemAdmin();
+
+        if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Danh sách quán import không được để trống");
+        }
+        if (request.getItems().size() > importMaxBatchSize) {
+            throw new AppException(ErrorCode.INVALID_INPUT,
+                    "Mỗi lần import tối đa " + importMaxBatchSize + " quán");
+        }
+
+        StoreStatus targetStatus = request.getTargetStatus() != null ? request.getTargetStatus() : StoreStatus.ACTIVE;
+        if (targetStatus != StoreStatus.ACTIVE && targetStatus != StoreStatus.PENDING && targetStatus != StoreStatus.INACTIVE) {
+            throw new AppException(ErrorCode.INVALID_INPUT, "Trạng thái đích chỉ hỗ trợ ACTIVE, PENDING hoặc INACTIVE");
+        }
+        boolean skipDuplicates = !Boolean.FALSE.equals(request.getSkipDuplicates());
+
+        StoreRole ownerRole = storeRoleRepository.findByName(STORE_ROLE_OWNER)
+                .orElseThrow(() -> new AppException(ErrorCode.STORE_ROLE_NOT_FOUND, "OWNER role not found"));
+
+        Map<String, User> userCache = new HashMap<>();
+        String defaultOwnerEmail = normalizeBlankToNull(request.getDefaultOwnerEmail());
+        if (defaultOwnerEmail != null) {
+            resolveImportOwnerUser(defaultOwnerEmail, userCache);
+        }
+
+        List<Tag> activeTags = tagRepository.findAllByActiveTrue();
+        Map<String, Tag> tagByName = new HashMap<>();
+        Map<UUID, Tag> tagById = new HashMap<>();
+        for (Tag t : activeTags) {
+            if (t.getTagId() != null) {
+                tagById.put(t.getTagId(), t);
+            }
+            if (t.getName() != null) {
+                tagByName.put(normalizeKey(t.getName()), t);
+            }
+        }
+
+        Set<String> existingStoreKeys = new HashSet<>();
+        for (Object[] row : storeRepository.findAllNormalizedNameAndAddress()) {
+            if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                existingStoreKeys.add(buildStoreDedupKey(String.valueOf(row[0]), String.valueOf(row[1])));
+            }
+        }
+
+        TransactionTemplate txTemplate = null;
+        if (transactionManager != null) {
+            txTemplate = new TransactionTemplate(transactionManager);
+            txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        }
+
+        List<AdminStoreImportRowResult> results = new ArrayList<>();
+        int createdCount = 0;
+        int skippedCount = 0;
+        int failedCount = 0;
+
+        for (int i = 0; i < request.getItems().size(); i++) {
+            AdminStoreImportItemRequest item = request.getItems().get(i);
+            int rowNumber = (item.getRowNumber() != null && item.getRowNumber() > 0) ? item.getRowNumber() : (i + 1);
+            String storeName = item.getName() != null ? item.getName().trim() : "";
+
+            try {
+                String address = item.getAddress() != null ? item.getAddress().trim() : "";
+                if (storeName.isEmpty() || address.isEmpty()) {
+                    throw new AppException(ErrorCode.INVALID_INPUT, "Tên quán và địa chỉ không được để trống");
+                }
+
+                String dedupKey = buildStoreDedupKey(storeName, address);
+                if (existingStoreKeys.contains(dedupKey)) {
+                    if (skipDuplicates) {
+                        skippedCount++;
+                        results.add(AdminStoreImportRowResult.builder()
+                                .rowNumber(rowNumber)
+                                .storeName(storeName)
+                                .outcome(ImportOutcome.SKIPPED)
+                                .message("Bỏ qua vì quán đã tồn tại (trùng tên và địa chỉ)")
+                                .build());
+                        continue;
+                    }
+                    throw new AppException(ErrorCode.INVALID_INPUT, "Quán đã tồn tại (trùng tên và địa chỉ)");
+                }
+
+                String effectiveOwnerEmail = normalizeBlankToNull(item.getOwnerEmail());
+                if (effectiveOwnerEmail == null) {
+                    effectiveOwnerEmail = defaultOwnerEmail;
+                }
+                if (effectiveOwnerEmail == null) {
+                    throw new AppException(ErrorCode.INVALID_INPUT,
+                            "Thiếu email chủ quán (vui lòng nhập cột ownerEmail hoặc cấu hình Email chủ quán mặc định)");
+                }
+                User ownerUser = resolveImportOwnerUser(effectiveOwnerEmail, userCache);
+
+                long[] resolvedPrices = resolveImportPrices(item.getPriceFrom(), item.getPriceTo());
+                List<Tag> resolvedTags = resolveAndValidateImportTags(item, tagById, tagByName);
+                List<String> cleanImageUrls = sanitizeImportImageUrls(item.getImageUrls());
+
+                final String finalAddress = address;
+                final long priceFrom = resolvedPrices[0];
+                final long priceTo = resolvedPrices[1];
+
+                UUID savedStoreId;
+                if (txTemplate != null) {
+                    savedStoreId = txTemplate.execute(status -> persistImportedStore(
+                            item, storeName, finalAddress, priceFrom, priceTo,
+                            targetStatus, ownerUser, ownerRole, resolvedTags, cleanImageUrls
+                    ));
+                } else {
+                    savedStoreId = persistImportedStore(
+                            item, storeName, finalAddress, priceFrom, priceTo,
+                            targetStatus, ownerUser, ownerRole, resolvedTags, cleanImageUrls
+                    );
+                }
+
+                existingStoreKeys.add(dedupKey);
+                createdCount++;
+                results.add(AdminStoreImportRowResult.builder()
+                        .rowNumber(rowNumber)
+                        .storeName(storeName)
+                        .outcome(ImportOutcome.CREATED)
+                        .storeId(savedStoreId)
+                        .message("Import quán thành công")
+                        .build());
+            } catch (Exception ex) {
+                failedCount++;
+                String errorMsg = (ex.getMessage() != null && !ex.getMessage().isBlank())
+                        ? ex.getMessage()
+                        : "Lỗi không xác định khi import dòng " + rowNumber;
+                results.add(AdminStoreImportRowResult.builder()
+                        .rowNumber(rowNumber)
+                        .storeName(storeName)
+                        .outcome(ImportOutcome.FAILED)
+                        .message(errorMsg)
+                        .build());
+            }
+        }
+
+        if (createdCount > 0) {
+            notificationDispatcherService.dispatchToAdmins(
+                    "Import hàng loạt cơ sở mới",
+                    String.format("Admin vừa import thành công %d quán cà phê mới (trạng thái %s).", createdCount, targetStatus),
+                    NotificationType.STORE_STATUS_UPDATED,
+                    "BULK_IMPORT",
+                    targetStatus == StoreStatus.PENDING ? "/admin/stores?status=PENDING" : "/admin/stores?status=ACTIVE"
+            );
+        }
+
+        return AdminStoreImportResponse.builder()
+                .totalSubmitted(request.getItems().size())
+                .createdCount(createdCount)
+                .skippedCount(skippedCount)
+                .failedCount(failedCount)
+                .results(results)
+                .build();
+    }
+
+    private UUID persistImportedStore(
+            AdminStoreImportItemRequest item,
+            String storeName,
+            String address,
+            long priceFrom,
+            long priceTo,
+            StoreStatus targetStatus,
+            User ownerUser,
+            StoreRole ownerRole,
+            List<Tag> resolvedTags,
+            List<String> cleanImageUrls
+    ) {
+        Store store = Store.builder()
+                .name(storeName)
+                .description(normalizeBlankToNull(item.getDescription()))
+                .address(address)
+                .district(normalizeBlankToNull(item.getDistrict()))
+                .latitude(item.getLatitude())
+                .longitude(item.getLongitude())
+                .openingTime(item.getOpeningTime())
+                .closingTime(item.getClosingTime())
+                .priceFrom(priceFrom)
+                .priceTo(priceTo)
+                .phone(normalizeBlankToNull(item.getPhone()))
+                .email(normalizeBlankToNull(item.getEmail()))
+                .status(targetStatus)
+                .allowResubmit(true)
+                .build();
+        store = storeRepository.save(store);
+
+        if (!cleanImageUrls.isEmpty()) {
+            boolean first = true;
+            for (String url : cleanImageUrls) {
+                storeImageRepository.save(StoreImage.builder()
+                        .store(store)
+                        .imageUrl(url)
+                        .primary(first)
+                        .build());
+                first = false;
+            }
+        }
+
+        boolean isApproved = targetStatus != StoreStatus.PENDING;
+        Instant now = Instant.now();
+        for (int idx = 0; idx < resolvedTags.size(); idx++) {
+            Tag tag = resolvedTags.get(idx);
+            storeTagRepository.save(StoreTag.builder()
+                    .storeId(store.getStoreId())
+                    .tag(tag)
+                    .status(isApproved ? StoreTagStatus.APPROVED : StoreTagStatus.PENDING)
+                    .approvedAt(isApproved ? now : null)
+                    .allowResubmit(true)
+                    .highlighted(idx < MAX_HIGHLIGHTED_TAGS_PER_STORE)
+                    .avgScore(0.0)
+                    .reviewCount(0)
+                    .build());
+        }
+
+        if (item.getOpeningTime() != null && item.getClosingTime() != null) {
+            List<StoreSchedule> schedules = new ArrayList<>();
+            for (DayOfWeek dow : DayOfWeek.values()) {
+                schedules.add(StoreSchedule.builder()
+                        .store(store)
+                        .dayOfWeek(dow)
+                        .openTime(item.getOpeningTime())
+                        .closeTime(item.getClosingTime())
+                        .isOpen(true)
+                        .build());
+            }
+            storeScheduleRepository.saveAll(schedules);
+        }
+
+        storeStaffRepository.save(StoreStaff.builder()
+                .store(store)
+                .user(ownerUser)
+                .storeRole(ownerRole)
+                .status(StoreStaffStatus.ACTIVE)
+                .joinedAt(now)
+                .build());
+
+        return store.getStoreId();
+    }
+
+    private User resolveImportOwnerUser(String email, Map<String, User> userCache) {
+        String key = normalizeKey(email);
+        User cached = userCache.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        User user = userRepository.findByEmail(email.trim())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND,
+                        "Không tìm thấy tài khoản chủ quán với email: " + email));
+        if (!user.isActive() || user.isDeleted()) {
+            throw new AppException(ErrorCode.USER_IS_BLOCKED,
+                    "Tài khoản chủ quán đang bị khóa hoặc ngừng hoạt động: " + email);
+        }
+        if (user.getRole() == null || !SYSTEM_ROLE_CUSTOMER.equalsIgnoreCase(user.getRole().getName())) {
+            throw new AppException(ErrorCode.FORBIDDEN,
+                    "Email chủ quán phải thuộc tài khoản CUSTOMER (không dùng tài khoản ADMIN/STAFF): " + email);
+        }
+        userCache.put(key, user);
+        return user;
+    }
+
+    private long[] resolveImportPrices(Long rawFrom, Long rawTo) {
+        Long priceFrom = rawFrom;
+        Long priceTo = rawTo;
+        if (priceFrom == null && priceTo == null) {
+            priceFrom = defaultPriceFrom;
+            priceTo = defaultPriceTo;
+        } else if (priceFrom != null && priceTo == null) {
+            priceTo = priceFrom;
+        } else if (priceTo != null && priceFrom == null) {
+            priceFrom = priceTo;
+        }
+        if (priceFrom < 0 || priceTo < 0 || priceFrom > priceTo) {
+            throw new AppException(ErrorCode.INVALID_INPUT,
+                    "Khoảng giá không hợp lệ (giá thấp nhất phải >= 0 và <= giá cao nhất)");
+        }
+        return new long[]{priceFrom, priceTo};
+    }
+
+    private List<Tag> resolveAndValidateImportTags(
+            AdminStoreImportItemRequest item,
+            Map<UUID, Tag> tagById,
+            Map<String, Tag> tagByName
+    ) {
+        Set<Tag> resolved = new LinkedHashSet<>();
+        List<String> unknownTags = new ArrayList<>();
+
+        if (item.getTagIds() != null) {
+            for (UUID tagId : item.getTagIds()) {
+                if (tagId == null) continue;
+                Tag tag = tagById.get(tagId);
+                if (tag == null) {
+                    unknownTags.add(tagId.toString());
+                } else {
+                    resolved.add(tag);
+                }
+            }
+        }
+
+        if (item.getTagNames() != null) {
+            for (String rawName : item.getTagNames()) {
+                if (rawName == null || rawName.isBlank()) continue;
+                Tag tag = tagByName.get(normalizeKey(rawName));
+                if (tag == null) {
+                    unknownTags.add(rawName.trim());
+                } else {
+                    resolved.add(tag);
+                }
+            }
+        }
+
+        if (!unknownTags.isEmpty()) {
+            throw new AppException(ErrorCode.TAG_NOT_FOUND,
+                    "Không tìm thấy thẻ Vibe trong hệ thống: " + String.join(", ", unknownTags));
+        }
+
+        if (resolved.isEmpty()) {
+            throw new AppException(ErrorCode.STORE_TAG_REQUIRED,
+                    "Vui lòng chọn ít nhất 1 thẻ Vibe cho quán");
+        }
+
+        Map<UUID, List<Tag>> sliderTagsByCategory = resolved.stream()
+                .filter(t -> t.getCategory() != null
+                        && t.getCategory().getTagCategoryId() != null
+                        && ControlType.SLIDER.equals(t.getCategory().getControlType()))
+                .collect(Collectors.groupingBy(t -> t.getCategory().getTagCategoryId()));
+
+        for (List<Tag> categoryTags : sliderTagsByCategory.values()) {
+            if (categoryTags.size() > 1) {
+                TagCategory cat = categoryTags.get(0).getCategory();
+                String label = cat.getCode() != null
+                        ? cat.getName() + " (" + cat.getCode() + ")"
+                        : cat.getName();
+                throw new AppException(ErrorCode.INVALID_INPUT,
+                        "Mỗi quán chỉ được chọn tối đa 1 thẻ thuộc nhóm " + label);
+            }
+        }
+
+        return new ArrayList<>(resolved);
+    }
+
+    private List<String> sanitizeImportImageUrls(List<String> imageUrls) {
+        if (imageUrls == null || imageUrls.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Set<String> unique = new LinkedHashSet<>();
+        for (String raw : imageUrls) {
+            if (raw == null || raw.isBlank()) {
+                continue;
+            }
+            String trimmed = raw.trim();
+            if (!isValidCloudinaryImageUrl(trimmed)) {
+                throw new AppException(ErrorCode.INVALID_INPUT,
+                        "Link ảnh quán bắt buộc phải là đường dẫn đã upload lên Cloudinary (https://res.cloudinary.com/...): " + trimmed);
+            }
+            unique.add(trimmed);
+        }
+        return new ArrayList<>(unique);
+    }
+
+    private boolean isValidCloudinaryImageUrl(String rawUrl) {
+        try {
+            URI uri = URI.create(rawUrl);
+            if (!"https".equalsIgnoreCase(uri.getScheme())) {
+                return false;
+            }
+            String host = uri.getHost();
+            if (host == null || !"res.cloudinary.com".equalsIgnoreCase(host)) {
+                return false;
+            }
+            String path = uri.getPath();
+            if (path == null || path.isBlank()) {
+                return false;
+            }
+            if (cloudinaryCloudName != null && !cloudinaryCloudName.isBlank()) {
+                String expectedPrefix = "/" + cloudinaryCloudName.trim() + "/";
+                if (!path.startsWith(expectedPrefix)) {
+                    return false;
+                }
+            }
+            return path.matches("^/[^/]+/(image|raw|video)/upload/.+");
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    private String normalizeBlankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
+    private String normalizeKey(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private String buildStoreDedupKey(String name, String address) {
+        return normalizeKey(name) + "||" + normalizeKey(address);
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.transaction.TransactionSystemException;
@@ -150,6 +151,38 @@ public class GlobalExceptionHandler {
     public void handleClientAbortException(Exception ex, HttpServletRequest request) {
         log.debug("Client cancelled/closed connection before response completion for request {}: {}",
                 request.getRequestURI(), ex.getMessage());
+    }
+
+    @ExceptionHandler(HttpMessageNotWritableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotWritable(
+            HttpMessageNotWritableException ex,
+            HttpServletRequest request
+    ) {
+        if (isClientAbort(ex)) {
+            log.debug("Client cancelled/closed connection while writing JSON response for request {}: {}",
+                    request.getRequestURI(), ex.getMessage());
+            return null;
+        }
+        log.error("Failed to write JSON response for request {}", request.getRequestURI(), ex);
+        return buildError(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Internal server error",
+                ErrorCode.INTERNAL_ERROR,
+                request.getRequestURI()
+        );
+    }
+
+    private boolean isClientAbort(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof ClientAbortException
+                    || current instanceof AsyncRequestNotUsableException
+                    || current instanceof IOException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     @ExceptionHandler(AsyncRequestTimeoutException.class)

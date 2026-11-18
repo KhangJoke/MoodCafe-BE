@@ -23,4 +23,7 @@ public interface StoreRepository extends JpaRepository<Store, UUID>, JpaSpecific
 
     @Query("SELECT DISTINCT s.district FROM Store s WHERE s.status = :status AND s.district IS NOT NULL AND TRIM(s.district) <> '' ORDER BY s.district ASC")
     List<String> findDistinctDistrictsByStatus(@Param("status") StoreStatus status);
+
+    @Query("SELECT LOWER(TRIM(s.name)), LOWER(TRIM(s.address)) FROM Store s")
+    List<Object[]> findAllNormalizedNameAndAddress();
 }
