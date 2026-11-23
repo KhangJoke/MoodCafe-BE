@@ -44,6 +44,19 @@ public class CustomerVoucher {
     @Column(name = "template_id")
     private UUID templateId;
 
+    /**
+     * MOODPOINT_REDEEM (redeemed via MoodPoints) or REVENUE_GRANT (funded from platform revenue, free for user).
+     */
+    @Column(name = "source_type", nullable = false, length = 30)
+    @Builder.Default
+    private String sourceType = "MOODPOINT_REDEEM";
+
+    @Column(name = "campaign_id")
+    private UUID campaignId;
+
+    @Column(name = "title", length = 150)
+    private String title;
+
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
 
