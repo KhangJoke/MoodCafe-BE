@@ -1759,25 +1759,30 @@ public class BookingServiceImpl implements BookingService {
         BigDecimal voucherDiscount = BigDecimal.ZERO;
         BigDecimal refundFunded = BigDecimal.ZERO;
         BigDecimal rewardFunded = BigDecimal.ZERO;
+        BigDecimal revenueFunded = BigDecimal.ZERO;
 
         if (voucher != null) {
             if (voucher.getMinGrossAmount() != null && grossAmount.compareTo(voucher.getMinGrossAmount()) < 0) {
                 throw new AppException(ErrorCode.BAD_REQUEST, "Đơn chưa đạt giá trị tối thiểu của voucher");
             }
             voucherDiscount = voucher.getFaceValueVnd() != null ? voucher.getFaceValueVnd() : BigDecimal.ZERO;
-            List<VoucherPointAllocation> allocations = voucherPointAllocationRepository.findByVoucherId(voucher.getVoucherId());
-            for (VoucherPointAllocation alloc : allocations) {
-                BigDecimal allocAmount = BigDecimal.valueOf(alloc.getAllocatedPoints());
-                if ("REFUND".equalsIgnoreCase(alloc.getFundingType())) {
-                    refundFunded = refundFunded.add(allocAmount);
-                } else {
-                    rewardFunded = rewardFunded.add(allocAmount);
+            if ("REVENUE_GRANT".equalsIgnoreCase(voucher.getSourceType())) {
+                revenueFunded = voucherDiscount;
+            } else {
+                List<VoucherPointAllocation> allocations = voucherPointAllocationRepository.findByVoucherId(voucher.getVoucherId());
+                for (VoucherPointAllocation alloc : allocations) {
+                    BigDecimal allocAmount = BigDecimal.valueOf(alloc.getAllocatedPoints());
+                    if ("REFUND".equalsIgnoreCase(alloc.getFundingType())) {
+                        refundFunded = refundFunded.add(allocAmount);
+                    } else {
+                        rewardFunded = rewardFunded.add(allocAmount);
+                    }
                 }
-            }
 
-            // Fallback if allocations not explicitly set
-            if (allocations.isEmpty() && voucherDiscount.compareTo(BigDecimal.ZERO) > 0) {
-                rewardFunded = voucherDiscount;
+                // Fallback if allocations not explicitly set
+                if (allocations.isEmpty() && voucherDiscount.compareTo(BigDecimal.ZERO) > 0) {
+                    rewardFunded = voucherDiscount;
+                }
             }
         }
 
@@ -1787,6 +1792,7 @@ public class BookingServiceImpl implements BookingService {
                 .voucherDiscount(voucherDiscount)
                 .voucherRefundFunded(refundFunded)
                 .voucherRewardFunded(rewardFunded)
+                .voucherRevenueFunded(revenueFunded)
                 .build();
 
         return reservationPricingService.quote(pricingInput);

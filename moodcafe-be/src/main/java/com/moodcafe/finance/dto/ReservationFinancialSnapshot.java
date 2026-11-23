@@ -63,4 +63,9 @@ public class ReservationFinancialSnapshot {
      * Portion of voucher funded by platform reward / marketing budget.
      */
     private BigDecimal voucherRewardFundedAmount;
+
+    /**
+     * Portion of voucher funded directly from platform revenue campaigns (pre-expensed in RevenueVoucherCampaign).
+     */
+    private BigDecimal voucherRevenueFundedAmount;
 }

@@ -28,4 +28,6 @@ public class ReservationPricingInput {
     private BigDecimal voucherRefundFunded = BigDecimal.ZERO;
     @Builder.Default
     private BigDecimal voucherRewardFunded = BigDecimal.ZERO;
+    @Builder.Default
+    private BigDecimal voucherRevenueFunded = BigDecimal.ZERO;
 }

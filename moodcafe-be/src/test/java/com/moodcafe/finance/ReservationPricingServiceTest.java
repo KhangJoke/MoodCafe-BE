@@ -179,4 +179,27 @@ class ReservationPricingServiceTest {
         assertEquals(new BigDecimal("11300"), snapshot.getCommissionAmount());
         assertEquals(new BigDecimal("64033"), snapshot.getMerchantNetAmount()); // 75333 - 11300 = 64033
     }
+
+    @Test
+    @DisplayName("Case 8: REVENUE_GRANT 50k exceeding commission 15k is ALLOWED (already expensed from platform revenue)")
+    void testRevenueFundedVoucherExceedingCommissionIsAllowed() {
+        ReservationPricingInput input = ReservationPricingInput.builder()
+                .storeId(storeId)
+                .grossAmount(new BigDecimal("100000"))
+                .voucherDiscount(new BigDecimal("50000"))
+                .voucherRevenueFunded(new BigDecimal("50000"))
+                .voucherRefundFunded(BigDecimal.ZERO)
+                .voucherRewardFunded(BigDecimal.ZERO)
+                .build();
+
+        ReservationFinancialSnapshot snapshot = pricingService.quote(input);
+
+        assertNotNull(snapshot);
+        assertEquals(new BigDecimal("100000"), snapshot.getGrossAmount());
+        assertEquals(new BigDecimal("50000"), snapshot.getVoucherDiscount());
+        assertEquals(new BigDecimal("50000"), snapshot.getCustomerPaidAmount());
+        assertEquals(new BigDecimal("15000"), snapshot.getCommissionAmount());
+        assertEquals(new BigDecimal("85000"), snapshot.getMerchantNetAmount());
+        assertEquals(new BigDecimal("50000"), snapshot.getVoucherRevenueFundedAmount());
+    }
 }

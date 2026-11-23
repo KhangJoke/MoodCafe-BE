@@ -68,12 +68,19 @@ public class ReservationPricingService {
                 ? input.getVoucherRewardFunded().setScale(0, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
+        BigDecimal revenueFunded = input.getVoucherRevenueFunded() != null
+                ? input.getVoucherRevenueFunded().setScale(0, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
         // Auto-balance funding if discount is provided without explicit split
-        if (voucherDiscount.compareTo(BigDecimal.ZERO) > 0 && refundFunded.add(rewardFunded).compareTo(BigDecimal.ZERO) == 0) {
+        if (voucherDiscount.compareTo(BigDecimal.ZERO) > 0
+                && refundFunded.add(rewardFunded).add(revenueFunded).compareTo(BigDecimal.ZERO) == 0) {
             rewardFunded = voucherDiscount;
         }
 
         // Anti-loss guard: REWARD funded discount must NOT exceed commission
+        // Note: REVENUE_GRANT vouchers are already expensed from Platform Revenue (Subscription + Booking Commission)
+        // when the campaign is created, so they are not blocked by per-booking commission cap.
         if (rewardFunded.compareTo(commissionAmount) > 0) {
             throw new AppException(ErrorCode.BAD_REQUEST,
                     "Mức giảm giá từ điểm thưởng (" + rewardFunded + "đ) vượt quá giới hạn trợ giá của sàn (tối đa bằng hoa hồng " + commissionAmount + "đ)");
@@ -95,6 +102,7 @@ public class ReservationPricingService {
                 .platformNetRevenue(platformNetRevenue)
                 .voucherRefundFundedAmount(refundFunded)
                 .voucherRewardFundedAmount(rewardFunded)
+                .voucherRevenueFundedAmount(revenueFunded)
                 .build();
     }
 
