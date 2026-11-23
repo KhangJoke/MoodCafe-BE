@@ -104,6 +104,8 @@ public class VoucherRedemptionService {
         CustomerVoucher voucher = CustomerVoucher.builder()
                 .userId(userId)
                 .templateId(template.getTemplateId())
+                .sourceType("MOODPOINT_REDEEM")
+                .title(template.getTitle())
                 .code(code)
                 .faceValueVnd(template.getFaceValueVnd())
                 .pointCost(template.getPointCost())

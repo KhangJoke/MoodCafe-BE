@@ -145,7 +145,9 @@ public class SecurityConfig {
                                 "/api/sponsored/placements/**",
                                 "/api/users/*/public-profile",
                                 "/api/users/*/reviews",
-                                "/api/users/*/vibesnaps"
+                                "/api/users/*/vibesnaps",
+                                "/api/users/*/vibesnaps",
+                                "/api/revenue-vouchers/available"
                         ).permitAll()
 
                         .requestMatchers(

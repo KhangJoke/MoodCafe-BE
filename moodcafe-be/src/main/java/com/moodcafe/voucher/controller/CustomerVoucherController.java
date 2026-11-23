@@ -7,6 +7,7 @@ import com.moodcafe.shared.exceptions.AppException;
 import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.voucher.abstraction.repository.CustomerVoucherRepository;
 import com.moodcafe.voucher.entity.CustomerVoucher;
+import com.moodcafe.voucher.service.RevenueVoucherCampaignService;
 import com.moodcafe.voucher.service.VoucherRedemptionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,10 +35,11 @@ import java.util.UUID;
 public class CustomerVoucherController {
 
     private final VoucherRedemptionService voucherRedemptionService;
+    private final RevenueVoucherCampaignService revenueVoucherCampaignService;
     private final CustomerVoucherRepository customerVoucherRepository;
     private final CurrentUserService currentUserService;
 
-    @Operation(summary = "1. Đổi MoodPoints lấy Voucher")
+    @Operation(summary = "1. Đổi MoodPoints lấy Voucher (Flow MoodPoint)")
     @PostMapping("/redeem/{templateId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<CustomerVoucher>> redeemVoucher(
@@ -50,6 +52,20 @@ public class CustomerVoucherController {
         }
         CustomerVoucher voucher = voucherRedemptionService.redeemVoucher(user.getUserId(), templateId, idempotencyKey);
         return ResponseEntity.ok(ApiResponse.success(voucher, "Đổi voucher thành công"));
+    }
+
+    @Operation(summary = "1b. Nhận Voucher miễn phí từ doanh thu MoodCafe (0 MoodPoints, không cần điều kiện đổi)")
+    @PostMapping("/claim/{campaignId}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<CustomerVoucher>> claimRevenueVoucher(
+            @PathVariable UUID campaignId
+    ) {
+        User user = currentUserService.getCurrentUser();
+        if (user == null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED, "Vui lòng đăng nhập");
+        }
+        CustomerVoucher voucher = revenueVoucherCampaignService.claimVoucher(user.getUserId(), campaignId);
+        return ResponseEntity.ok(ApiResponse.success(voucher, "Nhận voucher miễn phí thành công"));
     }
 
     @Operation(summary = "2. Xem danh sách voucher khả dụng để áp dụng khi đặt bàn")
