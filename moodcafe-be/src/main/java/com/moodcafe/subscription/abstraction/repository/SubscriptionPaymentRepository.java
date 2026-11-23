@@ -31,6 +31,22 @@ public interface SubscriptionPaymentRepository extends JpaRepository<Subscriptio
     @Query("SELECT COALESCE(SUM(sp.amount), 0) FROM SubscriptionPayment sp WHERE sp.status = 'SUCCESS' AND sp.paidAt >= :since")
     BigDecimal sumRevenueSince(@Param("since") Instant since);
 
+    @Query("""
+        SELECT COALESCE(SUM(sp.amount), 0) FROM SubscriptionPayment sp
+        WHERE sp.status = 'SUCCESS'
+          AND COALESCE(sp.paidAt, sp.createdAt) >= :from
+          AND COALESCE(sp.paidAt, sp.createdAt) < :to
+    """)
+    BigDecimal sumRevenueBetween(@Param("from") Instant from, @Param("to") Instant to);
+
+    @Query("""
+        SELECT COUNT(sp) FROM SubscriptionPayment sp
+        WHERE sp.status = 'SUCCESS'
+          AND COALESCE(sp.paidAt, sp.createdAt) >= :from
+          AND COALESCE(sp.paidAt, sp.createdAt) < :to
+    """)
+    long countSuccessfulPaymentsBetween(@Param("from") Instant from, @Param("to") Instant to);
+
     @Query("SELECT sp.subscriptionPlan.subscriptionPlanId, COALESCE(SUM(sp.amount), 0) " +
            "FROM SubscriptionPayment sp WHERE sp.status = 'SUCCESS' AND sp.subscriptionPlan IS NOT NULL " +
            "GROUP BY sp.subscriptionPlan.subscriptionPlanId")
