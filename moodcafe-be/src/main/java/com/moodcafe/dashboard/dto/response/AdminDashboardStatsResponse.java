@@ -19,6 +19,7 @@ public class AdminDashboardStatsResponse {
     private TagStats tags;
     private ReviewReportStats reviewReports;
     private SubscriptionStats subscriptions;
+    private FinanceStats finance;
     private UserStats users;
 
     @Getter
@@ -63,6 +64,24 @@ public class AdminDashboardStatsResponse {
         private long totalSubscribedOwners;
         private BigDecimal totalRevenue;
         private BigDecimal monthlyRevenue;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class FinanceStats {
+        private BigDecimal totalRevenue;
+        private BigDecimal subscriptionRevenue;
+        private BigDecimal bookingCommissionRevenue;
+        private BigDecimal totalExpenses;
+        private BigDecimal netIncome;
+        private BigDecimal monthlyRevenue;
+        private BigDecimal monthlySubscriptionRevenue;
+        private BigDecimal monthlyBookingCommissionRevenue;
+        private BigDecimal monthlyExpenses;
+        private BigDecimal monthlyNetIncome;
     }
 
     @Getter

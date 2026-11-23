@@ -2,6 +2,7 @@ package com.moodcafe.dashboard.service;
 
 import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.dashboard.dto.response.AdminDashboardStatsResponse;
+import com.moodcafe.finance.abstraction.repository.BookingCommissionEntryRepository;
 import com.moodcafe.store.abstraction.repository.ReviewReportRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.entity.enums.ReviewReportStatus;
@@ -11,6 +12,7 @@ import com.moodcafe.subscription.abstraction.repository.UserSubscriptionReposito
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
+import com.moodcafe.voucher.abstraction.repository.RevenueVoucherCampaignRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,6 +52,12 @@ class AdminDashboardServiceTest {
     @Mock
     private SubscriptionPaymentRepository subscriptionPaymentRepository;
 
+    @Mock
+    private BookingCommissionEntryRepository bookingCommissionEntryRepository;
+
+    @Mock
+    private RevenueVoucherCampaignRepository revenueVoucherCampaignRepository;
+
     @InjectMocks
     private AdminDashboardServiceImpl adminDashboardService;
 
@@ -77,6 +85,14 @@ class AdminDashboardServiceTest {
         when(userSubscriptionRepository.countDistinctUsersWithSubscriptions()).thenReturn(35L);
         when(subscriptionPaymentRepository.sumTotalRevenue()).thenReturn(new BigDecimal("24500000"));
         when(subscriptionPaymentRepository.sumRevenueSince(any(Instant.class))).thenReturn(new BigDecimal("8200000"));
+
+        // Booking commission & voucher expense mocks
+        when(bookingCommissionEntryRepository.sumSettledCommissionAllTime()).thenReturn(new BigDecimal("5500000"));
+        when(bookingCommissionEntryRepository.sumSettledCommissionBetween(any(Instant.class), any(Instant.class)))
+                .thenReturn(new BigDecimal("1800000"));
+        when(revenueVoucherCampaignRepository.sumTotalEffectiveExpenses()).thenReturn(new BigDecimal("3000000"));
+        when(revenueVoucherCampaignRepository.sumEffectiveExpensesBetween(any(Instant.class), any(Instant.class)))
+                .thenReturn(new BigDecimal("1000000"));
 
         // User mocks
         when(userRepository.count()).thenReturn(1250L);
@@ -107,6 +123,16 @@ class AdminDashboardServiceTest {
         assertThat(result.getSubscriptions().getTotalSubscribedOwners()).isEqualTo(35);
         assertThat(result.getSubscriptions().getTotalRevenue()).isEqualTo(new BigDecimal("24500000"));
         assertThat(result.getSubscriptions().getMonthlyRevenue()).isEqualTo(new BigDecimal("8200000"));
+
+        // Verify finance (Revenue = Sub + Booking Commission, Net Income = Revenue - Expenses)
+        assertThat(result.getFinance().getTotalRevenue()).isEqualTo(new BigDecimal("30000000"));
+        assertThat(result.getFinance().getSubscriptionRevenue()).isEqualTo(new BigDecimal("24500000"));
+        assertThat(result.getFinance().getBookingCommissionRevenue()).isEqualTo(new BigDecimal("5500000"));
+        assertThat(result.getFinance().getTotalExpenses()).isEqualTo(new BigDecimal("3000000"));
+        assertThat(result.getFinance().getNetIncome()).isEqualTo(new BigDecimal("27000000"));
+        assertThat(result.getFinance().getMonthlyRevenue()).isEqualTo(new BigDecimal("10000000"));
+        assertThat(result.getFinance().getMonthlyExpenses()).isEqualTo(new BigDecimal("1000000"));
+        assertThat(result.getFinance().getMonthlyNetIncome()).isEqualTo(new BigDecimal("9000000"));
 
         // Verify users
         assertThat(result.getUsers().getTotal()).isEqualTo(1250);

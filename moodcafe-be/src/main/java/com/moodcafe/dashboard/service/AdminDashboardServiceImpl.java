@@ -3,6 +3,7 @@ package com.moodcafe.dashboard.service;
 import com.moodcafe.auth.abstraction.repository.UserRepository;
 import com.moodcafe.dashboard.abstraction.service.AdminDashboardService;
 import com.moodcafe.dashboard.dto.response.AdminDashboardStatsResponse;
+import com.moodcafe.finance.abstraction.repository.BookingCommissionEntryRepository;
 import com.moodcafe.store.abstraction.repository.ReviewReportRepository;
 import com.moodcafe.store.abstraction.repository.StoreRepository;
 import com.moodcafe.store.entity.enums.ReviewReportStatus;
@@ -12,6 +13,7 @@ import com.moodcafe.subscription.abstraction.repository.UserSubscriptionReposito
 import com.moodcafe.tag.abstraction.repository.StoreTagRepository;
 import com.moodcafe.tag.abstraction.repository.TagRepository;
 import com.moodcafe.tag.entity.enums.StoreTagStatus;
+import com.moodcafe.voucher.abstraction.repository.RevenueVoucherCampaignRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +34,8 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
     private final UserRepository userRepository;
     private final UserSubscriptionRepository userSubscriptionRepository;
     private final SubscriptionPaymentRepository subscriptionPaymentRepository;
+    private final BookingCommissionEntryRepository bookingCommissionEntryRepository;
+    private final RevenueVoucherCampaignRepository revenueVoucherCampaignRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -86,16 +90,45 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .total(reviewReportsTotal)
                 .build();
 
-        // 4. Subscriptions stats
+        // 4. Subscriptions & Platform Finance stats
         long totalSubscribedOwners = userSubscriptionRepository.countDistinctUsersWithSubscriptions();
-        BigDecimal totalRevenue = subscriptionPaymentRepository.sumTotalRevenue();
-        Instant startOfMonth = Instant.now().minus(30, ChronoUnit.DAYS);
-        BigDecimal monthlyRevenue = subscriptionPaymentRepository.sumRevenueSince(startOfMonth);
+        BigDecimal totalSubRevenue = subscriptionPaymentRepository.sumTotalRevenue();
+        totalSubRevenue = totalSubRevenue != null ? totalSubRevenue : BigDecimal.ZERO;
+        Instant now = Instant.now();
+        Instant startOfMonth = now.minus(30, ChronoUnit.DAYS);
+        BigDecimal monthlySubRevenue = subscriptionPaymentRepository.sumRevenueSince(startOfMonth);
+        monthlySubRevenue = monthlySubRevenue != null ? monthlySubRevenue : BigDecimal.ZERO;
 
         AdminDashboardStatsResponse.SubscriptionStats subscriptionStats = AdminDashboardStatsResponse.SubscriptionStats.builder()
                 .totalSubscribedOwners(totalSubscribedOwners)
-                .totalRevenue(totalRevenue != null ? totalRevenue : BigDecimal.ZERO)
-                .monthlyRevenue(monthlyRevenue != null ? monthlyRevenue : BigDecimal.ZERO)
+                .totalRevenue(totalSubRevenue)
+                .monthlyRevenue(monthlySubRevenue)
+                .build();
+
+        BigDecimal totalBookingCommission = bookingCommissionEntryRepository.sumSettledCommissionAllTime();
+        totalBookingCommission = totalBookingCommission != null ? totalBookingCommission : BigDecimal.ZERO;
+        BigDecimal monthlyBookingCommission = bookingCommissionEntryRepository.sumSettledCommissionBetween(startOfMonth, now);
+        monthlyBookingCommission = monthlyBookingCommission != null ? monthlyBookingCommission : BigDecimal.ZERO;
+
+        BigDecimal totalExpenses = revenueVoucherCampaignRepository.sumTotalEffectiveExpenses();
+        totalExpenses = totalExpenses != null ? totalExpenses : BigDecimal.ZERO;
+        BigDecimal monthlyExpenses = revenueVoucherCampaignRepository.sumEffectiveExpensesBetween(startOfMonth, now);
+        monthlyExpenses = monthlyExpenses != null ? monthlyExpenses : BigDecimal.ZERO;
+
+        BigDecimal combinedTotalRevenue = totalSubRevenue.add(totalBookingCommission);
+        BigDecimal combinedMonthlyRevenue = monthlySubRevenue.add(monthlyBookingCommission);
+
+        AdminDashboardStatsResponse.FinanceStats financeStats = AdminDashboardStatsResponse.FinanceStats.builder()
+                .totalRevenue(combinedTotalRevenue)
+                .subscriptionRevenue(totalSubRevenue)
+                .bookingCommissionRevenue(totalBookingCommission)
+                .totalExpenses(totalExpenses)
+                .netIncome(combinedTotalRevenue.subtract(totalExpenses))
+                .monthlyRevenue(combinedMonthlyRevenue)
+                .monthlySubscriptionRevenue(monthlySubRevenue)
+                .monthlyBookingCommissionRevenue(monthlyBookingCommission)
+                .monthlyExpenses(monthlyExpenses)
+                .monthlyNetIncome(combinedMonthlyRevenue.subtract(monthlyExpenses))
                 .build();
 
         // 5. Users stats
@@ -127,6 +160,7 @@ public class AdminDashboardServiceImpl implements AdminDashboardService {
                 .tags(tagStats)
                 .reviewReports(reviewReportStats)
                 .subscriptions(subscriptionStats)
+                .finance(financeStats)
                 .users(userStats)
                 .build();
     }
