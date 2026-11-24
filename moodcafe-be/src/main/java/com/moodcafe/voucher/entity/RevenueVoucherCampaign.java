@@ -87,6 +87,10 @@ public class RevenueVoucherCampaign {
     @Column(name = "released_budget_vnd", nullable = false, precision = 14, scale = 2)
     private BigDecimal releasedBudgetVnd = BigDecimal.ZERO;
 
+    @Builder.Default
+    @Column(name = "exclude_from_finance", nullable = false)
+    private Boolean excludeFromFinance = false;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     @Column(name = "status", nullable = false, length = 30)
@@ -110,6 +114,9 @@ public class RevenueVoucherCampaign {
     private Instant updatedAt;
 
     public BigDecimal getEffectiveExpenseVnd() {
+        if (Boolean.TRUE.equals(excludeFromFinance)) {
+            return BigDecimal.ZERO;
+        }
         BigDecimal allocated = allocatedBudgetVnd != null ? allocatedBudgetVnd : BigDecimal.ZERO;
         BigDecimal released = releasedBudgetVnd != null ? releasedBudgetVnd : BigDecimal.ZERO;
         return allocated.subtract(released).max(BigDecimal.ZERO);

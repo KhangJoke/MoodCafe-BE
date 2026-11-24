@@ -39,27 +39,30 @@ public interface RevenueVoucherCampaignRepository
     """)
     List<RevenueVoucherCampaign> findAvailableClaimableCampaigns(@Param("now") Instant now);
 
-    @Query("SELECT COALESCE(SUM(c.allocatedBudgetVnd - c.releasedBudgetVnd), 0) FROM RevenueVoucherCampaign c")
+    @Query("SELECT COALESCE(SUM(c.allocatedBudgetVnd - c.releasedBudgetVnd), 0) FROM RevenueVoucherCampaign c WHERE c.excludeFromFinance = false")
     BigDecimal sumTotalEffectiveExpenses();
 
     @Query("""
         SELECT COALESCE(SUM(c.allocatedBudgetVnd - c.releasedBudgetVnd), 0)
         FROM RevenueVoucherCampaign c
-        WHERE c.fundingSource = :fundingSource
+        WHERE c.excludeFromFinance = false
+          AND c.fundingSource = :fundingSource
     """)
     BigDecimal sumEffectiveExpensesByFundingSource(@Param("fundingSource") RevenueFundingSource fundingSource);
 
     @Query("""
         SELECT COALESCE(SUM(c.allocatedBudgetVnd - c.releasedBudgetVnd), 0)
         FROM RevenueVoucherCampaign c
-        WHERE c.createdAt >= :from AND c.createdAt < :to
+        WHERE c.excludeFromFinance = false
+          AND c.createdAt >= :from AND c.createdAt < :to
     """)
     BigDecimal sumEffectiveExpensesBetween(@Param("from") Instant from, @Param("to") Instant to);
 
     @Query("""
         SELECT COALESCE(SUM(c.allocatedBudgetVnd - c.releasedBudgetVnd), 0)
         FROM RevenueVoucherCampaign c
-        WHERE c.fundingSource = :fundingSource
+        WHERE c.excludeFromFinance = false
+          AND c.fundingSource = :fundingSource
           AND c.createdAt >= :from AND c.createdAt < :to
     """)
     BigDecimal sumEffectiveExpensesByFundingSourceBetween(
@@ -70,7 +73,8 @@ public interface RevenueVoucherCampaignRepository
 
     @Query("""
         SELECT c FROM RevenueVoucherCampaign c
-        WHERE c.createdAt >= :from AND c.createdAt < :to
+        WHERE c.excludeFromFinance = false
+          AND c.createdAt >= :from AND c.createdAt < :to
         ORDER BY c.createdAt ASC
     """)
     List<RevenueVoucherCampaign> findAllCreatedBetween(@Param("from") Instant from, @Param("to") Instant to);

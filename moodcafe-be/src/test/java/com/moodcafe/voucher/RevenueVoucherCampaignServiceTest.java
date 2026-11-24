@@ -183,5 +183,34 @@ class RevenueVoucherCampaignServiceTest {
         assertThat(res.getReleasedBudgetVnd()).isEqualByComparingTo("140000"); // 7 unclaimed * 20,000
         assertThat(res.getEffectiveExpenseVnd()).isEqualByComparingTo("60000"); // 3 issued * 20,000
     }
+
+    @Test
+    @DisplayName("Cancelling DB-seeded campaign (excludeFromFinance=true) just cancels without releasing budget or changing expenses")
+    void cancelCampaign_ExcludedFromFinance_JustCancels() {
+        UUID campaignId = UUID.randomUUID();
+        RevenueVoucherCampaign campaign = RevenueVoucherCampaign.builder()
+                .campaignId(campaignId)
+                .title("Ưu đãi MoodCafe dành cho người mới")
+                .distributionType(RevenueVoucherDistributionType.CLAIMABLE_POOL)
+                .fundingSource(RevenueFundingSource.ALL)
+                .faceValueVnd(new BigDecimal("15000"))
+                .totalQuantity(100)
+                .issuedQuantity(5)
+                .allocatedBudgetVnd(BigDecimal.ZERO)
+                .releasedBudgetVnd(BigDecimal.ZERO)
+                .excludeFromFinance(true)
+                .status(RevenueCampaignStatus.ACTIVE)
+                .build();
+
+        when(campaignRepository.findByIdWithLock(campaignId)).thenReturn(Optional.of(campaign));
+        when(campaignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(customerVoucherRepository.countByCampaignIdAndStatus(campaignId, "USED")).thenReturn(2L);
+
+        RevenueVoucherCampaignResponse res = service.updateCampaignStatus(campaignId, RevenueCampaignStatus.CANCELLED);
+
+        assertThat(res.getStatus()).isEqualTo(RevenueCampaignStatus.CANCELLED);
+        assertThat(res.getReleasedBudgetVnd()).isEqualByComparingTo("0");
+        assertThat(res.getEffectiveExpenseVnd()).isEqualByComparingTo("0");
+    }
 }
 

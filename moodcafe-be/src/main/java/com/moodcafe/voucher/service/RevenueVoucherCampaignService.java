@@ -356,12 +356,18 @@ public class RevenueVoucherCampaignService {
         }
 
         if (newStatus == RevenueCampaignStatus.CANCELLED) {
-            int remaining = campaign.getRemainingQuantity();
-            BigDecimal unusedBudget = campaign.getFaceValueVnd().multiply(BigDecimal.valueOf(remaining));
-            campaign.setReleasedBudgetVnd(unusedBudget);
-            campaign.setStatus(RevenueCampaignStatus.CANCELLED);
-            log.info("Cancelled revenue voucher campaign {}: released unused budget {} VND ({} unclaimed vouchers)",
-                    campaignId, unusedBudget, remaining);
+            if (Boolean.TRUE.equals(campaign.getExcludeFromFinance())) {
+                campaign.setStatus(RevenueCampaignStatus.CANCELLED);
+                log.info("Cancelled DB-seeded revenue voucher campaign {} (excludeFromFinance=true): status set to CANCELLED with no budget change",
+                        campaignId);
+            } else {
+                int remaining = campaign.getRemainingQuantity();
+                BigDecimal unusedBudget = campaign.getFaceValueVnd().multiply(BigDecimal.valueOf(remaining));
+                campaign.setReleasedBudgetVnd(unusedBudget);
+                campaign.setStatus(RevenueCampaignStatus.CANCELLED);
+                log.info("Cancelled revenue voucher campaign {}: released unused budget {} VND ({} unclaimed vouchers)",
+                        campaignId, unusedBudget, remaining);
+            }
         } else {
             campaign.setStatus(newStatus);
         }
