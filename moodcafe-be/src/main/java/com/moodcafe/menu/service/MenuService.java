@@ -24,6 +24,8 @@ public interface MenuService {
 
     Page<MenuItemResponse> getItems(UUID storeId, UUID categoryId, String q, Boolean isAvailable, Pageable pageable);
 
+    MenuItemResponse getItemDetail(UUID storeId, UUID itemId);
+
     MenuItemResponse createItem(UUID storeId, CreateMenuItemRequest request);
 
     MenuItemResponse updateItem(UUID storeId, UUID itemId, UpdateMenuItemRequest request);

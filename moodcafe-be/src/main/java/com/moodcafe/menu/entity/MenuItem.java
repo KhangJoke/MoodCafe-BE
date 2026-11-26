@@ -11,6 +11,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -74,4 +76,9 @@ public class MenuItem {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("displayOrder ASC, createdAt ASC")
+    private List<MenuItemSize> sizes = new ArrayList<>();
 }

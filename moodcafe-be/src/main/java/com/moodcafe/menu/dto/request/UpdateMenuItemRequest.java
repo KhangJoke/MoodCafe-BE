@@ -1,5 +1,6 @@
 package com.moodcafe.menu.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -8,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -29,4 +31,11 @@ public class UpdateMenuItemRequest {
     private String imageUrl;
 
     private Boolean isAvailable;
+
+    /**
+     * Null = keep existing sizes unchanged; empty list [] = clear sizes (single-price item);
+     * non-empty list = replace sizes with the provided list.
+     */
+    @Valid
+    private List<MenuItemSizeRequest> sizes;
 }

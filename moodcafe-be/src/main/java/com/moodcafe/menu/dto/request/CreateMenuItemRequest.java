@@ -1,5 +1,6 @@
 package com.moodcafe.menu.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -10,6 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -27,7 +29,9 @@ public class CreateMenuItemRequest {
 
     private String description;
 
-    @NotNull(message = "Giá món không được để trống")
+    /**
+     * Required when sizes is empty/null. When sizes are provided, optional (auto-filled from default or min size price).
+     */
     @Min(value = 0, message = "Giá không được nhỏ hơn 0")
     private BigDecimal price;
 
@@ -35,4 +39,7 @@ public class CreateMenuItemRequest {
 
     @Builder.Default
     private Boolean isAvailable = true;
+
+    @Valid
+    private List<MenuItemSizeRequest> sizes;
 }

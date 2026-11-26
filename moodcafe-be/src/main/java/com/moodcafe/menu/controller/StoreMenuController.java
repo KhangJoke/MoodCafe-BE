@@ -36,7 +36,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/stores/{storeId}/menu")
 @RequiredArgsConstructor
-@Tag(name = "Store Menu", description = "Quản lý thực đơn quán cà phê (Danh mục và Món ăn)")
+@Tag(name = "Store Menu", description = "Quản lý thực đơn quán cà phê (Danh mục, Món ăn và Size theo giá)")
 public class StoreMenuController {
 
     private final MenuService menuService;
@@ -86,7 +86,7 @@ public class StoreMenuController {
     // --- Items ---
 
     @Operation(
-            summary = "Lấy danh sách món ăn trong thực đơn có phân trang",
+            summary = "Lấy danh sách món ăn trong thực đơn có phân trang (kèm danh sách size & giá min/max)",
             description = "Hỗ trợ phân trang qua page (mặc định 0), size (mặc định 20), sort (mặc định createdAt,desc). Hỗ trợ tìm kiếm theo tên món (q), lọc theo danh mục (categoryId), lọc trạng thái còn hàng (isAvailable)."
     )
     @GetMapping("/items")
@@ -100,7 +100,16 @@ public class StoreMenuController {
         return ResponseEntity.ok(ApiResponse.success(items));
     }
 
-    @Operation(summary = "Tạo món ăn mới trong thực đơn (Yêu cầu quyền OWNER / MANAGER)")
+    @Operation(summary = "Xem chi tiết một món ăn trong thực đơn (kèm đầy đủ các size & giá)")
+    @GetMapping("/items/{itemId}")
+    public ResponseEntity<ApiResponse<MenuItemResponse>> getItemDetail(
+            @PathVariable UUID storeId,
+            @PathVariable UUID itemId) {
+        MenuItemResponse item = menuService.getItemDetail(storeId, itemId);
+        return ResponseEntity.ok(ApiResponse.success(item));
+    }
+
+    @Operation(summary = "Tạo món ăn mới trong thực đơn (hỗ trợ 1 giá đơn hoặc nhiều size với giá riêng - OWNER / MANAGER)")
     @PostMapping("/items")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<MenuItemResponse>> createItem(
@@ -111,7 +120,7 @@ public class StoreMenuController {
                 .body(ApiResponse.success(item, "Tạo món ăn thành công"));
     }
 
-    @Operation(summary = "Cập nhật thông tin món ăn (Yêu cầu quyền OWNER / MANAGER)")
+    @Operation(summary = "Cập nhật thông tin món ăn & danh sách size (Yêu cầu quyền OWNER / MANAGER)")
     @PatchMapping("/items/{itemId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<MenuItemResponse>> updateItem(
