@@ -19,6 +19,7 @@ public class AvailableRevenueVoucherResponse {
     private UUID campaignId;
     private String title;
     private String description;
+    private String bannerUrl;
     private BigDecimal faceValueVnd;
     private BigDecimal minGrossAmount;
     private Integer validDays;

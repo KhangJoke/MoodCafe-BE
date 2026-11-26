@@ -212,5 +212,51 @@ class RevenueVoucherCampaignServiceTest {
         assertThat(res.getReleasedBudgetVnd()).isEqualByComparingTo("0");
         assertThat(res.getEffectiveExpenseVnd()).isEqualByComparingTo("0");
     }
+
+    @Test
+    @DisplayName("updateCampaignBanner updates bannerUrl and getHomepageBanners returns only campaigns with non-blank bannerUrl")
+    void updateBannerAndGetHomepageBanners() {
+        UUID c1Id = UUID.randomUUID();
+        UUID c2Id = UUID.randomUUID();
+        RevenueVoucherCampaign c1 = RevenueVoucherCampaign.builder()
+                .campaignId(c1Id)
+                .title("Banner Promo")
+                .bannerUrl("https://res.cloudinary.com/demo/voucher1.jpg")
+                .distributionType(RevenueVoucherDistributionType.CLAIMABLE_POOL)
+                .faceValueVnd(new BigDecimal("15000"))
+                .minGrossAmount(BigDecimal.ZERO)
+                .validDays(30)
+                .totalQuantity(100)
+                .issuedQuantity(10)
+                .maxClaimsPerUser(1)
+                .status(RevenueCampaignStatus.ACTIVE)
+                .build();
+        RevenueVoucherCampaign c2 = RevenueVoucherCampaign.builder()
+                .campaignId(c2Id)
+                .title("No Banner Promo")
+                .bannerUrl(null)
+                .distributionType(RevenueVoucherDistributionType.CLAIMABLE_POOL)
+                .faceValueVnd(new BigDecimal("20000"))
+                .minGrossAmount(BigDecimal.ZERO)
+                .validDays(30)
+                .totalQuantity(50)
+                .issuedQuantity(0)
+                .maxClaimsPerUser(1)
+                .status(RevenueCampaignStatus.ACTIVE)
+                .build();
+
+        when(campaignRepository.findByIdWithLock(c1Id)).thenReturn(Optional.of(c1));
+        when(campaignRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(customerVoucherRepository.countByCampaignIdAndStatus(c1Id, "USED")).thenReturn(0L);
+
+        RevenueVoucherCampaignResponse updated = service.updateCampaignBanner(c1Id, "  https://res.cloudinary.com/demo/new-banner.jpg  ");
+        assertThat(updated.getBannerUrl()).isEqualTo("https://res.cloudinary.com/demo/new-banner.jpg");
+
+        when(campaignRepository.findAvailableClaimableCampaigns(any())).thenReturn(List.of(c1, c2));
+        var banners = service.getHomepageBanners(null);
+        assertThat(banners).hasSize(1);
+        assertThat(banners.get(0).getCampaignId()).isEqualTo(c1Id);
+        assertThat(banners.get(0).getBannerUrl()).isEqualTo("https://res.cloudinary.com/demo/new-banner.jpg");
+    }
 }
 

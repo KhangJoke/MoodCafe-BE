@@ -48,6 +48,9 @@ public class RevenueVoucherCampaign {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "banner_url", length = 500)
+    private String bannerUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "distribution_type", nullable = false, length = 30)
     private RevenueVoucherDistributionType distributionType;

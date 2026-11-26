@@ -57,6 +57,9 @@ public class CustomerVoucher {
     @Column(name = "title", length = 150)
     private String title;
 
+    @Column(name = "banner_url", length = 500)
+    private String bannerUrl;
+
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
 

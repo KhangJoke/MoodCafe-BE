@@ -2,10 +2,13 @@ package com.moodcafe.voucher.controller;
 
 import com.moodcafe.auth.abstraction.service.CurrentUserService;
 import com.moodcafe.auth.entity.User;
+import com.moodcafe.shared.abstraction.service.FileStorageService;
+import com.moodcafe.shared.dto.UploadImageResponse;
 import com.moodcafe.shared.response.ApiResponse;
 import com.moodcafe.shared.response.PageResponse;
 import com.moodcafe.voucher.dto.CreateRevenueVoucherCampaignRequest;
 import com.moodcafe.voucher.dto.RevenueVoucherCampaignResponse;
+import com.moodcafe.voucher.dto.UpdateRevenueCampaignBannerRequest;
 import com.moodcafe.voucher.dto.UpdateRevenueCampaignStatusRequest;
 import com.moodcafe.voucher.entity.CustomerVoucher;
 import com.moodcafe.voucher.entity.enums.RevenueCampaignStatus;
@@ -20,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -42,6 +47,7 @@ public class AdminRevenueVoucherController {
 
     private final RevenueVoucherCampaignService campaignService;
     private final CurrentUserService currentUserService;
+    private final FileStorageService fileStorageService;
 
     @Operation(summary = "1. Tạo chiến dịch Voucher từ Doanh thu (DIRECT_GRANT phát trực tiếp hoặc CLAIMABLE_POOL user tự bấm nhận)")
     @PostMapping
@@ -90,7 +96,7 @@ public class AdminRevenueVoucherController {
         return ResponseEntity.ok(ApiResponse.success(vouchers, "Lấy danh sách voucher của chiến dịch thành công"));
     }
 
-    @Operation(summary = "5. Cập nhật trạng thái chiến dịch (ACTIVE / PAUSED / CANCELLED - hủy sẽ hoàn lại phần ngân sách chưa phát vào Net Income)")
+    @Operation(summary = "5. Cập nhật trạng thái chiến dịch (ACTIVE / PAUSED / CANCELLED)")
     @PatchMapping("/{campaignId}/status")
     public ResponseEntity<ApiResponse<RevenueVoucherCampaignResponse>> updateStatus(
             @PathVariable UUID campaignId,
@@ -99,5 +105,25 @@ public class AdminRevenueVoucherController {
         RevenueVoucherCampaignResponse updated = campaignService.updateCampaignStatus(campaignId, request.getStatus());
         return ResponseEntity.ok(ApiResponse.success(updated, "Cập nhật trạng thái chiến dịch thành công"));
     }
-}
 
+    @Operation(summary = "6. Cập nhật URL ảnh banner cho chiến dịch voucher (để hiển thị thumbnail/carousel trang chủ)")
+    @PatchMapping("/{campaignId}/banner")
+    public ResponseEntity<ApiResponse<RevenueVoucherCampaignResponse>> updateBannerUrl(
+            @PathVariable UUID campaignId,
+            @Valid @RequestBody UpdateRevenueCampaignBannerRequest request
+    ) {
+        RevenueVoucherCampaignResponse updated = campaignService.updateCampaignBanner(campaignId, request.getBannerUrl());
+        return ResponseEntity.ok(ApiResponse.success(updated, "Cập nhật ảnh banner chiến dịch thành công"));
+    }
+
+    @Operation(summary = "7. Upload trực tiếp file ảnh banner lên Cloudinary và gắn vào chiến dịch voucher")
+    @PostMapping(value = "/{campaignId}/banner/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<RevenueVoucherCampaignResponse>> uploadBanner(
+            @PathVariable UUID campaignId,
+            @RequestParam("file") MultipartFile file
+    ) {
+        UploadImageResponse uploaded = fileStorageService.uploadImage(file, "vouchers/campaigns");
+        RevenueVoucherCampaignResponse updated = campaignService.updateCampaignBanner(campaignId, uploaded.getImageUrl());
+        return ResponseEntity.ok(ApiResponse.success(updated, "Upload ảnh banner chiến dịch thành công"));
+    }
+}

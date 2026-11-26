@@ -24,9 +24,17 @@ public class FileUploadController {
     @PostMapping(value = "/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<UploadImageResponse>> uploadImage(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "storeId", required = false) String storeId
+            @RequestParam(value = "storeId", required = false) String storeId,
+            @RequestParam(value = "folder", required = false) String folder
     ) {
-        String folderPath = (storeId != null && !storeId.isBlank()) ? "stores/" + storeId.trim() : "stores/onboarding";
+        String folderPath;
+        if (folder != null && !folder.isBlank()) {
+            folderPath = folder.trim().replaceAll("^/+|/+$", "");
+        } else if (storeId != null && !storeId.isBlank()) {
+            folderPath = "stores/" + storeId.trim();
+        } else {
+            folderPath = "stores/onboarding";
+        }
         UploadImageResponse response = fileStorageService.uploadImage(file, folderPath);
         return ResponseEntity.ok(ApiResponse.success(response, "Upload image successfully"));
     }

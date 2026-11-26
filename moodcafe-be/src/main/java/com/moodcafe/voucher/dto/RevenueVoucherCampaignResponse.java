@@ -22,6 +22,7 @@ public class RevenueVoucherCampaignResponse {
     private UUID campaignId;
     private String title;
     private String description;
+    private String bannerUrl;
     private RevenueVoucherDistributionType distributionType;
     private RevenueFundingSource fundingSource;
     private BigDecimal faceValueVnd;

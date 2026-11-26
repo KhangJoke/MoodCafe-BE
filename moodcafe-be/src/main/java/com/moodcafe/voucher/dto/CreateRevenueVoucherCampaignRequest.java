@@ -33,6 +33,9 @@ public class CreateRevenueVoucherCampaignRequest {
 
     private String description;
 
+    @Size(max = 500, message = "URL ảnh banner tối đa 500 ký tự")
+    private String bannerUrl;
+
     @NotNull(message = "Loại phân phối (DIRECT_GRANT hoặc CLAIMABLE_POOL) không được để trống")
     private RevenueVoucherDistributionType distributionType;
 

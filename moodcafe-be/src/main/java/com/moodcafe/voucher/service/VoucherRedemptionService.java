@@ -106,6 +106,7 @@ public class VoucherRedemptionService {
                 .templateId(template.getTemplateId())
                 .sourceType("MOODPOINT_REDEEM")
                 .title(template.getTitle())
+                .bannerUrl(template.getBannerUrl())
                 .code(code)
                 .faceValueVnd(template.getFaceValueVnd())
                 .pointCost(template.getPointCost())

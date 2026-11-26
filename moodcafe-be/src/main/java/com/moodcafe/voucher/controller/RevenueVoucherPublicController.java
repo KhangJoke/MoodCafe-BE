@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-@Tag(name = "Customer - Free Revenue Vouchers", description = "APIs xem danh sách voucher ưu đãi miễn phí từ doanh thu của MoodCafe (không cần đổi MoodPoint)")
+@Tag(name = "Customer - Free Revenue Vouchers", description = "APIs xem danh sách voucher ưu đãi miễn phí và banner khuyến mãi trang chủ (không cần đổi MoodPoint)")
 @RestController
 @RequestMapping("/api/revenue-vouchers")
 @RequiredArgsConstructor
@@ -28,17 +28,26 @@ public class RevenueVoucherPublicController {
     @Operation(summary = "1. Xem danh sách chương trình voucher miễn phí đang mở nhận (0 MoodPoints)")
     @GetMapping("/available")
     public ResponseEntity<ApiResponse<List<AvailableRevenueVoucherResponse>>> getAvailableCampaigns() {
-        UUID userId = null;
+        List<AvailableRevenueVoucherResponse> list = campaignService.getAvailableForCustomer(resolveCurrentUserId());
+        return ResponseEntity.ok(ApiResponse.success(list, "Lấy danh sách voucher miễn phí thành công"));
+    }
+
+    @Operation(summary = "2. Lấy danh sách banner / thumbnail voucher khuyến mãi đang hoạt động cho trang chủ (chỉ trả các chiến dịch có ảnh banner)")
+    @GetMapping("/banners")
+    public ResponseEntity<ApiResponse<List<AvailableRevenueVoucherResponse>>> getHomepageBanners() {
+        List<AvailableRevenueVoucherResponse> banners = campaignService.getHomepageBanners(resolveCurrentUserId());
+        return ResponseEntity.ok(ApiResponse.success(banners, "Lấy danh sách banner khuyến mãi thành công"));
+    }
+
+    private UUID resolveCurrentUserId() {
         try {
             User current = currentUserService.getCurrentUser();
             if (current != null) {
-                userId = current.getUserId();
+                return current.getUserId();
             }
         } catch (Exception ignored) {
             // Anonymous browsing is allowed
         }
-        List<AvailableRevenueVoucherResponse> list = campaignService.getAvailableForCustomer(userId);
-        return ResponseEntity.ok(ApiResponse.success(list, "Lấy danh sách voucher miễn phí thành công"));
+        return null;
     }
 }
-

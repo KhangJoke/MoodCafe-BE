@@ -91,6 +91,7 @@ public class RevenueVoucherCampaignService {
         RevenueVoucherCampaign campaign = RevenueVoucherCampaign.builder()
                 .title(request.getTitle().trim())
                 .description(request.getDescription())
+                .bannerUrl(normalizeBannerUrl(request.getBannerUrl()))
                 .distributionType(RevenueVoucherDistributionType.DIRECT_GRANT)
                 .fundingSource(fundingSource)
                 .faceValueVnd(faceValue)
@@ -117,6 +118,7 @@ public class RevenueVoucherCampaignService {
                     .sourceType(SOURCE_TYPE_REVENUE_GRANT)
                     .campaignId(saved.getCampaignId())
                     .title(saved.getTitle())
+                    .bannerUrl(saved.getBannerUrl())
                     .code(generateUniqueRevenueVoucherCode())
                     .faceValueVnd(faceValue)
                     .pointCost(0L)
@@ -152,6 +154,7 @@ public class RevenueVoucherCampaignService {
         RevenueVoucherCampaign campaign = RevenueVoucherCampaign.builder()
                 .title(request.getTitle().trim())
                 .description(request.getDescription())
+                .bannerUrl(normalizeBannerUrl(request.getBannerUrl()))
                 .distributionType(RevenueVoucherDistributionType.CLAIMABLE_POOL)
                 .fundingSource(fundingSource)
                 .faceValueVnd(faceValue)
@@ -219,6 +222,7 @@ public class RevenueVoucherCampaignService {
                 .sourceType(SOURCE_TYPE_REVENUE_GRANT)
                 .campaignId(campaign.getCampaignId())
                 .title(campaign.getTitle())
+                .bannerUrl(campaign.getBannerUrl())
                 .code(generateUniqueRevenueVoucherCode())
                 .faceValueVnd(campaign.getFaceValueVnd())
                 .pointCost(0L)
@@ -256,6 +260,7 @@ public class RevenueVoucherCampaignService {
                     .campaignId(c.getCampaignId())
                     .title(c.getTitle())
                     .description(c.getDescription())
+                    .bannerUrl(c.getBannerUrl())
                     .faceValueVnd(c.getFaceValueVnd())
                     .minGrossAmount(c.getMinGrossAmount())
                     .validDays(c.getValidDays())
@@ -270,6 +275,24 @@ public class RevenueVoucherCampaignService {
                     .build());
         }
         return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<AvailableRevenueVoucherResponse> getHomepageBanners(UUID currentUserId) {
+        return getAvailableForCustomer(currentUserId).stream()
+                .filter(v -> v.getBannerUrl() != null && !v.getBannerUrl().isBlank())
+                .toList();
+    }
+
+    @Transactional
+    public RevenueVoucherCampaignResponse updateCampaignBanner(UUID campaignId, String bannerUrl) {
+        RevenueVoucherCampaign campaign = campaignRepository.findByIdWithLock(campaignId)
+                .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND, "Không tìm thấy chiến dịch voucher"));
+        campaign.setBannerUrl(normalizeBannerUrl(bannerUrl));
+        RevenueVoucherCampaign saved = campaignRepository.save(campaign);
+        long usedCount = customerVoucherRepository.countByCampaignIdAndStatus(campaignId, "USED");
+        log.info("Updated bannerUrl for revenue voucher campaign {}", campaignId);
+        return toResponse(saved, usedCount);
     }
 
     @Transactional(readOnly = true)
@@ -421,6 +444,7 @@ public class RevenueVoucherCampaignService {
                 .campaignId(c.getCampaignId())
                 .title(c.getTitle())
                 .description(c.getDescription())
+                .bannerUrl(c.getBannerUrl())
                 .distributionType(c.getDistributionType())
                 .fundingSource(c.getFundingSource())
                 .faceValueVnd(c.getFaceValueVnd())
@@ -441,6 +465,14 @@ public class RevenueVoucherCampaignService {
                 .createdAt(c.getCreatedAt())
                 .updatedAt(c.getUpdatedAt())
                 .build();
+    }
+
+    private String normalizeBannerUrl(String bannerUrl) {
+        if (bannerUrl == null) {
+            return null;
+        }
+        String trimmed = bannerUrl.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private String generateUniqueRevenueVoucherCode() {

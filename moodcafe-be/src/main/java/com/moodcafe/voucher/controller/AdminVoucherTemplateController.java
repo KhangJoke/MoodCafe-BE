@@ -21,6 +21,7 @@ import java.util.*;
 public class AdminVoucherTemplateController {
     private final VoucherTemplateRepository repository;
     public record Terms(@NotBlank @Size(max=150) String title, String description,
+                        @Size(max=500) String bannerUrl,
                         @NotNull @DecimalMin("1") @Digits(integer=10,fraction=0) BigDecimal faceValueVnd,
                         @NotNull @Min(1) Long pointCost,
                         @NotNull @DecimalMin("0") @Digits(integer=10,fraction=0) BigDecimal minGrossAmount,
@@ -42,6 +43,7 @@ public class AdminVoucherTemplateController {
         if (t.faceValueVnd().compareTo(BigDecimal.valueOf(t.pointCost())) != 0)
             throw new AppException(ErrorCode.BAD_REQUEST,"1 MoodPoint = 1đ, điểm đổi phải bằng mệnh giá voucher");
         value.setTitle(t.title().trim()); value.setDescription(t.description());
+        value.setBannerUrl(t.bannerUrl() != null && !t.bannerUrl().isBlank() ? t.bannerUrl().trim() : null);
         value.setFaceValueVnd(t.faceValueVnd()); value.setPointCost(t.pointCost());
         value.setMinGrossAmount(t.minGrossAmount()); value.setValidDays(t.validDays());
         value.setIsActive(t.isActive()); value.setDisplayOrder(t.displayOrder());

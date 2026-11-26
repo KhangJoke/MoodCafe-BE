@@ -38,6 +38,9 @@ public class VoucherTemplate {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "banner_url", length = 500)
+    private String bannerUrl;
+
     @Column(name = "face_value_vnd", nullable = false, precision = 12, scale = 2)
     private BigDecimal faceValueVnd;
 
