@@ -6,16 +6,22 @@ import com.moodcafe.booking.controller.BookingController;
 import com.moodcafe.booking.dto.request.CreateBookingRequest;
 import com.moodcafe.booking.dto.response.BookingResponse;
 import com.moodcafe.booking.entity.enums.BookingStatus;
+import com.moodcafe.shared.exceptions.GlobalExceptionHandler;
 import com.moodcafe.shared.response.ApiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,6 +31,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @ExtendWith(MockitoExtension.class)
 class BookingContractTest {
@@ -133,5 +142,45 @@ class BookingContractTest {
         assertNotNull(response.getBody());
         assertEquals(BookingStatus.CHECKED_IN, response.getBody().getData().getStatus());
         verify(bookingService).undoComplete(storeId, bookingId);
+    }
+
+    @Test
+    @DisplayName("POST /api/bookings binds and returns canonical note field")
+    void testCreateBookingNoteField() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(bookingController)
+                .setMessageConverters(new JacksonJsonHttpMessageConverter())
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        BookingResponse expectedBooking = BookingResponse.builder()
+                .bookingId(bookingId)
+                .bookingCode("MC123456")
+                .status(BookingStatus.PENDING_PAYMENT)
+                .note("Cần ổ cắm sạc laptop")
+                .build();
+
+        when(bookingService.createBooking(any(CreateBookingRequest.class))).thenReturn(expectedBooking);
+
+        String payload = """
+                {
+                  "storeId": "%s",
+                  "categoryId": "%s",
+                  "startTime": "%s",
+                  "guestCount": 2,
+                  "customerName": "Nguyen Van A",
+                  "customerPhone": "0901234567",
+                  "note": "Cần ổ cắm sạc laptop"
+                }
+                """.formatted(storeId, categoryId, Instant.now().plusSeconds(3600).toString());
+
+        mockMvc.perform(post("/api/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(payload))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.note").value("Cần ổ cắm sạc laptop"));
+
+        ArgumentCaptor<CreateBookingRequest> captor = ArgumentCaptor.forClass(CreateBookingRequest.class);
+        verify(bookingService).createBooking(captor.capture());
+        assertEquals("Cần ổ cắm sạc laptop", captor.getValue().getNote());
     }
 }
